@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload Patient Files</title>
+  <link rel="stylesheet" href="./styles/styles.css" />
+
+  <style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background: #e8ecef;
+  color: #333;
+  padding: 0;
+  margin: 0;
+}
+
+
+.page-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 25px;
+  padding: 20px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.side-contact {
+  flex: 0 0 300px;
+  background: white;
+  padding: 25px 20px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  position: sticky;
+  top: 20px;
+  border: 1px solid #ddd;
+}
+
+.side-contact h2 {
+  color: #333;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 20px 0;
+  padding: 0 0 12px 0;
+  text-align: left;
+  background: none;
+  border-bottom: 2px solid #4a90e2;
+}
+
+.contact-item {
+  margin-bottom: 18px;
+  text-align: left;
+  line-height: 1.7;
+  padding: 0 0 18px 0;
+  background: none;
+  border-bottom: 1px solid #eee;
+}
+
+.contact-item:last-child {
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.contact-item h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 6px 0;
+  padding: 0;
+  color: #555;
+}
+
+.contact-item p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.contact-item .number {
+  color: #222;
+  font-weight: 600;
+}
+
+.main-content {
+  flex: 1;
+  max-width: 1200px;
+  width: 100%;
+}
+
+.back-link {
+  font-size: 14px;
+  margin: 15px;
+  padding: 8px 12px;
+  background: #4FBA5B;
+  color: white;
+  text-decoration: none;
+  cursor: pointer;
+
+}
+
+.form-wrapper {
+  margin: 0;
+  width: 100%;
+  background: #fff;
+  padding: 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+h2 {
+  background: #f7f7f7;
+  padding: 15px 20px;
+  margin: 0;
+  color: #333;
+  font-size: 18px;
+  font-weight: 600;
+  border-bottom: 1px solid #ddd;
+}
+
+h2 b {
+  color: #4a90e2;
+  font-weight: 600;
+}
+
+#uploadForm {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 0;
+}
+
+.form-row-hidden {
+  display: none;
+}
+
+.form-section {
+  background: #fafafa;
+  padding: 25px 22px;
+  border-right: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+}
+
+.form-section:nth-child(2n) {
+  border-right: none;
+}
+
+.form-section h3 {
+  background: #4a90e2;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  margin: -25px -22px 20px -22px;
+  padding: 12px 22px;
+  text-transform: none;
+}
+
+.form-row {
+  margin-bottom: 16px;
+}
+
+.form-row label {
+  display: block;
+  margin-bottom: 6px;
+  color: #444;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.form-row label .required {
+  color: #d9534f;
+  font-size: 16px;
+  font-weight: bold;
+  margin-left: 2px;
+}
+
+.form-row input[type="text"],
+.form-row input[type="date"],
+.form-row input[type="time"],
+.form-row select {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #ccc;
+  background: #fff;
+  font-size: 14px;
+  color: #333;
+  font-family: Arial, sans-serif;
+  border-radius: 3px;
+  height: auto;
+  line-height: normal;
+}
+
+.form-row input:focus,
+.form-row select:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.15);
+}
+
+.form-row select {
+  cursor: pointer;
+}
+
+.radio-group {
+  display: flex;
+  gap: 18px;
+  margin-top: 6px;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.radio-option input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.radio-option label {
+  margin: 0;
+  cursor: pointer;
+  font-size: 14px;
+  color: #444;
+  font-weight: normal;
+}
+
+.file-upload-box {
+  border: 2px dashed #aaa;
+  padding: 35px 20px;
+  text-align: center;
+  background: #f9f9f9;
+  cursor: pointer;
+  margin-top: 8px;
+  border-radius: 3px;
+}
+
+.file-upload-box:hover {
+  border-color: #777;
+  background: #f5f5f5;
+}
+
+.file-upload-box p {
+  margin: 5px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.file-upload-box p strong {
+  color: #4a90e2;
+  font-weight: 600;
+  text-decoration: underline;
+  font-size: 15px;
+}
+
+.file-upload-box input {
+  display: none;
+}
+
+.selected-files {
+  margin-top: 12px;
+}
+
+.file-row {
+  background: #fff;
+  padding: 11px 14px;
+  margin-bottom: 8px;
+  border: 1px solid #ddd;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  border-radius: 3px;
+}
+
+.file-row span {
+  color: #333;
+}
+
+.file-row button {
+  background: #d9534f;
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 3px;
+  font-weight: normal;
+}
+
+.file-row button:hover {
+  background: #c9302c;
+}
+
+.checkbox-row {
+  padding: 16px 22px;
+  background: #fafafa;
+  border-bottom: 1px solid #ddd;
+  grid-column: 1 / -1;
+}
+
+.checkbox-row input {
+  margin-right: 8px;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.checkbox-row label {
+  color: #444;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.button-row {
+  padding: 18px 22px;
+  background: #fafafa;
+  grid-column: 1 / -1;
+  text-align: right;
+}
+
+.submit-button {
+  padding: 10px 32px;
+  background: #5cb85c;
+  color: #fff;
+  border: none;
+  font-size: 15px;
+  cursor: pointer;
+  font-weight: 600;
+  border-radius: 3px;
+}
+
+.submit-button:hover {
+  background: #4cae4c;
+}
+
+.submit-button:active {
+  background: #449d44;
+}
+
+.submit-button:disabled {
+  background: #ccc;
+  color: #888;
+  cursor: not-allowed;
+}
+
+.alert {
+  padding: 14px 22px;
+  margin: 0 22px 16px 22px;
+  font-size: 14px;
+  display: none;
+  grid-column: 1 / -1;
+  border-radius: 3px;
+}
+
+.alert.show {
+  display: block;
+}
+
+.alert.success {
+  background: #dff0d8;
+  color: #3c763d;
+}
+
+.alert.error {
+  background: #f2dede;
+  color: #a94442;
+}
+
+.alert.info {
+  background: #d9edf7;
+  color: #31708f;
+}
+
+.alert.warning {
+  background: #fcf8e3;
+  color: #8a6d3b;
+}
+
+
+@media (max-width: 768px) {
+  #uploadForm {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-section {
+    border-right: none;
+  }
+  
+  .page-container {
+    flex-direction: column;
+    padding: 10px;
+  }
+  
+  .side-contact {
+    flex: 1;
+    width: 100%;
+    position: static;
+    margin-bottom: 15px;
+  }
+  
+  .main-content {
+    width: 100%;
+  }
+
+}
+</style>
+</head>
+<body>
+<div class="main-wrapper">
+
+<header>
+    <nav>
+      <img src="/static/telesoftlogo.jpeg" alt="Telesoft Logo" class="logo" />
+      <ul>
+        <li><a href="#" class="back-link" onclick="goBack(); return false;">Back</a></li>
+        <li><a href="#" onclick="logout()">Log Off</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <div class="page-container">
+
+    <div class="main-content">
+      <div class="form-wrapper">
+        <h2>24/7 Support</h2>
+
+        <form id="uploadForm">
+        
+      <div class="form-row-hidden">
+        <input type="text" name="center" id="centerName" required>
+      </div>
+      
+      <div class="form-row-hidden">
+        <input type="text" name="institute_name" id="instituteName" readonly>
+      </div>
+      
+      <div class="form-section">
+        <h3>Patient Information</h3>
+        
+        <div class="form-row">
+          <label>Patient Name <span class="required">*</span></label>
+          <input type="text" id="patientName">
+        </div>
+        
+        <div class="form-row">
+          <label>Patient ID</label>
+          <input type="text" id="patientId">
+        </div>
+        
+        <div class="form-row">
+          <label>Age</label>
+          <input type="text" id="patientAge" placeholder="e.g. 45">
+        </div>
+        
+        <div class="form-row">
+          <label>Sex</label>
+          <div class="radio-group">
+            <div class="radio-option">
+              <input type="radio" id="sexMale" name="patientSex" value="M">
+              <label for="sexMale">Male</label>
+            </div>
+            <div class="radio-option">
+              <input type="radio" id="sexFemale" name="patientSex" value="F">
+              <label for="sexFemale">Female</label>
+            </div>
+            <div class="radio-option">
+              <input type="radio" id="sexOther" name="patientSex" value="O">
+              <label for="sexOther">Others</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3>Study Details</h3>
+        
+        <div class="form-row" style="display: none;">
+          <label>Exam Date</label>
+          <input type="date" id="examDate">
+        </div>
+        
+        <div class="form-row" style="display: none;">
+          <label>Exam Time</label>
+          <input type="time" id="examTime">
+        </div>
+        
+        <div class="form-row">
+          <label>Modality</label>
+          <select id="modality">
+            <option value="">-- Select Modality --</option>
+            <option value="CT">CT</option>
+            <option value="US">US</option>
+            <option value="XA">XA</option>
+            <option value="SC">SC</option>
+            <option value="AN">AN</option>
+            <option value="RF">RF</option>
+            <option value="OT">OT</option>
+            <option value="MR">MR</option>
+            <option value="CR" selected>CR</option>
+            <option value="NM">NM</option>
+            <option value="PT">PT</option>
+            <option value="DX">DX</option>
+            <option value="PX">PX</option>
+          </select>
+        </div>
+        
+        <div class="form-row">
+          <label>Exam Name</label>
+          <input type="text" id="studyDesc" placeholder="e.g. Chest PA view" list="examNameList">
+          <datalist id="examNameList">
+            <option value="Chest PA view">
+            <option value="Chest AP view">
+            <option value="Abdomen AP view">
+            <option value="Pelvis AP view">
+            <option value="Skull AP/Lateral">
+            <option value="Spine Lateral">
+            <option value="Hand PA">
+            <option value="Foot AP/Lateral">
+            <option value="Knee AP/Lateral">
+            <option value="Shoulder AP">
+          </datalist>
+        </div>
+
+        <div class="form-row">
+          <label>Referring Doctor</label>
+          <input type="text" id="refPhysician" placeholder="e.g. Dr. Ahmed">
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3>Patient History</h3>
+        
+        <div class="form-row">
+          <label>Patient History</label>
+          <input type="text" id="patientHistory" placeholder="e.g. Chest pain" list="patientHistoryList">
+          <datalist id="patientHistoryList">
+            <option value="Chest pain">
+            <option value="Shortness of breath">
+            <option value="Abdominal pain">
+            <option value="Back pain">
+            <option value="Joint pain">
+            <option value="Fracture">
+            <option value="Headache">
+            <option value="Cough">
+            <option value="Fever">
+            <option value="Trauma">
+          </datalist>
+        </div>
+
+        <div class="form-row">
+          <label>Mobile Number</label>
+          <input type="text" id="mobileNumber" placeholder="e.g. 9876543210">
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3>Upload Files</h3>
+        
+        <div class="file-upload-box" onclick="document.getElementById('fileInput').click()">
+          <p><strong>Click here</strong></p>
+          <p>or select files to upload Images</p>
+          <input type="file" id="fileInput" accept=".dcm,.jpg,.jpeg,.png,.tiff,.tif,.bmp" multiple>
+        </div>
+        <div id="fileList" class="selected-files"></div>
+      </div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="emergency" name="emergency">
+        <label for="emergency">Mark as Emergency</label>
+      </div>
+      
+      <div class="button-row">
+        <button type="submit" class="submit-button" id="submitBtn">Upload</button>
+      </div>
+      
+      <div id="message" class="alert"></div>
+    </form>
+  </div>
+    </div>
+
+    <div class="side-contact">
+      <h2>Need Help?</h2>
+      
+      <div class="contact-item">
+        <h3>রিপোর্ট সংক্রান্ত বিষয়ে যোগাযোগ করুন:</h3>
+        <p class="number">01940295271, 01752822254</p>
+      </div>
+      
+      <div class="contact-item">
+        <h3>ইমেজ পাঠাতে সমস্যা হলে যোগাযোগ করুন:</h3>
+        <p class="number">01940295271, 01752822254</p>
+      </div>
+      
+      <div class="contact-item">
+        <h3>বিল সংক্রান্ত বিষয়ে যোগাযোগ করুন:</h3>
+        <p class="number">01940295271, 01752822254</p>
+      </div>
+      
+      <div class="contact-item">
+        <h3>অ্যাডমিন সংক্রান্ত বিষয়ে যোগাযোগ করুন:</h3>
+        <p class="number">01752822254</p>
+      </div>
+      
+      <div class="contact-item">
+        <h3>Email: <span class="number">yasirrabbanitanvir@gmail.com</span></h3>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <footer class="footer">
+    <div class="footer-content">
+      <div class="footer-left">© 2026 Telesoft. All rights reserved.</div>
+      <div class="footer-right">Developed by Yasir | 01752822254</div>
+    </div>
+  </footer>
+  
+  <script src="./script/form.js"></script>
+</body>
+</html>
