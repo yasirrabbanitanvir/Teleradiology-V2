@@ -1,0 +1,4 @@
+*.log
+logs/
+nginx-1.28.0/logs/
+django.log*

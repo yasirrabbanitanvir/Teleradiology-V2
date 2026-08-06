@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Login</title>
+  <link rel="stylesheet" href="/static/styles/styles.css">
+  <style>
+
+    body {
+      background: url("medical-cover.jpg") center / cover no-repeat fixed; 
+      /*  linear-gradient(rgba(10, 20, 40, 0.55), rgba(10, 20, 40, 0.55)), */
+      min-height: 100vh;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: Arial, sans-serif; 
+    }
+
+    .container {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+      max-width: 850px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+    }
+
+    .left-section {
+      padding: 40px 35px;
+    }
+
+    .right-section {
+      padding: 40px 30px;
+      background: #fafbfc;
+      border-left: 1px solid #e5e7eb;
+    }
+
+    h1 {
+      color: #00796b;
+      margin: 0 0 30px 0;
+      font-size: 26px;
+    }
+
+    h2 {
+      color: #2c3e50;
+      font-size: 20px;
+      margin: 0 0 22px 0;
+      font-weight: 600;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 11px 11px 11px 38px;
+      border: 1px solid #d1d5db;
+      border-radius: 5px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+
+    input[type="text"]:focus, input[type="password"]:focus {
+      border-color: #00796b;
+      outline: none;
+    }
+
+    .icon {
+      position: absolute;
+      left: 11px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #6b7280;
+      font-size: 18px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #4FBA5B;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 15px;
+      margin-top: 8px;
+    }
+
+    button:hover {
+      background: #3fa84d;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      margin: 14px 0;
+      font-size: 13px;
+      color: #4b5563;
+    }
+
+    .checkbox-label input {
+      margin-right: 7px;
+    }
+
+    .forgot-password {
+      text-align: right;
+      margin-bottom: 12px;
+    }
+
+    .forgot-password a {
+      color: #00796b;
+      text-decoration: none;
+      font-size: 13px;
+    }
+
+    .forgot-password a:hover {
+      text-decoration: underline;
+    }
+
+    #login-message {
+      margin-top: 14px;
+      padding: 9px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .error {
+      background: #fee;
+      color: #c62828;
+    }
+
+    .success {
+      background: #efe;
+      color: #2e7d32;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .loader {
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #00796b;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      animation: spin 1s linear infinite;
+      margin: 14px auto;
+      display: none;
+    }
+
+    .contact-item {
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .contact-item:last-child {
+      margin-bottom: 0;
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .contact-item h3 {
+      font-size: 13px;
+      margin: 0 0 5px 0;
+      color: #64748b;
+      font-weight: 500;
+      line-height: 1.4;
+    }
+
+    .contact-item .number {
+      color: #0f766e;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+
+      .right-section {
+        border-left: none;
+        border-top: 1px solid #e5e7eb;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="left-section">
+      <img src="/static/telesoftlogo.png" alt="Telesoft Logo" style="width: 100px; height: auto; margin-bottom: 20px;">
+      <h1>Telesoft PACS</h1>
+      <form id="login-form">
+        <label>
+          <span class="icon">👤</span>
+          <input type="text" name="username" placeholder="Username" required aria-label="Username">
+        </label>
+        <label>
+          <span class="icon">🔒</span>
+          <input type="password" name="password" placeholder="Password" required aria-label="Password">
+        </label>
+        <div class="checkbox-label">
+          <input type="checkbox" name="remember_me"> Remember me
+        </div>
+        <div class="forgot-password">
+          <a href="/forgot-password">Forgot password?</a>
+        </div>
+        <button type="submit">Login</button>
+      </form>
+      <div id="login-message" class="hidden"></div>
+      <div class="loader" id="loader"></div>
+    </div>
+
+    <div class="right-section">
+      <h2>Need Help?</h2>
+      
+      <div class="contact-item">
+        <h3>রিপোর্ট সংক্রান্ত বিষয়ে যোগাযোগ করুন:</h3>
+        <p class="number">01940295271, 01752822254</p>
+      </div>
+      
+      <div class="contact-item">
+        <h3>ইমেজ পাঠাতে সমস্যা হলে যোগাযোগ করুন:</h3>
+        <p class="number">01940295271, 01752822254</p>
+      </div>
+      
+      <div class="contact-item">
+        <h3>বিল সংক্রান্ত বিষয়ে যোগাযোগ করুন:</h3>
+        <p class="number">01940295271, 01752822254</p>
+      </div>
+      
+      <div class="contact-item">
+        <h3>অ্যাডমিন সংক্রান্ত বিষয়ে যোগাযোগ করুন:</h3>
+        <p class="number">01752822254</p>
+      </div>
+      
+      <div class="contact-item">
+        <h3>Email: <span class="number">yasirrabbanitanvir@gmail.com</span></h3>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const baseUrl = window.location.origin;
+
+    window.onload = () => {
+      const token = localStorage.getItem('token');
+      const role = localStorage.getItem('role');
+      if (token && role) {
+       
+        if (role === 'Admin') {
+          window.location.href = '/admin/';
+        } else if (role === 'SubAdmin' || role === 'Center') {
+          window.location.href = '/static/index.html';
+        } else if (role === 'Center') {
+          window.location.href = '/static/institute.html';
+        } else if (role === 'Doctor') {
+          window.location.href = '/static/doctor.html';
+        }
+      }
+    };
+
+    document.getElementById('login-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const form = e.target;
+      const msgEl = document.getElementById('login-message');
+      const loader = document.getElementById('loader');
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData);
+
+      if (!data.username || !data.password) {
+        msgEl.textContent = '❌ Please fill in both fields.';
+        msgEl.className = 'error';
+        return;
+      }
+
+      loader.style.display = 'block';
+      msgEl.className = 'hidden';
+
+      try {
+        const res = await fetch(`${baseUrl}/api/login/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Login failed');
+
+        localStorage.setItem('token', result.token);
+        localStorage.setItem('role', result.role);
+        if (result.center_name) localStorage.setItem('center_name', result.center_name);
+        if (result.institute_name) localStorage.setItem('institute_name', result.institute_name);
+
+        if (form.remember_me.checked) {
+          localStorage.setItem('remembered_username', data.username);
+        } else {
+          localStorage.removeItem('remembered_username');
+        }
+
+        window.location.href = result.redirect;
+      } catch (err) {
+        msgEl.textContent = `❌ ${err.message}`;
+        msgEl.className = 'error';
+      } finally {
+        loader.style.display = 'none';
+      }
+    });
+
+    const rememberedUsername = localStorage.getItem('remembered_username');
+    if (rememberedUsername) {
+      document.querySelector('input[name="username"]').value = rememberedUsername;
+      document.querySelector('input[name="remember_me"]').checked = true;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+[
+  {
+    "reported_by": "sazzad",
+    "report_content": "<p><strong>Comparison: </strong>___________</p><p><br></p><p><strong>Findings:</strong></p><p>No fractures or other bony abnormalities are seen in the _____ knee.</p><p>The joint space has a normal appearance and there is no joint effusion.</p><p>No soft tissue abnormality is seen.</p><p><br></p><p><strong>Conclusion:</strong></p><p>Normal _____ knee.</p>",
+    "status": "Reported",
+    "report_file": "http://telesoftbangladesh.net/media/reports/26061910_90860_Report_90860_20260707T080612.docx",
+    "created_at": "07-07-2026 14:06:11",
+    "dicom_id": 90860
+  },
+  {
+    "reported_by": "sazzad",
+    "report_content": "",
+    "status": "Reported",
+    "report_file": "http://telesoftbangladesh.net/media/reports/26061910_90860_Report_90860_20260704T045649.docx",
+    "created_at": "04-07-2026 10:56:45",
+    "dicom_id": 90860
+  }
+]

@@ -1,0 +1,2760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Telerad PACS Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f0f2f7;
+  --bg2: #ffffff;
+  --bg3: #f5f7fb;
+  --border: #e2e6f0;
+  --border2: #d0d7e8;
+  --text: #111827;
+  --text2: #4b5563;
+  --text3: #9ca3af;
+  --accent: #3d7eff;
+  --accent2: #2563d4;
+  --accent-glow: rgba(61,126,255,0.12);
+  --green: #16a34a;
+  --green-bg: rgba(22,163,74,0.10);
+  --yellow: #ca8a04;
+  --yellow-bg: rgba(202,138,4,0.10);
+  --red: #dc2626;
+  --red-bg: rgba(220,38,38,0.10);
+  --purple: #7c3aed;
+  --purple-bg: rgba(124,58,237,0.10);
+  --orange: #ea580c;
+  --orange-bg: rgba(234,88,12,0.10);
+  --sidebar-w: 240px;
+  --header-h: 58px;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  --transition: 0.15s ease;
+  --font: 'DM Sans', sans-serif;
+  --mono: 'DM Mono', monospace;
+}
+
+html, body { height: 100%; font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; overflow-x: hidden; }
+a { color: inherit; text-decoration: none; }
+button { font-family: var(--font); cursor: pointer; border: none; outline: none; }
+input, select, textarea { font-family: var(--font); outline: none; }
+ul { list-style: none; }
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: var(--sidebar-w);
+  background: #0062C2;
+  border-right: none;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  transition: transform var(--transition);
+  box-shadow: 2px 0 12px rgba(0,0,0,0.20);
+}
+
+.sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0L52 15L52 45L30 60L8 45L8 15Z' fill='none' stroke='rgba(255,255,255,0.06)' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 60px 60px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sidebar::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 180px;
+  background: linear-gradient(to top, rgba(0,0,0,0.18) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sidebar-logo,
+.sidebar-nav,
+.sidebar-footer {
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar-logo {
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+
+.logo-mark {
+  width: 32px; height: 32px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  display: flex; flex-direction: column;
+  gap: 0;
+}
+
+.logo-text span:first-child {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+}
+
+.logo-text span:last-child {
+  font-size: 10.5px;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 10px;
+  overflow-y: auto;
+}
+
+.nav-section {
+  margin-bottom: 20px;
+}
+
+.nav-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  padding: 0 8px 6px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  color: rgba(255,255,255,0.72);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  margin-bottom: 1px;
+}
+
+.nav-item:hover {
+  background: rgba(255,255,255,0.12);
+  color: #ffffff;
+}
+
+.nav-item.active {
+  background: #4FBA5B;
+  color: #ffffff;
+  border: none;
+}
+
+.nav-icon {
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.sidebar-footer {
+  padding: 14px 10px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+}
+
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.user-card:hover { background: rgba(255,255,255,0.08); }
+
+.user-avatar {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0062C2 0%, #4FBA5B 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.user-info { flex: 1; min-width: 0; }
+.user-name { font-size: 12.5px; font-weight: 600; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-role { font-size: 11px; color: rgba(255,255,255,0.45); }
+
+.logout-btn {
+  background: none;
+  color: var(--text3);
+  padding: 4px;
+  border-radius: 4px;
+  transition: color var(--transition);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.logout-btn:hover { color: var(--red); }
+
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.topbar {
+  height: var(--header-h);
+  background: #0062C2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.page-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.2px;
+}
+
+.page-subtitle {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+}
+
+.topbar-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.topbar-nav-link {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+  transition: all var(--transition);
+  background: none;
+  border: none;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.page {
+  display: none;
+}
+
+.page.active {
+  display: block;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+  margin-bottom: 26px;
+}
+
+.stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.stat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.stat-icon {
+  width: 36px; height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.stat-icon.blue { background: var(--accent-glow); color: var(--accent); }
+.stat-icon.green { background: var(--green-bg); color: var(--green); }
+.stat-icon.purple { background: var(--purple-bg); color: var(--purple); }
+.stat-icon.orange { background: var(--orange-bg); color: var(--orange); }
+
+.stat-label {
+  font-size: 12.5px;
+  color: var(--text3);
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
+
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.card-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.card-body {
+  padding: 20px;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table thead {
+  background: var(--bg3);
+}
+
+.table th {
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text2);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+}
+
+.table tbody tr {
+  transition: background var(--transition);
+}
+
+.table tbody tr:hover {
+  background: var(--bg3);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.badge-blue { background: var(--accent-glow); color: var(--accent); }
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-yellow { background: var(--yellow-bg); color: var(--yellow); }
+.badge-red { background: var(--red-bg); color: var(--red); }
+.badge-purple { background: var(--purple-bg); color: var(--purple); }
+.badge-gray { background: rgba(0,0,0,0.05); color: var(--text3); }
+
+.tag {
+  display: inline-block;
+  padding: 3px 8px;
+  background: var(--bg3);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text2);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all var(--transition);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--accent2);
+}
+
+.btn-secondary {
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+.btn-danger {
+  background: var(--red);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
+.btn-warning {
+  background: #d97706;
+  color: #fff;
+}
+
+.btn-warning:hover {
+  background: #b45309;
+}
+
+.btn-success {
+  background: var(--green);
+  color: #fff;
+}
+
+.btn-success:hover {
+  background: #15803d;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text2);
+}
+
+.btn-ghost:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.btn-xs {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.btn-sm {
+  padding: 7px 12px;
+  font-size: 12.5px;
+}
+
+.input-group {
+  margin-bottom: 16px;
+}
+
+.input-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.input-text, .input-select, .input-textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  color: var(--text);
+  background: var(--bg2);
+  transition: border-color var(--transition);
+}
+
+.input-text:focus, .input-select:focus, .input-textarea:focus {
+  border-color: var(--accent);
+}
+
+.input-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.input-file {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  font-size: 13px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.2);
+  max-width: 860px;
+  width: 92%;
+  max-height: 92vh;
+  overflow-y: auto;
+  transform: scale(0.95);
+  transition: transform 0.2s ease;
+}
+
+.modal-overlay.open .modal {
+  transform: scale(1);
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.modal-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text3);
+  transition: all var(--transition);
+  background: none;
+  border: none;
+  font-size: 20px;
+}
+
+.modal-close:hover {
+  background: rgba(0,0,0,0.05);
+  color: var(--text);
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.3;
+}
+
+.empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.empty-text {
+  font-size: 13px;
+  color: var(--text3);
+}
+
+.loading {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text3);
+}
+
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateX(100px);
+  animation: toastIn 0.3s ease forwards;
+}
+
+.toast.out {
+  animation: toastOut 0.3s ease forwards;
+}
+
+@keyframes toastIn {
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastOut {
+  to { opacity: 0; transform: translateX(100px); }
+}
+
+.toast-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.toast.success .toast-icon {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.toast.error .toast-icon {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.toast.info .toast-icon {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.actions-cell {
+  display: flex;
+  gap: 6px;
+}
+
+.confirm-dialog {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 250;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.confirm-dialog.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.confirm-box {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.2);
+  max-width: 440px;
+  width: 90%;
+  padding: 24px;
+  transform: scale(0.95);
+  transition: transform 0.2s ease;
+}
+
+.confirm-dialog.open .confirm-box {
+  transform: scale(1);
+}
+
+.confirm-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+.confirm-message {
+  font-size: 13.5px;
+  color: var(--text2);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.error-banner {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.search-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.multi-select-container {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  min-height: 100px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg2);
+}
+
+.multi-select-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.multi-select-item:hover {
+  background: var(--bg3);
+}
+
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.permission-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  transition: all var(--transition);
+}
+
+.permission-item:hover {
+  background: var(--bg2);
+  border-color: var(--accent);
+}
+
+.permission-checkbox {
+  width: 18px;
+  height: 18px;
+}
+
+.permission-label {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  cursor: pointer;
+  flex: 1;
+}
+
+.image-preview {
+  margin-top: 8px;
+  max-width: 200px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.alert-type-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.alert-type-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--bg3);
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.alert-type-header input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.alert-channel-panel {
+  display: none;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg2);
+}
+
+.alert-channel-panel.open {
+  display: block;
+}
+
+.alert-channel-section {
+  margin-bottom: 14px;
+}
+
+.alert-channel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg3);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 8px;
+}
+
+.alert-channel-header.alert-channel-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: rgba(0,0,0,0.03);
+}
+
+.alert-channel-header input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.alert-channel-header.alert-channel-disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
+.alert-channel-fields {
+  display: none;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg2);
+}
+
+.alert-channel-fields.open {
+  display: block;
+}
+
+.alert-recipient-row {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  align-items: start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.alert-recipient-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.alert-recipient-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 500;
+}
+
+.alert-recipient-label input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.alert-msg-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.alert-msg-col label {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 500;
+}
+
+.alert-msg-col textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg2);
+  resize: vertical;
+  min-height: 56px;
+  transition: border-color var(--transition);
+}
+
+.alert-msg-col textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.alert-msg-col textarea:disabled {
+  background: rgba(0,0,0,0.02);
+  color: var(--text3);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.alert-num-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 140px;
+}
+
+.alert-num-col label {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 500;
+}
+
+.alert-num-col textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg2);
+  resize: vertical;
+  min-height: 56px;
+  transition: border-color var(--transition);
+}
+
+.alert-num-col textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.alert-num-col textarea:disabled {
+  background: rgba(0,0,0,0.02);
+  color: var(--text3);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.alert-recipient-label input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.alert-recipient-label input[type="checkbox"]:disabled + label {
+  color: var(--text3);
+  opacity: 0.7;
+}
+
+.server-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.server-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+}
+
+.server-info-row:last-child {
+  border-bottom: none;
+}
+
+.server-info-label {
+  color: var(--text3);
+  font-weight: 500;
+}
+
+.server-info-value {
+  color: var(--text);
+  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  text-align: right;
+  max-width: 60%;
+  word-break: break-all;
+}
+
+.usage-bar-wrap {
+  margin-top: 6px;
+}
+
+.usage-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text3);
+  margin-bottom: 4px;
+}
+
+.usage-bar-track {
+  height: 8px;
+  background: var(--bg3);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.usage-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+.usage-bar-fill.cpu { background: linear-gradient(90deg, var(--accent), #7c3aed); }
+.usage-bar-fill.mem { background: linear-gradient(90deg, var(--green), #059669); }
+.usage-bar-fill.disk-used { background: linear-gradient(90deg, var(--orange), #f59e0b); }
+
+.history-canvas-wrap {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg3);
+}
+
+.history-canvas-wrap canvas {
+  display: block;
+  width: 100%;
+}
+
+.drive-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.drive-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+
+.drive-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.drive-letter {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--accent-glow);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.drive-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.drive-total {
+  font-size: 11.5px;
+  color: var(--text3);
+}
+
+.drive-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.drive-stat {
+  text-align: center;
+}
+
+.drive-stat-val {
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.drive-stat-lbl {
+  color: var(--text3);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.drive-pie-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 8px;
+}
+
+.drive-pie-wrap canvas {
+  display: block;
+}
+
+.server-refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.server-last-updated {
+  font-size: 12px;
+  color: var(--text3);
+}
+
+.admin-footer {
+  background: #0062C2;
+  color: #fff;
+  padding: 0;
+  margin-top: auto;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.admin-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 60px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 60' preserveAspectRatio='none'%3E%3Cpath fill='%234FBA5B' d='M0,32 C240,10 480,5 720,20 C960,35 1200,45 1440,32 L1440,0 L0,0 Z'/%3E%3C/svg%3E") no-repeat;
+  background-size: cover;
+  background-position: bottom;
+}
+
+.admin-footer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0L52 15L52 45L30 60L8 45L8 15Z' fill='none' stroke='rgba(255,255,255,0.05)' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 60px 60px;
+}
+
+.admin-footer-content {
+  width: 100%;
+  margin: 0;
+  padding: 80px 0 30px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+}
+
+.admin-footer-left {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.45);
+  padding-left: 40px;
+}
+
+.admin-footer-right {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.45);
+  padding-right: 40px;
+}
+
+.pagination-container {
+  margin-top: 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 15px 20px;
+}
+
+.pagination-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.pagination-info {
+  color: #666;
+  font-size: 14px;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.items-per-page {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #666;
+}
+
+.items-per-page select {
+  padding: 5px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pagination-btn {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  background: white;
+  color: #333;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  min-width: 40px;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #f5f5f5;
+  border-color: #ccc;
+}
+
+.pagination-btn:disabled {
+  background: #f9f9f9;
+  color: #ccc;
+  cursor: not-allowed;
+  border-color: #eee;
+}
+
+.pagination-btn.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.pagination-btn.active:hover {
+  background: #0056b3;
+  border-color: #0056b3;
+}
+
+.page-numbers {
+  display: flex;
+  gap: 2px;
+}
+
+.pagination-ellipsis {
+  padding: 8px 4px;
+  color: #999;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .pagination-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+  
+  .pagination-controls {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .pagination-buttons {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+.user-grid-search {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg2);
+  margin-bottom: 6px;
+  font-family: var(--font);
+  transition: border-color var(--transition);
+}
+
+.user-grid-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.user-grid-container {
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.user-grid-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border-bottom: 1px solid var(--border);
+}
+
+.user-grid-row:last-child {
+  border-bottom: none;
+}
+
+.user-grid-row:nth-child(odd) {
+  background: #ffffff;
+}
+
+.user-grid-row:nth-child(even) {
+  background: #f3f4f6;
+}
+
+.user-grid-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+
+.user-grid-cell:last-child {
+  border-right: none;
+}
+
+.user-grid-cell input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  accent-color: #17a2b8;
+  cursor: pointer;
+}
+
+.user-grid-cell label {
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+  font-family: var(--font);
+}
+
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark"><img src="/static/telesoftlogo.png" alt="Logo" height="25" width="25"></div>
+      <div class="logo-text">
+        <span>Telerad PACS</span>
+        <span>Admin Portal</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-label">Overview</div>
+        <div class="nav-item active" data-page="dashboard">
+          
+          Dashboard
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-label">Management</div>
+        <div class="nav-item" data-page="sessions">
+          
+          Session Management
+        </div>
+        <div class="nav-item" data-page="dicom">
+          
+          Study Management
+        </div>
+        <div class="nav-item" data-page="users">
+          
+          User Management
+        </div>
+        <div class="nav-item" data-page="groups">
+          
+          Group Management
+        </div>
+        <div class="nav-item" data-page="centers">
+          
+          Center Management
+        </div>
+        <div style="padding: 8px 10px 4px; font-size: 13.5px; font-weight: 500; color: rgba(255,255,255,0.65); margin-top: 2px;">
+          Report Template
+        </div>
+        <div class="nav-item" data-page="templates" style="padding-left:26px;font-size:12.5px;color:rgba(255,255,255,0.50);">
+          &bull; Create
+        </div>
+        <div class="nav-item" data-page="mgmt-reports">
+          
+          Management Reports
+        </div>
+        <div style="padding: 8px 10px 4px; font-size: 13.5px; font-weight: 500; color: rgba(255,255,255,0.65); margin-top: 2px;">
+          Dicom
+        </div>
+        <div class="nav-item" onclick="goToAddDicom()" style="padding-left:26px;font-size:12.5px;color:rgba(255,255,255,0.50);">
+          &bull; Add Dicom
+        </div>
+        <div class="nav-item" onclick="goToDicomActivity()" style="padding-left:26px;font-size:12.5px;color:rgba(255,255,255,0.50);">
+          &bull; Dicom Activity
+        </div>
+        <div class="nav-item" data-page="alerts">
+          Alerts
+        </div>
+        <div class="nav-item" data-page="server">
+          Server Manager
+        </div>
+        <div class="nav-item" onclick="logout()">
+          Log Off
+        </div>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-avatar" id="user-avatar">A</div>
+        <div class="user-info">
+          <div class="user-name" id="current-username">Admin</div>
+          <div class="user-role">Administrator</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-nav-links">
+          <button class="topbar-nav-link" onclick="logout()">Log Off</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div id="dashboard-page" class="page active">
+        <div class="dashboard-grid">
+          <div class="stat-card">
+            <div class="stat-header">
+              
+              <div class="stat-label">Total Users</div>
+            </div>
+            <div class="stat-value" id="total-users">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header">
+             
+              <div class="stat-label">Centers</div>
+            </div>
+            <div class="stat-value" id="total-centers">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header">
+            
+              <div class="stat-label">DICOM Images</div>
+            </div>
+            <div class="stat-value" id="total-images">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header">
+            
+              <div class="stat-label">Templates</div>
+            </div>
+            <div class="stat-value" id="total-templates">0</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Recent Activity</div>
+          </div>
+          <div class="card-body">
+            <div class="empty-state">
+              <div class="empty-icon">📈</div>
+              <div class="empty-title">Dashboard Coming Soon</div>
+              <div class="empty-text">Activity metrics will be displayed here</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="users-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">User Management</div>
+            <div class="card-actions">
+              <button class="btn btn-primary btn-sm" onclick="openCreateUserModal()">
+                + New User
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="margin-bottom: 20px;">
+              <input type="text" id="user-search-input" class="input-text" placeholder="Search by username or name..." style="max-width: 400px;" oninput="searchUsers()" />
+            </div>
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Login Username</th>
+                    <th>Name</th>
+                    <th>Change Password</th>
+                    <th>Enable / Disable</th>
+                    <th>Edit</th>
+                    <th>Delete</th>
+                  </tr>
+                </thead>
+                <tbody id="users-table-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="users-pagination-container" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="users-pagination-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="users-items-per-page" onchange="changeUsersPerPage()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="users-pagination-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="centers-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Centers / Institutes</div>
+            <div class="card-actions">
+              <button class="btn btn-primary btn-sm" onclick="openCreateCenterModal()">
+                + New Center
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="margin-bottom: 20px;">
+              <input type="text" id="center-search-input" class="input-text" placeholder="Search by institute name or username..." style="max-width: 400px;" oninput="searchCenters()" />
+            </div>
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Institute Name</th>
+                    <th>Login Username</th>
+                    <th>Enabled</th>
+                    <th>Upload History</th>
+                    <th>Delete</th>
+                  </tr>
+                </thead>
+                <tbody id="centers-table-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="centers-pagination-container" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="centers-pagination-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="centers-items-per-page" onchange="changeCentersPerPage()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="centers-pagination-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="mgmt-reports-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Management Reports</div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="printMgmtReportHTML()">Print HTML</button>
+              <button class="btn btn-success btn-sm" onclick="exportMgmtReportExcel()">Export Excel</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px;">
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Report Start Date</label>
+                <input type="date" class="input-text" id="mgmt-report-start" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Report End Date</label>
+                <input type="date" class="input-text" id="mgmt-report-end" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Server Receive Start</label>
+                <input type="date" class="input-text" id="mgmt-server-start" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Server Receive End</label>
+                <input type="date" class="input-text" id="mgmt-server-end" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Scan Start Date</label>
+                <input type="date" class="input-text" id="mgmt-scan-start" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Scan End Date</label>
+                <input type="date" class="input-text" id="mgmt-scan-end" />
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px;">
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Institute</label>
+                <select class="input-select" id="mgmt-centre-filter">
+                  <option value="">All Institutes</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Doctor</label>
+                <select class="input-select" id="mgmt-doctor-filter" style="min-width:200px;max-width:280px;">
+                  <option value="">All</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Status</label>
+                <select class="input-select" id="mgmt-status-filter">
+                  <option value="">All Statuses</option>
+                  <option value="Not Assigned">Not Assigned</option>
+                  <option value="Unreported">Unreported</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Reviewed">Reviewed</option>
+                  <option value="Reported">Reported</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Modality</label>
+                <select class="input-select" id="mgmt-modality-filter">
+                  <option value="">All Modalities</option>
+                  <option value="CT">CT</option>
+                  <option value="MR">MR</option>
+                  <option value="US">US</option>
+                  <option value="CR">CR</option>
+                  <option value="DX">DX</option>
+                  <option value="XA">XA</option>
+                  <option value="NM">NM</option>
+                  <option value="PT">PT</option>
+                  <option value="RF">RF</option>
+                  <option value="MG">MG</option>
+                  <option value="SC">SC</option>
+                  <option value="OT">OT</option>
+                  <option value="AN">AN</option>
+                  <option value="PX">PX</option>
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;padding-top:20px;">
+                <button class="btn btn-primary btn-sm" onclick="searchMgmtReports()" style="padding:9px 16px;">Search</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <div class="card-body" style="padding:0;">
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>S.No.</th>
+                    <th>Radiologist</th>
+                    <th>Reporting Center</th>
+                    <th>Patient Name</th>
+                    <th>Patient ID</th>
+                    <th>Body Part</th>
+                    <th>Modality</th>
+                    <th>Scan Date/Time</th>
+                    <th>Server Receive Date/Time</th>
+                    <th>Report Status</th>
+                    <th>Report Date/Time</th>
+                    <th>Transmission Time</th>
+                  </tr>
+                </thead>
+                <tbody id="mgmt-reports-table-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="mgmt-pagination-container" style="display:none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="mgmt-pagination-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="mgmt-items-per-page" onchange="changeMgmtPerPage()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="mgmt-pagination-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="dicom-page" class="page">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-body" style="padding:16px 20px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px;">
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Patient Name</label>
+                <input type="text" class="input-text" id="dicom-search" placeholder="Search name..." />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Patient ID</label>
+                <input type="text" class="input-text" id="dicom-id-filter" placeholder="Search ID..." />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">From Date</label>
+                <input type="date" class="input-text" id="dicom-date-from" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">To Date</label>
+                <input type="date" class="input-text" id="dicom-date-to" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Status</label>
+                <select class="input-select" id="dicom-status-filter">
+                  <option value="">All Statuses</option>
+                  <option value="Not Assigned">Not Assigned</option>
+                  <option value="Unreported">Unreported</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Reviewed">Reviewed</option>
+                  <option value="Reported">Reported</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Institute</label>
+                <select class="input-select" id="dicom-institute-filter">
+                  <option value="">All Institutes</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Modality</label>
+                <select class="input-select" id="dicom-modality-filter">
+                  <option value="">All Modalities</option>
+                  <option value="CT">CT</option>
+                  <option value="MR">MR</option>
+                  <option value="US">US</option>
+                  <option value="CR">CR</option>
+                  <option value="DX">DX</option>
+                  <option value="XA">XA</option>
+                  <option value="NM">NM</option>
+                  <option value="PT">PT</option>
+                  <option value="RF">RF</option>
+                  <option value="MG">MG</option>
+                  <option value="SC">SC</option>
+                  <option value="OT">OT</option>
+                  <option value="AN">AN</option>
+                  <option value="PX">PX</option>
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-top:20px;">
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;">
+                  <input type="checkbox" id="dicom-emergency-filter" style="width:15px;height:15px;cursor:pointer;" />
+                  Emergency Only
+                </label>
+                <button class="btn btn-primary btn-sm" onclick="filterDicom()" style="padding:9px 16px;">Search</button>
+              </div>
+            </div>
+            <div id="dicom-assign-panel" style="display:block;padding:12px 0 0;border-top:1px solid var(--border);margin-top:4px;">
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                <span style="font-size:13px;font-weight:600;color:var(--text2);">Assign selected studies to:</span>
+                <select class="input-select" id="dicom-assign-doctor" style="min-width:200px;max-width:280px;">
+                  <option value="">Select Doctor</option>
+                </select>
+                <button class="btn btn-primary btn-sm" onclick="assignSelectedStudies()">Assign</button>
+              </div>
+            </div>
+            <div id="dicom-bulk-panel" style="display:none;padding:12px 0 0;border-top:1px solid var(--border);margin-top:4px;">
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                <span id="dicom-bulk-count" style="font-size:13px;font-weight:600;color:var(--text2);">0 selected</span>
+                <select class="input-select" id="dicom-bulk-modality" style="min-width:140px;">
+                  <option value="">Set Modality...</option>
+                  <option value="CT">CT</option>
+                  <option value="MR">MR</option>
+                  <option value="US">US</option>
+                  <option value="CR">CR</option>
+                  <option value="DX">DX</option>
+                  <option value="XA">XA</option>
+                  <option value="NM">NM</option>
+                  <option value="PT">PT</option>
+                  <option value="RF">RF</option>
+                  <option value="MG">MG</option>
+                  <option value="SC">SC</option>
+                  <option value="OT">OT</option>
+                  <option value="AN">AN</option>
+                  <option value="PX">PX</option>
+                </select>
+                <select class="input-select" id="dicom-bulk-status" style="min-width:160px;">
+                  <option value="">Set Status...</option>
+                  <option value="Not Assigned">Not Assigned</option>
+                  <option value="Unreported">Unreported</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Reviewed">Reviewed</option>
+                  <option value="Reported">Reported</option>
+                </select>
+                <button class="btn btn-primary btn-sm" onclick="bulkApplyDicomEdit()">Apply</button>
+                <button class="btn btn-danger btn-sm" onclick="bulkDeleteDicom()">Delete Selected</button>
+                <button class="btn btn-ghost btn-sm" onclick="selectDicomByModality()">Select by Modality</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="dicom-results-card" style="display:none;">
+          <div class="card-header">
+            <div class="card-title">
+              Studies
+              <span id="dicom-count" style="font-size: 12px; color: var(--text3); font-weight: 400; margin-left: 8px;"></span>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width:36px;"><input type="checkbox" id="dicom-select-all" onchange="toggleAllDicomRows(this)" /></th>
+                    <th>Patient Name</th>
+                    <th>Patient ID</th>
+                    <th>Modality</th>
+                    <th>Assigned Groups</th>
+                    <th>Institute</th>
+                    <th>Scan Date/Time</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="dicom-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="templates-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Report Templates</div>
+            <div class="card-actions">
+              <button class="btn btn-primary btn-sm" onclick="openCreateTemplateModal()">
+                + New Template
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Body Part</th>
+                    <th>Modality</th>
+                    <th>Template Name</th>
+                    <th>Created By</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="templates-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="groups-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Doctor Groups</div>
+            <div class="card-actions">
+              <button class="btn btn-primary btn-sm" onclick="openCreateGroupModal()">
+                + New Group
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="margin-bottom: 20px;">
+              <input type="text" class="input-text" id="group-search" placeholder="Search groups..." style="max-width: 400px;" oninput="filterGroups()" />
+            </div>
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Group Name</th>
+                    <th>Members</th>
+                    <th>Enable / Disable</th>
+                    <th>Description</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="groups-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="sessions-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Active Sessions</div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="loadSessions()">↻ Refresh</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>IP Address</th>
+                    <th>Login Time</th>
+                    <th>Last Activity</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="sessions-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="alerts-page" class="page">        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Alert Settings</div>
+          </div>
+          <div class="card-body">
+            <div id="alert-types-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+            <div style="margin-top:24px;">
+              <button class="btn btn-primary" onclick="saveAlertSettings()">Submit</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="server-page" class="page">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+          <div>
+            <div style="font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.3px;">Server Manager</div>
+            <div class="server-last-updated" id="server-last-updated">Not loaded yet</div>
+          </div>
+          <button class="btn btn-secondary btn-sm server-refresh-btn" onclick="loadServerInfo()">
+            <span id="server-refresh-icon">↻</span> Refresh
+          </button>
+        </div>
+
+        <div class="server-grid">
+          <div class="card">
+            <div class="card-header"><div class="card-title">System</div></div>
+            <div class="card-body" id="server-system-body">
+              <div class="loading">Loading...</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">CPU</div></div>
+            <div class="card-body" id="server-cpu-body">
+              <div class="loading">Loading...</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Memory</div></div>
+            <div class="card-body" id="server-mem-body">
+              <div class="loading">Loading...</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:24px;">
+          <div class="card-header"><div class="card-title">Storage</div></div>
+          <div class="card-body">
+            <div class="drive-cards" id="server-drives-body">
+              <div class="loading">Loading...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="admin-footer">
+      <div class="admin-footer-content">
+        <div class="admin-footer-left">© 2026 Telesoft. All rights reserved.</div>
+        <div class="admin-footer-right">Developed by Yasir | 01752822254</div>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<div class="modal-overlay" id="create-group-modal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title" id="group-modal-title">Create New Group</div>
+      <button class="modal-close" onclick="closeModal('create-group-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="group-modal-error"></div>
+      <div class="input-group">
+        <label class="input-label">Name <span style="color:var(--red);">*</span></label>
+        <input type="text" class="input-text" id="group-name" placeholder="e.g. Night Shift Team" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Description</label>
+        <textarea class="input-textarea" id="group-description" rows="3" placeholder="Describe the purpose of this group…"></textarea>
+      </div>
+      <div class="input-group">
+        <label class="checkbox-label">
+          <input type="checkbox" class="checkbox" id="group-enabled" checked />
+          Enabled
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('create-group-modal')">Cancel</button>
+      <button class="btn btn-primary" id="group-modal-save-btn" onclick="saveGroup()">Save Group</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="manage-members-modal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">Members — <span id="members-modal-group-name"></span></div>
+      <button class="modal-close" onclick="closeModal('manage-members-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="members-modal-error"></div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Select the doctors who belong to this group. When you assign this group to a study, all checked doctors will be assigned.</p>
+      <div id="members-doctor-list" style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('manage-members-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveGroupMembers()">Save Members</button>
+    </div>
+  </div>
+</div>
+
+
+
+
+<div class="modal-overlay" id="create-user-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="user-modal-title">Create New User</div>
+      <button class="modal-close" onclick="closeModal('create-user-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="user-modal-error"></div>
+      <div class="input-group">
+        <label class="input-label">Username</label>
+        <input type="text" class="input-text" id="user-username" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Password</label>
+        <input type="password" class="input-text" id="user-password" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Role</label>
+        <select class="input-select" id="user-role" onchange="toggleUserFields()">
+          <option value="">Select Role</option>
+          <option value="Admin">Admin</option>
+          <option value="SubAdmin">SubAdmin</option>
+          <option value="Doctor">Doctor</option>
+          <option value="Center">Center</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Group</label>
+        <select class="input-select" id="user-group">
+          <option value="">No Group</option>
+        </select>
+      </div>
+      <div class="input-group" id="user-center-group" style="display: none;">
+        <label class="input-label">Center</label>
+        <select class="input-select" id="user-center">
+          <option value="">Select Center</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Full Name <span id="fullname-required" style="color: var(--red); display:none;">*</span></label>
+        <input type="text" class="input-text" id="user-fullname" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Designation</label>
+        <input type="text" class="input-text" id="user-designation" />
+      </div>
+      <div class="input-group" id="user-qualification-group">
+        <label class="input-label">Qualification <span id="qualification-required" style="color: var(--red); display:none;">*</span></label>
+        <textarea class="input-textarea" id="user-qualification" rows="3"></textarea>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Contact Number</label>
+        <input type="text" class="input-text" id="user-contact" />
+      </div>
+      <div class="input-group" id="user-bmdc-group">
+        <label class="input-label">BMDC Reg. No</label>
+        <input type="text" class="input-text" id="user-bmdc" />
+      </div>
+      <div class="input-group" id="user-signature-group">
+        <label class="input-label">Signature Image</label>
+        <input type="file" class="input-file" id="user-signature" accept="image/*" onchange="previewSignature()" />
+        <img id="signature-preview" class="image-preview" style="display: none;" />
+      </div>
+      <div id="user-permissions-section">
+        <div class="input-group">
+          <label class="input-label">Permissions</label>
+          <div class="permission-grid">
+            <div class="permission-item">
+              <input type="checkbox" class="permission-checkbox" id="perm-assign-doctors" />
+              <label class="permission-label" for="perm-assign-doctors">Assign Doctors</label>
+            </div>
+            <div class="permission-item">
+              <input type="checkbox" class="permission-checkbox" id="perm-write-reports" />
+              <label class="permission-label" for="perm-write-reports">Write Reports</label>
+            </div>
+            <div class="permission-item">
+              <input type="checkbox" class="permission-checkbox" id="perm-manage-templates" />
+              <label class="permission-label" for="perm-manage-templates">Manage Templates</label>
+            </div>
+            <div class="permission-item">
+              <input type="checkbox" class="permission-checkbox" id="perm-view-images" />
+              <label class="permission-label" for="perm-view-images">View Images</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="user-institution-section" style="display: none;">
+        <div class="input-group">
+          <label class="input-label">Assigned Institutions (for Doctors)</label>
+          <div class="multi-select-container" id="institution-multi-select"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('create-user-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUser()">Save User</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="edit-user-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Edit User Profile</div>
+      <button class="modal-close" onclick="closeModal('edit-user-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="edit-user-modal-error"></div>
+      <input type="hidden" id="edit-user-id" />
+      <div class="input-group">
+        <label class="input-label">Username</label>
+        <input type="text" class="input-text" id="edit-user-username" disabled />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Role</label>
+        <input type="text" class="input-text" id="edit-user-role" disabled />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Group</label>
+        <select class="input-select" id="edit-user-group">
+          <option value="">No Group</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Full Name <span style="color: var(--red);">*</span></label>
+        <input type="text" class="input-text" id="edit-user-fullname" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Designation</label>
+        <input type="text" class="input-text" id="edit-user-designation" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Qualification <span style="color: var(--red);">*</span></label>
+        <textarea class="input-textarea" id="edit-user-qualification" rows="3"></textarea>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Contact Number</label>
+        <input type="text" class="input-text" id="edit-user-contact" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">BMDC Reg. No</label>
+        <input type="text" class="input-text" id="edit-user-bmdc" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Signature Image</label>
+        <input type="file" class="input-file" id="edit-user-signature" accept="image/*" onchange="previewEditSignature()" />
+        <img id="edit-signature-preview" class="image-preview" style="display: none;" />
+        <div id="current-signature-info" style="margin-top: 8px; font-size: 12px; color: var(--text3);"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Permissions</label>
+        <div class="permission-grid">
+          <div class="permission-item">
+            <input type="checkbox" class="permission-checkbox" id="edit-perm-assign-doctors" />
+            <label class="permission-label" for="edit-perm-assign-doctors">Assign Doctors</label>
+          </div>
+          <div class="permission-item">
+            <input type="checkbox" class="permission-checkbox" id="edit-perm-write-reports" />
+            <label class="permission-label" for="edit-perm-write-reports">Write Reports</label>
+          </div>
+          <div class="permission-item">
+            <input type="checkbox" class="permission-checkbox" id="edit-perm-manage-templates" />
+            <label class="permission-label" for="edit-perm-manage-templates">Manage Templates</label>
+          </div>
+          <div class="permission-item">
+            <input type="checkbox" class="permission-checkbox" id="edit-perm-view-images" />
+            <label class="permission-label" for="edit-perm-view-images">View Images</label>
+          </div>
+        </div>
+      </div>
+      <div id="edit-institution-section" style="display: none;">
+        <div class="input-group">
+          <label class="input-label">Assigned Institutions</label>
+          <div class="multi-select-container" id="edit-institution-multi-select"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('edit-user-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="updateUser()">Update Profile</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="create-center-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Create New Center</div>
+      <button class="modal-close" onclick="closeModal('create-center-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="create-center-error"></div>
+      <div class="input-group">
+        <label class="input-label">Institute Name</label>
+        <input type="text" class="input-text" id="new-institute" placeholder="Enter institute name" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Center Names (comma separated)</label>
+        <input type="text" class="input-text" id="new-center-names" placeholder="Center 1, Center 2, Center 3" />
+      </div>
+      <div class="input-group">
+        <label class="checkbox-label">
+          <input type="checkbox" class="checkbox" id="new-center-enabled" checked />
+          Enabled
+        </label>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Allowed Users</label>
+        <input type="text" class="user-grid-search" id="new-center-user-search" placeholder="Search users..." oninput="filterCenterUserGrid('new-center-user-list', this.value)" />
+        <div class="user-grid-container" id="new-center-user-list">
+          <div style="padding:10px;color:var(--text3);font-size:13px;">Loading users...</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('create-center-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createCenter()">Create Center</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="edit-center-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Edit Center</div>
+      <button class="modal-close" onclick="closeModal('edit-center-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="edit-center-error"></div>
+      <input type="hidden" id="edit-center-id" />
+      <div class="input-group">
+        <label class="input-label">Institute Name</label>
+        <input type="text" class="input-text" id="edit-institute-name" placeholder="Enter institute name" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Center Names (comma separated)</label>
+        <input type="text" class="input-text" id="edit-center-names" placeholder="Center 1, Center 2, Center 3" />
+      </div>
+      <div class="input-group">
+        <label class="checkbox-label">
+          <input type="checkbox" class="checkbox" id="edit-center-enabled" />
+          Enabled
+        </label>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Allowed Users</label>
+        <input type="text" class="user-grid-search" id="edit-center-user-search" placeholder="Search users..." oninput="filterCenterUserGrid('edit-center-user-list', this.value)" />
+        <div class="user-grid-container" id="edit-center-user-list">
+          <div style="padding:10px;color:var(--text3);font-size:13px;">Loading users...</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('edit-center-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="updateCenter()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="update-status-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Update DICOM Status</div>
+      <button class="modal-close" onclick="closeModal('update-status-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="status-modal-error"></div>
+      <div class="input-group">
+        <label class="input-label">Status</label>
+        <select class="input-select" id="status-select">
+          <option value="Not Assigned">Not Assigned</option>
+          <option value="Unreported">Unreported</option>
+          <option value="Draft">Draft</option>
+          <option value="Reviewed">Reviewed</option>
+          <option value="Reported">Reported</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Reported By</label>
+        <input type="text" class="input-text" id="status-reported-by" placeholder="Doctor name" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('update-status-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitStatusUpdate()">Update Status</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="template-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="tpl-modal-title">New Template</div>
+      <button class="modal-close" onclick="closeModal('template-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="tpl-modal-error"></div>
+      <div class="input-group">
+        <label class="input-label">Body Part</label>
+        <select class="input-text" id="tpl-body-part">
+          <option value="">Select Body Part</option>
+          <option value="CT TEMPLATES">CT TEMPLATES</option>
+          <option value="MRI TEMPLATES">MRI TEMPLATES</option>
+          <option value="X-RAY TEMPLATES">X-RAY TEMPLATES</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Modality</label>
+        <select class="input-text" id="tpl-modality">
+          <option value="">Select Body Part first</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Template Name</label>
+        <input type="text" class="input-text" id="tpl-name" placeholder="e.g., Normal Brain MRI" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Content</label>
+        <textarea class="input-textarea" id="tpl-content" rows="8" placeholder="Enter template content..."></textarea>
+      </div>
+      <div class="input-group">
+        <label class="checkbox-label">
+          <input type="checkbox" class="checkbox" id="tpl-active" checked />
+          Active Template
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('template-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTemplate()">Save Template</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-dialog" id="confirm-dialog">
+  <div class="confirm-box">
+    <div class="confirm-title" id="confirm-title"></div>
+    <div class="confirm-message" id="confirm-message"></div>
+    <div class="confirm-actions">
+      <button class="btn btn-secondary" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-danger" id="confirm-btn" onclick="confirmAction()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<div class="modal-overlay" id="change-password-modal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <div class="modal-title">Change Password</div>
+      <button class="modal-close" onclick="closeModal('change-password-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="change-password-user-id" />
+      <div class="form-group">
+        <label class="input-label">New Password</label>
+        <input type="password" class="input-text" id="change-password-input" placeholder="Enter new password" style="width:100%;" />
+      </div>
+      <div id="change-password-error" style="display:none;color:var(--red);font-size:13px;margin-top:8px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('change-password-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitChangePassword()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="upload-history-modal">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-header">
+      <div class="modal-title" id="upload-history-modal-title">Upload History</div>
+      <button class="modal-close" onclick="closeModal('upload-history-modal')">×</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Center</th>
+              <th>Uploaded Date</th>
+              <th>Size</th>
+            </tr>
+          </thead>
+          <tbody id="upload-history-table-body"></tbody>
+        </table>
+      </div>
+      <div id="upload-history-pagination" style="display:none;padding:12px 16px;border-top:1px solid var(--border);">
+        <div class="pagination-wrapper">
+          <div class="pagination-info">
+            <span id="upload-history-pagination-info"></span>
+          </div>
+          <div class="pagination-controls">
+            <div class="items-per-page">
+              <label>Per page:</label>
+              <select id="upload-history-per-page" onchange="changeUploadHistoryPerPage()">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+              </select>
+            </div>
+            <div class="pagination-buttons" id="upload-history-pagination-buttons"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="edit-study-modal">
+  <div class="modal" style="max-width:620px;">
+    <div class="modal-header">
+      <div class="modal-title">Edit Study</div>
+      <button class="modal-close" onclick="closeModal('edit-study-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="edit-study-error"></div>
+      <input type="hidden" id="edit-study-id" />
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="input-group">
+          <label class="input-label">Patient Name</label>
+          <input type="text" class="input-text" id="edit-study-patient-name" placeholder="Patient name" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">Patient ID</label>
+          <input type="text" class="input-text" id="edit-study-patient-id" placeholder="Patient ID" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">Institute</label>
+          <input type="text" class="input-text" id="edit-study-institute" placeholder="Institute name" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">Center</label>
+          <input type="text" class="input-text" id="edit-study-center" placeholder="Center name" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">Modality</label>
+          <select class="input-select" id="edit-study-modality">
+            <option value="">-- Select --</option>
+            <option value="CT">CT</option>
+            <option value="MR">MR</option>
+            <option value="US">US</option>
+            <option value="CR">CR</option>
+            <option value="DX">DX</option>
+            <option value="XA">XA</option>
+            <option value="NM">NM</option>
+            <option value="PT">PT</option>
+            <option value="RF">RF</option>
+            <option value="MG">MG</option>
+            <option value="SC">SC</option>
+            <option value="OT">OT</option>
+            <option value="AN">AN</option>
+            <option value="PX">PX</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label class="input-label">Status</label>
+          <select class="input-select" id="edit-study-status">
+            <option value="Not Assigned">Not Assigned</option>
+            <option value="Unreported">Unreported</option>
+            <option value="Draft">Draft</option>
+            <option value="Reviewed">Reviewed</option>
+            <option value="Reported">Reported</option>
+          </select>
+        </div>
+        <div class="input-group" style="grid-column:1/-1;">
+          <label class="input-label">Study Description</label>
+          <input type="text" class="input-text" id="edit-study-description" placeholder="Study description" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">Referring Physician</label>
+          <input type="text" class="input-text" id="edit-study-referring" placeholder="Referring physician" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">Reported By</label>
+          <input type="text" class="input-text" id="edit-study-reported-by" placeholder="Doctor name" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('edit-study-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEditStudy()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<script src="./script/admin.js"></script>
+
+</body>
+</html>

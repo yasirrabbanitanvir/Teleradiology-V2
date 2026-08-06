@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Patient History</title>
+  <link rel="stylesheet" href="./styles/styles.css" />
+  <style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background: #e8ecef;
+  color: #333;
+  padding: 0;
+  margin: 0;
+}
+
+.hw-wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 20px 40px;
+}
+
+.pt-strip {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.pt-strip-header {
+  background: #4a90e2;
+  color: #fff;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.pt-strip-body {
+  padding: 16px 20px;
+  display: flex;
+  gap: 30px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.pt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pt-field .lbl {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.pt-field .val {
+  font-size: 14px;
+  font-weight: 600;
+  color: #222;
+}
+
+.pt-field-name .val {
+  font-size: 17px;
+  color: #4a90e2;
+}
+
+.study-block {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-bottom: 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.study-block-head {
+  background: #4a90e2;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.study-block-head .study-id {
+  font-weight: 600;
+  font-size: 14px;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.study-block-head .study-date {
+  font-size: 13px;
+  color: rgba(255,255,255,0.85);
+}
+
+.study-block-inner {
+  padding: 18px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.row-top {
+  display: flex;
+  gap: 14px;
+}
+
+.row-top .f-history {
+  flex: 2;
+}
+
+.row-top .f-desc {
+  flex: 1;
+}
+
+.row-bottom {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.row-bottom .f-ref {
+  flex: 1;
+}
+
+.field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #444;
+  margin-bottom: 6px;
+}
+
+textarea,
+input[type="text"],
+select {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #ccc;
+  background: #fff;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  color: #333;
+  border-radius: 3px;
+}
+
+textarea:focus,
+input[type="text"]:focus,
+select:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.15);
+}
+
+textarea {
+  resize: none;
+}
+
+.ta-history { height: 90px; }
+.ta-desc    { height: 90px; }
+
+input[type="text"] { height: 36px; }
+select             { height: 36px; cursor: pointer; }
+
+.study-block-foot {
+  border-top: 1px solid #ddd;
+  padding: 10px 20px;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.foot-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.foot-left label {
+  font-weight: 600;
+  color: #444;
+  white-space: nowrap;
+}
+
+.foot-left input[type="file"] {
+  font-size: 13px;
+  border: none;
+  background: none;
+  padding: 0;
+  width: auto;
+}
+
+.dl-link {
+  font-size: 13px;
+  color: #4a90e2;
+  text-decoration: none;
+}
+
+.dl-link:hover {
+  text-decoration: underline;
+}
+
+.emg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+}
+
+.emg-row select {
+  width: auto;
+  height: 36px;
+  font-size: 13px;
+}
+
+.foot-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-save {
+  padding: 8px 28px;
+  background: #5cb85c;
+  color: #fff;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: Arial, sans-serif;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.btn-save:hover { background: #4cae4c; }
+.btn-save:active { background: #449d44; }
+
+.save-ok {
+  font-size: 13px;
+  color: #5cb85c;
+  font-weight: 600;
+  display: none;
+}
+
+.loading-cell {
+  background: #e8e8e8;
+  border-radius: 2px;
+  display: inline-block;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (max-width: 768px) {
+  .pt-strip-body {
+    gap: 16px;
+  }
+
+  .row-top {
+    flex-direction: column;
+  }
+
+  .row-bottom {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hw-wrap {
+    padding: 12px 10px 30px;
+  }
+}
+  </style>
+</head>
+<body>
+<div class="main-wrapper">
+
+  <header>
+    <nav>
+      <img src="/static/telesoftlogo.jpeg" alt="Telesoft Logo" class="logo" />
+      <ul>
+        <li><a href="#" onclick="history.back(); return false;">Back</a></li>
+        <li><a href="#" onclick="logout()">Log Off</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <div class="hw-wrap">
+
+    <div class="pt-strip">
+      <div class="pt-strip-header">
+        <span id="pt-name"><span class="loading-cell" style="width:160px;height:15px;">&nbsp;</span></span>
+      </div>
+      <div class="pt-strip-body">
+        <div class="pt-field">
+          <span class="lbl">Age</span>
+          <span class="val" id="pt-age"><span class="loading-cell" style="width:40px;height:14px;">&nbsp;</span></span>
+        </div>
+        <div class="pt-field">
+          <span class="lbl">Sex</span>
+          <span class="val" id="pt-sex"><span class="loading-cell" style="width:40px;height:14px;">&nbsp;</span></span>
+        </div>
+        <div class="pt-field">
+          <span class="lbl">Modality</span>
+          <span class="val" id="pt-modality"><span class="loading-cell" style="width:40px;height:14px;">&nbsp;</span></span>
+        </div>
+        <div class="pt-field">
+          <span class="lbl">Institute</span>
+          <span class="val" id="pt-institute"><span class="loading-cell" style="width:100px;height:14px;">&nbsp;</span></span>
+        </div>
+        <div class="pt-field">
+          <span class="lbl">Study Date</span>
+          <span class="val" id="pt-date"><span class="loading-cell" style="width:80px;height:14px;">&nbsp;</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="studies-container">
+      <div class="study-block">
+        <div class="study-block-head">
+          <span class="study-id"><span class="loading-cell" style="width:100px;height:13px;">&nbsp;</span></span>
+          <span class="study-date"><span class="loading-cell" style="width:70px;height:12px;">&nbsp;</span></span>
+        </div>
+        <div class="study-block-inner">
+          <div class="row-top">
+            <div class="f-history">
+              <span class="field-label">Patient History</span>
+              <span class="loading-cell ta-history" style="display:block;border-radius:3px;">&nbsp;</span>
+            </div>
+            <div class="f-desc">
+              <span class="field-label">Study Description</span>
+              <span class="loading-cell ta-desc" style="display:block;border-radius:3px;">&nbsp;</span>
+            </div>
+          </div>
+          <div class="row-bottom">
+            <div class="f-ref">
+              <span class="field-label">Referring Doctor</span>
+              <span class="loading-cell" style="display:block;height:36px;border-radius:3px;">&nbsp;</span>
+            </div>
+          </div>
+        </div>
+        <div class="study-block-foot">
+          <div class="foot-left">
+            <span class="loading-cell" style="width:200px;height:22px;border-radius:3px;">&nbsp;</span>
+          </div>
+          <div class="foot-right">
+            <span class="loading-cell" style="width:80px;height:34px;border-radius:3px;">&nbsp;</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+  <footer class="footer">
+    <div class="footer-content">
+
+    </div>
+  </footer>
+
+<script>
+  const baseUrl = window.location.origin;
+  const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+  const params = new URLSearchParams(window.location.search);
+  const patientId = params.get('patient');
+
+  function setText(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = val || '--';
+  }
+
+  if (!token || !patientId) {
+    setText('pt-name', 'Auth error');
+    ['pt-age','pt-sex','pt-modality','pt-institute','pt-date'].forEach(id => setText(id, '--'));
+  } else {
+    loadData();
+  }
+
+  async function loadData() {
+    try {
+      const res = await fetch(`${baseUrl}/api/patient-history/?patient_id=${encodeURIComponent(patientId)}`, {
+        headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setText('pt-name', data.error || 'Error');
+        ['pt-age','pt-sex','pt-modality','pt-institute','pt-date'].forEach(id => setText(id, '--'));
+        document.getElementById('studies-container').innerHTML =
+          `<p style="padding:20px;color:#c00;text-align:center;">${data.error || 'No studies found.'}</p>`;
+        return;
+      }
+
+      const p = data.patient;
+      setText('pt-name',      p.patient_name       || 'Unknown');
+      setText('pt-age',       p.age                || '--');
+      setText('pt-sex',       p.patient_sex        || '--');
+      setText('pt-modality',  p.modality           || '--');
+      setText('pt-date',      p.study_date_display || '--');
+
+      let instituteName = p.institute_name || '--';
+      if (data.studies && data.studies.length > 0) {
+        try {
+          const firstId = data.studies[0].id;
+          const imgRes = await fetch(`${baseUrl}/api/dicom-images/${firstId}/`, {
+            headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
+          });
+          if (imgRes.ok) {
+            const imgData = await imgRes.json();
+            instituteName = imgData.institute_name || imgData.center_name || instituteName;
+          }
+        } catch(e) {}
+      }
+      setText('pt-institute', instituteName);
+
+      const container = document.getElementById('studies-container');
+      container.innerHTML = '';
+      data.studies.forEach(study => container.appendChild(buildBlock(study)));
+
+    } catch(err) {
+      setText('pt-name', err.message);
+    }
+  }
+
+  function buildBlock(study) {
+    const wrap = document.createElement('div');
+    wrap.className = 'study-block';
+    wrap.dataset.studyId = study.id;
+
+    const safeHistory = (study.patient_history    || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const safeDesc    = (study.study_description  || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const safeRef     = (study.referring_physician|| '').replace(/"/g,'&quot;');
+
+    const dlLink = study.referral_file
+      ? `<a class="dl-link" href="${study.referral_file}" target="_blank" download>⬇ Download Referral</a>`
+      : '';
+
+    wrap.innerHTML = `
+      <div class="study-block-head">
+        <span class="study-id">Study #${study.id}</span>
+        <span class="study-date">${study.study_date || ''}</span>
+      </div>
+      <div class="study-block-inner">
+        <div class="row-top">
+          <div class="f-history">
+            <span class="field-label">Patient History</span>
+            <textarea id="history-${study.id}" class="ta-history" placeholder="Enter clinical history...">${safeHistory}</textarea>
+          </div>
+          <div class="f-desc">
+            <span class="field-label">Study Description</span>
+            <textarea id="desc-${study.id}" class="ta-desc">${safeDesc}</textarea>
+          </div>
+        </div>
+        <div class="row-bottom">
+          <div class="f-ref">
+            <span class="field-label">Referring Doctor</span>
+            <input type="text" id="ref-${study.id}" value="${safeRef}" placeholder="Doctor name" />
+          </div>
+          <div class="emg-row">
+            Emergency:
+            <select id="emg-${study.id}">
+              <option value="No" ${!study.is_emergency ? 'selected':''}>No</option>
+              <option value="Yes" ${study.is_emergency ? 'selected':''}>Yes</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="study-block-foot">
+        <div class="foot-left">
+          <label>Referral Form:</label>
+          <input type="file" id="file-${study.id}" accept=".pdf,.jpg,.jpeg,.png" />
+          <span id="dl-${study.id}">${dlLink}</span>
+        </div>
+        <div class="foot-right">
+          <span class="save-ok" id="ok-${study.id}">✓ Saved</span>
+          <button class="btn-save" onclick="save(${study.id})">Save</button>
+        </div>
+      </div>
+    `;
+    return wrap;
+  }
+
+  async function save(id) {
+    const fd = new FormData();
+    fd.append('patient_history',    document.getElementById(`history-${id}`)?.value || '');
+    fd.append('study_description',  document.getElementById(`desc-${id}`)?.value    || '');
+    fd.append('referring_physician',document.getElementById(`ref-${id}`)?.value     || '');
+    fd.append('is_emergency', document.getElementById(`emg-${id}`)?.value === 'Yes' ? 'true' : 'false');
+    const fi = document.getElementById(`file-${id}`);
+    if (fi?.files?.[0]) fd.append('referral_file', fi.files[0]);
+
+    try {
+      const res = await fetch(`${baseUrl}/api/dicom-images/${id}/`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Token ${token}` },
+        body: fd
+      });
+      if (!res.ok) throw new Error('Save failed: ' + res.status);
+      const saved = await res.json();
+
+      if (fi?.files?.[0] && saved.referral_file) {
+        const url = saved.referral_file.startsWith('http') ? saved.referral_file : `${baseUrl}${saved.referral_file}`;
+        const dl = document.getElementById(`dl-${id}`);
+        if (dl) dl.innerHTML = `<a class="dl-link" href="${url}" target="_blank" download>⬇ Download Referral</a>`;
+      }
+
+      const ok = document.getElementById(`ok-${id}`);
+      if (ok) { ok.style.display = 'inline'; setTimeout(() => ok.style.display = 'none', 2500); }
+    } catch(err) {
+      alert('Error: ' + err.message);
+    }
+  }
+</script>
+</body>
+</html>
