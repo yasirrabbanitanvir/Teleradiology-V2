@@ -1,0 +1,2742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Telerad PACS Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f0f2f7;
+  --bg2: #ffffff;
+  --bg3: #f5f7fb;
+  --border: #e2e6f0;
+  --border2: #d0d7e8;
+  --text: #111827;
+  --text2: #4b5563;
+  --text3: #9ca3af;
+  --accent: #3d7eff;
+  --accent2: #2563d4;
+  --accent-glow: rgba(61,126,255,0.12);
+  --green: #16a34a;
+  --green-bg: rgba(22,163,74,0.10);
+  --yellow: #ca8a04;
+  --yellow-bg: rgba(202,138,4,0.10);
+  --red: #dc2626;
+  --red-bg: rgba(220,38,38,0.10);
+  --purple: #7c3aed;
+  --purple-bg: rgba(124,58,237,0.10);
+  --orange: #ea580c;
+  --orange-bg: rgba(234,88,12,0.10);
+  --sidebar-w: 240px;
+  --header-h: 58px;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  --transition: 0.15s ease;
+  --font: 'DM Sans', sans-serif;
+  --mono: 'DM Mono', monospace;
+}
+
+html, body { height: 100%; font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; overflow-x: hidden; }
+a { color: inherit; text-decoration: none; }
+button { font-family: var(--font); cursor: pointer; border: none; outline: none; }
+input, select, textarea { font-family: var(--font); outline: none; }
+ul { list-style: none; }
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  transition: transform var(--transition);
+}
+
+.sidebar-logo {
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.logo-mark {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--accent) 0%, #7c3aed 100%);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  display: flex; flex-direction: column;
+  gap: 0;
+}
+
+.logo-text span:first-child {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+}
+
+.logo-text span:last-child {
+  font-size: 10.5px;
+  color: var(--text3);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 10px;
+  overflow-y: auto;
+}
+
+.nav-section {
+  margin-bottom: 20px;
+}
+
+.nav-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 0 8px 6px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text2);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  margin-bottom: 1px;
+}
+
+.nav-item:hover {
+  background: rgba(0,0,0,0.05);
+  color: var(--text);
+}
+
+.nav-item.active {
+  background: var(--accent-glow);
+  color: var(--accent);
+  border: 1px solid rgba(61,126,255,0.2);
+}
+
+.nav-icon {
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.sidebar-footer {
+  padding: 14px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.user-card:hover { background: rgba(0,0,0,0.04); }
+
+.user-avatar {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent) 0%, #7c3aed 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.user-info { flex: 1; min-width: 0; }
+.user-name { font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-role { font-size: 11px; color: var(--text3); }
+
+.logout-btn {
+  background: none;
+  color: var(--text3);
+  padding: 4px;
+  border-radius: 4px;
+  transition: color var(--transition);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.logout-btn:hover { color: var(--red); }
+
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.topbar {
+  height: var(--header-h);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.topbar-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.page-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+.page-subtitle {
+  font-size: 12px;
+  color: var(--text3);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.page {
+  display: none;
+}
+
+.page.active {
+  display: block;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+  margin-bottom: 26px;
+}
+
+.stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.stat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.stat-icon {
+  width: 36px; height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.stat-icon.blue { background: var(--accent-glow); color: var(--accent); }
+.stat-icon.green { background: var(--green-bg); color: var(--green); }
+.stat-icon.purple { background: var(--purple-bg); color: var(--purple); }
+.stat-icon.orange { background: var(--orange-bg); color: var(--orange); }
+
+.stat-label {
+  font-size: 12.5px;
+  color: var(--text3);
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
+
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.card-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.card-body {
+  padding: 20px;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table thead {
+  background: var(--bg3);
+}
+
+.table th {
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text2);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+}
+
+.table tbody tr {
+  transition: background var(--transition);
+}
+
+.table tbody tr:hover {
+  background: var(--bg3);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.badge-blue { background: var(--accent-glow); color: var(--accent); }
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-yellow { background: var(--yellow-bg); color: var(--yellow); }
+.badge-red { background: var(--red-bg); color: var(--red); }
+.badge-purple { background: var(--purple-bg); color: var(--purple); }
+.badge-gray { background: rgba(0,0,0,0.05); color: var(--text3); }
+
+.tag {
+  display: inline-block;
+  padding: 3px 8px;
+  background: var(--bg3);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text2);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all var(--transition);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--accent2);
+}
+
+.btn-secondary {
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+.btn-danger {
+  background: var(--red);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text2);
+}
+
+.btn-ghost:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.btn-xs {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.btn-sm {
+  padding: 7px 12px;
+  font-size: 12.5px;
+}
+
+.input-group {
+  margin-bottom: 16px;
+}
+
+.input-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.input-text, .input-select, .input-textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  color: var(--text);
+  background: var(--bg2);
+  transition: border-color var(--transition);
+}
+
+.input-text:focus, .input-select:focus, .input-textarea:focus {
+  border-color: var(--accent);
+}
+
+.input-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.input-file {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  font-size: 13px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.2);
+  max-width: 860px;
+  width: 92%;
+  max-height: 92vh;
+  overflow-y: auto;
+  transform: scale(0.95);
+  transition: transform 0.2s ease;
+}
+
+.modal-overlay.open .modal {
+  transform: scale(1);
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.modal-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text3);
+  transition: all var(--transition);
+  background: none;
+  border: none;
+  font-size: 20px;
+}
+
+.modal-close:hover {
+  background: rgba(0,0,0,0.05);
+  color: var(--text);
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.3;
+}
+
+.empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.empty-text {
+  font-size: 13px;
+  color: var(--text3);
+}
+
+.loading {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text3);
+}
+
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateX(100px);
+  animation: toastIn 0.3s ease forwards;
+}
+
+.toast.out {
+  animation: toastOut 0.3s ease forwards;
+}
+
+@keyframes toastIn {
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastOut {
+  to { opacity: 0; transform: translateX(100px); }
+}
+
+.toast-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.toast.success .toast-icon {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.toast.error .toast-icon {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.toast.info .toast-icon {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.actions-cell {
+  display: flex;
+  gap: 6px;
+}
+
+.confirm-dialog {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 250;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.confirm-dialog.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.confirm-box {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.2);
+  max-width: 440px;
+  width: 90%;
+  padding: 24px;
+  transform: scale(0.95);
+  transition: transform 0.2s ease;
+}
+
+.confirm-dialog.open .confirm-box {
+  transform: scale(1);
+}
+
+.confirm-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+.confirm-message {
+  font-size: 13.5px;
+  color: var(--text2);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.error-banner {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.search-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.multi-select-container {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  min-height: 100px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg2);
+}
+
+.multi-select-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.multi-select-item:hover {
+  background: var(--bg3);
+}
+
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.permission-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  transition: all var(--transition);
+}
+
+.permission-item:hover {
+  background: var(--bg2);
+  border-color: var(--accent);
+}
+
+.permission-checkbox {
+  width: 18px;
+  height: 18px;
+}
+
+.permission-label {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  cursor: pointer;
+  flex: 1;
+}
+
+.image-preview {
+  margin-top: 8px;
+  max-width: 200px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark"><img src="/static/telesoftlogo.png" alt="Logo" height="25" width="25"></div>
+      <div class="logo-text">
+        <span>Telerad PACS</span>
+        <span>Admin Portal</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-label">Overview</div>
+        <div class="nav-item active" data-page="dashboard">
+          
+          Dashboard
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-label">Management</div>
+        <div class="nav-item" data-page="sessions">
+          
+          Session Management
+        </div>
+        <div class="nav-item" data-page="dicom">
+          
+          Study Management
+        </div>
+        <div class="nav-item" data-page="users">
+          
+          User Management
+        </div>
+        <div class="nav-item" data-page="groups">
+          
+          Group Management
+        </div>
+        <div class="nav-item" data-page="centers">
+          
+          Center Management
+        </div>
+        <div class="nav-item" data-page="templates">
+          
+          Report Template
+        </div>
+        <div class="nav-item" onclick="goToCreateTemplate()" style="padding-left:26px;font-size:12.5px;color:var(--text3);">
+          &bull; Create
+        </div>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-avatar" id="user-avatar">A</div>
+        <div class="user-info">
+          <div class="user-name" id="current-username">Admin</div>
+          <div class="user-role">Administrator</div>
+        </div>
+        <button class="logout-btn" onclick="logout()">⏻</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="page-title" id="page-title">Dashboard</div>
+        <div class="page-subtitle" id="page-subtitle">System overview</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div id="dashboard-page" class="page active">
+        <div class="dashboard-grid">
+          <div class="stat-card">
+            <div class="stat-header">
+              <div class="stat-icon blue">👥</div>
+              <div class="stat-label">Total Users</div>
+            </div>
+            <div class="stat-value" id="total-users">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header">
+              <div class="stat-icon green">🏢</div>
+              <div class="stat-label">Centers</div>
+            </div>
+            <div class="stat-value" id="total-centers">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header">
+              <div class="stat-icon purple">🖼</div>
+              <div class="stat-label">DICOM Images</div>
+            </div>
+            <div class="stat-value" id="total-images">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-header">
+              <div class="stat-icon orange">📋</div>
+              <div class="stat-label">Templates</div>
+            </div>
+            <div class="stat-value" id="total-templates">0</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Recent Activity</div>
+          </div>
+          <div class="card-body">
+            <div class="empty-state">
+              <div class="empty-icon">📈</div>
+              <div class="empty-title">Dashboard Coming Soon</div>
+              <div class="empty-text">Activity metrics will be displayed here</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="users-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">User Profiles</div>
+            <div class="card-actions">
+              <button class="btn btn-primary btn-sm" onclick="openCreateUserModal()">
+                + New User
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="search-bar">
+              <input type="text" class="input-text search-input" id="user-search" placeholder="Search users..." oninput="filterUsers()" />
+              <select class="input-select" id="user-role-filter" onchange="filterUsers()">
+                <option value="">All Roles</option>
+                <option value="Admin">Admin</option>
+                <option value="SubAdmin">SubAdmin</option>
+                <option value="Doctor">Doctor</option>
+                <option value="Center">Center</option>
+              </select>
+            </div>
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Full Name</th>
+                    <th>Role</th>
+                    <th>Center</th>
+                    <th>Designation</th>
+                    <th>BMDC Reg No</th>
+                    <th>Permissions</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="users-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="centers-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Centers / Institutes</div>
+            <div class="card-actions">
+              <button class="btn btn-primary btn-sm" onclick="openCreateCenterModal()">
+                + New Center
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Institute Name</th>
+                    <th>Center Names</th>
+                    <th>Default</th>
+                    <th>Assigned Doctors</th>
+                    <th>User</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="centers-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="dicom-page" class="page">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-body" style="padding:16px 20px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px;">
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Patient Name</label>
+                <input type="text" class="input-text" id="dicom-search" placeholder="Search name..." oninput="filterDicom()" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Patient ID</label>
+                <input type="text" class="input-text" id="dicom-id-filter" placeholder="Search ID..." oninput="filterDicom()" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">From Date</label>
+                <input type="date" class="input-text" id="dicom-date-from" onchange="filterDicom()" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">To Date</label>
+                <input type="date" class="input-text" id="dicom-date-to" onchange="filterDicom()" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Status</label>
+                <select class="input-select" id="dicom-status-filter" onchange="filterDicom()">
+                  <option value="">All Statuses</option>
+                  <option value="Not Assigned">Not Assigned</option>
+                  <option value="Unreported">Unreported</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Reviewed">Reviewed</option>
+                  <option value="Reported">Reported</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Institute</label>
+                <select class="input-select" id="dicom-institute-filter" onchange="filterDicom()">
+                  <option value="">All Institutes</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Modality</label>
+                <select class="input-select" id="dicom-modality-filter" onchange="filterDicom()">
+                  <option value="">All Modalities</option>
+                  <option value="CT">CT</option>
+                  <option value="MR">MR</option>
+                  <option value="US">US</option>
+                  <option value="CR">CR</option>
+                  <option value="DX">DX</option>
+                  <option value="XA">XA</option>
+                  <option value="NM">NM</option>
+                  <option value="PT">PT</option>
+                  <option value="RF">RF</option>
+                  <option value="MG">MG</option>
+                  <option value="SC">SC</option>
+                  <option value="OT">OT</option>
+                  <option value="AN">AN</option>
+                  <option value="PX">PX</option>
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-top:20px;">
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;">
+                  <input type="checkbox" id="dicom-emergency-filter" style="width:15px;height:15px;cursor:pointer;" />
+                  Emergency Only
+                </label>
+                <button class="btn btn-primary btn-sm" onclick="filterDicom()" style="padding:9px 16px;">Search</button>
+              </div>
+            </div>
+            <div id="dicom-assign-panel" style="display:block;padding:12px 0 0;border-top:1px solid var(--border);margin-top:4px;">
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                <span style="font-size:13px;font-weight:600;color:var(--text2);">Assign selected studies to:</span>
+                <select class="input-select" id="dicom-assign-doctor" style="min-width:200px;max-width:280px;">
+                  <option value="">Select Doctor</option>
+                </select>
+                <button class="btn btn-primary btn-sm" onclick="assignSelectedStudies()">Assign</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="dicom-results-card" style="display:none;">
+          <div class="card-header">
+            <div class="card-title">
+              Studies
+              <span id="dicom-count" style="font-size: 12px; color: var(--text3); font-weight: 400; margin-left: 8px;"></span>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width:36px;"><input type="checkbox" id="dicom-select-all" onchange="toggleAllDicomRows(this)" /></th>
+                    <th>Patient Name</th>
+                    <th>Patient ID</th>
+                    <th>Modality</th>
+                    <th>Assigned Groups</th>
+                    <th>Institute</th>
+                    <th>Scan Date/Time</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="dicom-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="templates-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Report Templates</div>
+            <div class="card-actions">
+              <button class="btn btn-primary btn-sm" onclick="openCreateTemplateModal()">
+                + New Template
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Body Part</th>
+                    <th>Template Name</th>
+                    <th>Created By</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="templates-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="groups-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Doctor Groups</div>
+            <div class="card-actions">
+              <button class="btn btn-primary btn-sm" onclick="openCreateGroupModal()">
+                + New Group
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="search-bar">
+              <input type="text" class="input-text search-input" id="group-search" placeholder="Search groups..." oninput="filterGroups()" />
+            </div>
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Group Name</th>
+                    <th>Members</th>
+                    <th>Member Count</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="groups-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="sessions-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Active Sessions</div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="loadSessions()">↻ Refresh</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>IP Address</th>
+                    <th>Login Time</th>
+                    <th>Last Activity</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="sessions-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="create-group-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="group-modal-title">Create New Group</div>
+      <button class="modal-close" onclick="closeModal('create-group-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="group-modal-error"></div>
+      <div class="input-group">
+        <label class="input-label">Group Name</label>
+        <input type="text" class="input-text" id="group-name" placeholder="e.g. Night Shift Team" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Select Members</label>
+        <div class="multi-select-container" id="group-doctor-select" style="min-height:140px;max-height:260px;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('create-group-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveGroup()">Save Group</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="edit-group-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Edit Group</div>
+      <button class="modal-close" onclick="closeModal('edit-group-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="edit-group-modal-error"></div>
+      <input type="hidden" id="edit-group-id" />
+      <div class="input-group">
+        <label class="input-label">Group Name</label>
+        <input type="text" class="input-text" id="edit-group-name" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Select Members</label>
+        <div class="multi-select-container" id="edit-group-doctor-select" style="min-height:140px;max-height:260px;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('edit-group-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="updateGroup()">Update Group</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="create-user-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="user-modal-title">Create New User</div>
+      <button class="modal-close" onclick="closeModal('create-user-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="user-modal-error"></div>
+      <div class="input-group">
+        <label class="input-label">Username</label>
+        <input type="text" class="input-text" id="user-username" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Password</label>
+        <input type="password" class="input-text" id="user-password" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Role</label>
+        <select class="input-select" id="user-role" onchange="toggleUserFields()">
+          <option value="">Select Role</option>
+          <option value="Admin">Admin</option>
+          <option value="SubAdmin">SubAdmin</option>
+          <option value="Doctor">Doctor</option>
+          <option value="Center">Center</option>
+        </select>
+      </div>
+      <div class="input-group" id="user-center-group" style="display: none;">
+        <label class="input-label">Center</label>
+        <select class="input-select" id="user-center">
+          <option value="">Select Center</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Full Name <span id="fullname-required" style="color: var(--red); display:none;">*</span></label>
+        <input type="text" class="input-text" id="user-fullname" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Designation</label>
+        <input type="text" class="input-text" id="user-designation" />
+      </div>
+      <div class="input-group" id="user-qualification-group">
+        <label class="input-label">Qualification <span id="qualification-required" style="color: var(--red); display:none;">*</span></label>
+        <textarea class="input-textarea" id="user-qualification" rows="3"></textarea>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Contact Number</label>
+        <input type="text" class="input-text" id="user-contact" />
+      </div>
+      <div class="input-group" id="user-bmdc-group">
+        <label class="input-label">BMDC Reg. No</label>
+        <input type="text" class="input-text" id="user-bmdc" />
+      </div>
+      <div class="input-group" id="user-signature-group">
+        <label class="input-label">Signature Image</label>
+        <input type="file" class="input-file" id="user-signature" accept="image/*" onchange="previewSignature()" />
+        <img id="signature-preview" class="image-preview" style="display: none;" />
+      </div>
+      <div id="user-permissions-section">
+        <div class="input-group">
+          <label class="input-label">Permissions</label>
+          <div class="permission-grid">
+            <div class="permission-item">
+              <input type="checkbox" class="permission-checkbox" id="perm-assign-doctors" />
+              <label class="permission-label" for="perm-assign-doctors">Assign Doctors</label>
+            </div>
+            <div class="permission-item">
+              <input type="checkbox" class="permission-checkbox" id="perm-write-reports" />
+              <label class="permission-label" for="perm-write-reports">Write Reports</label>
+            </div>
+            <div class="permission-item">
+              <input type="checkbox" class="permission-checkbox" id="perm-manage-templates" />
+              <label class="permission-label" for="perm-manage-templates">Manage Templates</label>
+            </div>
+            <div class="permission-item">
+              <input type="checkbox" class="permission-checkbox" id="perm-view-images" />
+              <label class="permission-label" for="perm-view-images">View Images</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="user-institution-section" style="display: none;">
+        <div class="input-group">
+          <label class="input-label">Assigned Institutions (for Doctors)</label>
+          <div class="multi-select-container" id="institution-multi-select"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('create-user-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUser()">Save User</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="edit-user-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Edit User Profile</div>
+      <button class="modal-close" onclick="closeModal('edit-user-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="edit-user-modal-error"></div>
+      <input type="hidden" id="edit-user-id" />
+      <div class="input-group">
+        <label class="input-label">Username</label>
+        <input type="text" class="input-text" id="edit-user-username" disabled />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Role</label>
+        <input type="text" class="input-text" id="edit-user-role" disabled />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Full Name <span style="color: var(--red);">*</span></label>
+        <input type="text" class="input-text" id="edit-user-fullname" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Designation</label>
+        <input type="text" class="input-text" id="edit-user-designation" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Qualification <span style="color: var(--red);">*</span></label>
+        <textarea class="input-textarea" id="edit-user-qualification" rows="3"></textarea>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Contact Number</label>
+        <input type="text" class="input-text" id="edit-user-contact" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">BMDC Reg. No</label>
+        <input type="text" class="input-text" id="edit-user-bmdc" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Signature Image</label>
+        <input type="file" class="input-file" id="edit-user-signature" accept="image/*" onchange="previewEditSignature()" />
+        <img id="edit-signature-preview" class="image-preview" style="display: none;" />
+        <div id="current-signature-info" style="margin-top: 8px; font-size: 12px; color: var(--text3);"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Permissions</label>
+        <div class="permission-grid">
+          <div class="permission-item">
+            <input type="checkbox" class="permission-checkbox" id="edit-perm-assign-doctors" />
+            <label class="permission-label" for="edit-perm-assign-doctors">Assign Doctors</label>
+          </div>
+          <div class="permission-item">
+            <input type="checkbox" class="permission-checkbox" id="edit-perm-write-reports" />
+            <label class="permission-label" for="edit-perm-write-reports">Write Reports</label>
+          </div>
+          <div class="permission-item">
+            <input type="checkbox" class="permission-checkbox" id="edit-perm-manage-templates" />
+            <label class="permission-label" for="edit-perm-manage-templates">Manage Templates</label>
+          </div>
+          <div class="permission-item">
+            <input type="checkbox" class="permission-checkbox" id="edit-perm-view-images" />
+            <label class="permission-label" for="edit-perm-view-images">View Images</label>
+          </div>
+        </div>
+      </div>
+      <div id="edit-institution-section" style="display: none;">
+        <div class="input-group">
+          <label class="input-label">Assigned Institutions</label>
+          <div class="multi-select-container" id="edit-institution-multi-select"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('edit-user-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="updateUser()">Update Profile</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="create-center-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Create New Center</div>
+      <button class="modal-close" onclick="closeModal('create-center-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="create-center-error"></div>
+      <div class="input-group">
+        <label class="input-label">Institute Name</label>
+        <input type="text" class="input-text" id="new-institute" placeholder="Enter institute name" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Center Names (comma separated)</label>
+        <input type="text" class="input-text" id="new-center-names" placeholder="Center 1, Center 2, Center 3" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('create-center-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createCenter()">Create Center</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="edit-center-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Edit Center</div>
+      <button class="modal-close" onclick="closeModal('edit-center-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="edit-center-error"></div>
+      <input type="hidden" id="edit-center-id" />
+      <div class="input-group">
+        <label class="input-label">Institute Name</label>
+        <input type="text" class="input-text" id="edit-institute-name" placeholder="Enter institute name" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Center Names (comma separated)</label>
+        <input type="text" class="input-text" id="edit-center-names" placeholder="Center 1, Center 2, Center 3" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('edit-center-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="updateCenter()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="update-status-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Update DICOM Status</div>
+      <button class="modal-close" onclick="closeModal('update-status-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="status-modal-error"></div>
+      <div class="input-group">
+        <label class="input-label">Status</label>
+        <select class="input-select" id="status-select">
+          <option value="Not Assigned">Not Assigned</option>
+          <option value="Unreported">Unreported</option>
+          <option value="Draft">Draft</option>
+          <option value="Reviewed">Reviewed</option>
+          <option value="Reported">Reported</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Reported By</label>
+        <input type="text" class="input-text" id="status-reported-by" placeholder="Doctor name" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('update-status-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitStatusUpdate()">Update Status</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="template-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="tpl-modal-title">New Template</div>
+      <button class="modal-close" onclick="closeModal('template-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="tpl-modal-error"></div>
+      <div class="input-group">
+        <label class="input-label">Body Part</label>
+        <input type="text" class="input-text" id="tpl-body-part" placeholder="e.g., Brain, Chest, Abdomen" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Template Name</label>
+        <input type="text" class="input-text" id="tpl-name" placeholder="e.g., Normal Brain MRI" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Content</label>
+        <textarea class="input-textarea" id="tpl-content" rows="8" placeholder="Enter template content..."></textarea>
+      </div>
+      <div class="input-group">
+        <label class="checkbox-label">
+          <input type="checkbox" class="checkbox" id="tpl-active" checked />
+          Active Template
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('template-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTemplate()">Save Template</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-dialog" id="confirm-dialog">
+  <div class="confirm-box">
+    <div class="confirm-title" id="confirm-title"></div>
+    <div class="confirm-message" id="confirm-message"></div>
+    <div class="confirm-actions">
+      <button class="btn btn-secondary" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-danger" id="confirm-btn" onclick="confirmAction()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+const API_BASE = '/api';
+let currentUser = null;
+let allUsers = [];
+let allCenters = [];
+let confirmCallback = null;
+let editingUserId = null;
+
+function getToken() {
+  return sessionStorage.getItem('token') || localStorage.getItem('token');
+}
+
+async function api(endpoint, options = {}) {
+  const token = getToken();
+  const headers = { 
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Token ${token}` } : {})
+  };
+  return fetch(endpoint, { ...options, headers: { ...headers, ...options.headers } });
+}
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
+  toast.innerHTML = `<div class="toast-icon">${icon}</div><div>${message}</div>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('out');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+function toast(message, type) {
+  showToast(message, type);
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function openConfirm(title, message, callback) {
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-message').textContent = message;
+  confirmCallback = callback;
+  document.getElementById('confirm-dialog').classList.add('open');
+}
+
+function closeConfirm() {
+  document.getElementById('confirm-dialog').classList.remove('open');
+  confirmCallback = null;
+}
+
+function confirmAction() {
+  if (confirmCallback) confirmCallback();
+  closeConfirm();
+}
+
+function logout() {
+  sessionStorage.removeItem('token');
+  localStorage.removeItem('token');
+  window.location.href = '/';
+}
+
+async function loadCurrentUser() {
+  try {
+    const res = await api('/api/current-user/');
+    if (!res.ok) { logout(); return; }
+    currentUser = await res.json();
+    document.getElementById('current-username').textContent = currentUser.username || 'Admin';
+    const avatar = document.getElementById('user-avatar');
+    avatar.textContent = (currentUser.username || 'A')[0].toUpperCase();
+  } catch (e) {
+    console.error('Failed to load current user:', e);
+  }
+}
+
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const page = item.getAttribute('data-page');
+    if (!page) return;
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const pageEl = document.getElementById(`${page}-page`);
+    if (pageEl) pageEl.classList.add('active');
+    const titles = {
+      dashboard: ['Dashboard', 'System overview'],
+      users: ['User Profiles', 'Manage user accounts and profiles'],
+      centers: ['Centers', 'Manage imaging centers and institutes'],
+      dicom: ['DICOM Images', 'View and manage DICOM studies'],
+      templates: ['Report Templates', 'Manage report templates'],
+      groups: ['Group Management', 'Organise doctors into teams for bulk assignment'],
+      sessions: ['Session Management', 'View and manage currently logged-in users']
+    };
+    if (titles[page]) {
+      document.getElementById('page-title').textContent = titles[page][0];
+      document.getElementById('page-subtitle').textContent = titles[page][1];
+    }
+    if (page === 'users') loadUsers();
+    else if (page === 'centers') loadCenters();
+    else if (page === 'dicom') loadDicom();
+    else if (page === 'templates') loadTemplates();
+    else if (page === 'groups') loadGroups();
+    else if (page === 'sessions') loadSessions();
+  });
+});
+
+async function loadDashboard() {
+  try {
+    const [usersRes, centersRes, dicomRes, templatesRes] = await Promise.all([
+      api('/api/users/'),
+      api('/api/centers/'),
+      api('/api/dicom-list/?page=1&page_size=1'),
+      api('/api/manage-templates/')
+    ]);
+    if (usersRes.ok) {
+      const users = await usersRes.json();
+      document.getElementById('total-users').textContent = users.length || 0;
+    }
+    if (centersRes.ok) {
+      const centers = await centersRes.json();
+      document.getElementById('total-centers').textContent = centers.length || 0;
+    }
+    if (dicomRes.ok) {
+      const dicom = await dicomRes.json();
+      document.getElementById('total-images').textContent = dicom.count || 0;
+    }
+    if (templatesRes.ok) {
+      const templates = await templatesRes.json();
+      document.getElementById('total-templates').textContent = (templates.templates || []).length;
+    }
+  } catch (e) {
+    console.error('Failed to load dashboard stats:', e);
+  }
+}
+
+async function loadUsers() {
+  document.getElementById('users-table-body').innerHTML = '<tr><td colspan="8" class="loading">Loading users</td></tr>';
+  try {
+    const res = await api('/api/users/');
+    if (!res.ok) throw new Error();
+    allUsers = await res.json();
+    renderUsers(allUsers);
+  } catch {
+    document.getElementById('users-table-body').innerHTML = '<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--red);">Failed to load users</td></tr>';
+  }
+}
+
+function filterUsers() {
+  const query = document.getElementById('user-search').value.toLowerCase();
+  const roleFilter = document.getElementById('user-role-filter').value;
+  const filtered = allUsers.filter(u => {
+    const profile = u.userprofile || {};
+    const matchQuery = !query || (u.username || '').toLowerCase().includes(query) || 
+                       (profile.full_name || '').toLowerCase().includes(query);
+    const matchRole = !roleFilter || (profile.role_name === roleFilter);
+    return matchQuery && matchRole;
+  });
+  renderUsers(filtered);
+}
+
+function renderUsers(users) {
+  const tbody = document.getElementById('users-table-body');
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">No users found</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = users.map(u => {
+    const p = u.userprofile || {};
+    const roleBadge = p.role_name ? `<span class="badge badge-blue">${p.role_name}</span>` : '<span class="badge badge-gray">No Role</span>';
+    const centerName = p.center_name || p.institute_name || '—';
+    const perms = [];
+    if (p.can_assign_doctors) perms.push('Assign');
+    if (p.can_write_reports) perms.push('Write');
+    if (p.can_manage_templates) perms.push('Templates');
+    if (p.can_view_images) perms.push('View');
+    const permsBadges = perms.map(perm => `<span class="badge badge-green" style="font-size:10px;padding:2px 6px;margin:1px;">${perm}</span>`).join(' ');
+    return `<tr>
+      <td><span style="font-weight:500;color:var(--text);">${u.username}</span></td>
+      <td>${p.full_name || '—'}</td>
+      <td>${roleBadge}</td>
+      <td>${centerName}</td>
+      <td>${p.designation || '—'}</td>
+      <td>${p.bmdc_reg_no || '—'}</td>
+      <td>${permsBadges || '<span style="color:var(--text3);">None</span>'}</td>
+      <td><div class="actions-cell">
+        <button class="btn btn-ghost btn-xs" onclick="openEditUserModal(${u.id})">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteUser(${u.id}, '${(u.username || '').replace(/'/g,"\\'")}')">Delete</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+async function openCreateUserModal() {
+  editingUserId = null;
+  document.getElementById('user-modal-title').textContent = 'Create New User';
+  document.getElementById('user-username').value = '';
+  document.getElementById('user-password').value = '';
+  document.getElementById('user-role').value = '';
+  document.getElementById('user-center').value = '';
+  document.getElementById('user-fullname').value = '';
+  document.getElementById('user-designation').value = '';
+  document.getElementById('user-qualification').value = '';
+  document.getElementById('user-contact').value = '';
+  document.getElementById('user-bmdc').value = '';
+  document.getElementById('user-signature').value = '';
+  document.getElementById('signature-preview').style.display = 'none';
+  document.getElementById('perm-assign-doctors').checked = false;
+  document.getElementById('perm-write-reports').checked = false;
+  document.getElementById('perm-manage-templates').checked = false;
+  document.getElementById('perm-view-images').checked = false;
+  document.getElementById('user-modal-error').style.display = 'none';
+  document.getElementById('user-center-group').style.display = 'none';
+  document.getElementById('user-institution-section').style.display = 'none';
+  document.getElementById('fullname-required').style.display = 'none';
+  document.getElementById('qualification-required').style.display = 'none';
+  await loadCentersForDropdown();
+  openModal('create-user-modal');
+}
+
+async function loadCentersForDropdown() {
+  try {
+    const res = await api('/api/centers/');
+    if (res.ok) {
+      allCenters = await res.json();
+      const select = document.getElementById('user-center');
+      select.innerHTML = '<option value="">Select Center</option>' + 
+        allCenters.map(c => `<option value="${c.id}">${c.institute_name}</option>`).join('');
+    }
+  } catch {}
+}
+
+function toggleUserFields() {
+  const role = document.getElementById('user-role').value;
+  const centerGroup = document.getElementById('user-center-group');
+  const instSection = document.getElementById('user-institution-section');
+  const fullnameReq = document.getElementById('fullname-required');
+  const qualReq = document.getElementById('qualification-required');
+
+  centerGroup.style.display = role === 'Center' ? 'block' : 'none';
+  instSection.style.display = role === 'Doctor' ? 'block' : 'none';
+  fullnameReq.style.display = role === 'Doctor' ? 'inline' : 'none';
+  qualReq.style.display = role === 'Doctor' ? 'inline' : 'none';
+
+  if (role === 'Doctor') {
+    loadInstitutionsMultiSelect();
+  }
+}
+
+function loadInstitutionsMultiSelect() {
+  const container = document.getElementById('institution-multi-select');
+  if (!allCenters.length) {
+    container.innerHTML = '<div style="padding:10px;color:var(--text3);">No centers available</div>';
+    return;
+  }
+  container.innerHTML = allCenters.map(c => `
+    <div class="multi-select-item">
+      <input type="checkbox" class="checkbox" id="inst-${c.id}" value="${c.id}" />
+      <label for="inst-${c.id}" style="cursor:pointer;flex:1;">${c.institute_name}</label>
+    </div>
+  `).join('');
+}
+
+function previewSignature() {
+  const file = document.getElementById('user-signature').files[0];
+  const preview = document.getElementById('signature-preview');
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      preview.src = e.target.result;
+      preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+async function saveUser() {
+  const username = document.getElementById('user-username').value.trim();
+  const password = document.getElementById('user-password').value;
+  const role = document.getElementById('user-role').value;
+  const centerId = document.getElementById('user-center').value;
+  const errEl = document.getElementById('user-modal-error');
+  
+  if (!username || !password || !role) {
+    errEl.textContent = 'Username, password, and role are required.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+  
+  const fullName = document.getElementById('user-fullname').value.trim();
+  const qualification = document.getElementById('user-qualification').value.trim();
+  
+  if (role === 'Doctor' && (!fullName || !qualification)) {
+    errEl.textContent = 'Full name and qualification are required for doctors.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+  
+  const userPayload = { username, password, role };
+  if (role === 'Center' && centerId) {
+    userPayload.center = centerId;
+  }
+  
+  const res = await api('/api/users/', { method: 'POST', body: JSON.stringify(userPayload) });
+  const data = await res.json();
+  
+  if (!res.ok) {
+    errEl.textContent = data.detail || 'Failed to create user.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+  
+  const profileData = new FormData();
+  profileData.append('username', username);
+  profileData.append('full_name', document.getElementById('user-fullname').value.trim());
+  profileData.append('designation', document.getElementById('user-designation').value.trim());
+  profileData.append('qualification', document.getElementById('user-qualification').value.trim());
+  profileData.append('contact_number', document.getElementById('user-contact').value.trim());
+  profileData.append('bmdc_reg_no', document.getElementById('user-bmdc').value.trim());
+
+  profileData.append('can_assign_doctors', document.getElementById('perm-assign-doctors').checked);
+  profileData.append('can_write_reports', document.getElementById('perm-write-reports').checked);
+  profileData.append('can_manage_templates', document.getElementById('perm-manage-templates').checked);
+  profileData.append('can_view_images', document.getElementById('perm-view-images').checked);
+
+  const signatureFile = document.getElementById('user-signature').files[0];
+  if (signatureFile) {
+    profileData.append('signature', signatureFile);
+  }
+
+  if (role === 'Doctor') {
+    const selectedInsts = Array.from(document.querySelectorAll('#institution-multi-select input:checked'))
+      .map(cb => cb.value);
+    profileData.append('assigned_institutions', JSON.stringify(selectedInsts));
+  }
+
+  const profileRes = await fetch('/api/update-user-profile/', {
+    method: 'POST',
+    headers: { 'Authorization': `Token ${getToken()}` },
+    body: profileData
+  });
+
+  if (!profileRes.ok) {
+    console.error('Failed to update profile');
+  }
+  
+  toast('User created successfully!', 'success');
+  closeModal('create-user-modal');
+  loadUsers();
+  loadDashboard();
+}
+
+async function openEditUserModal(userId) {
+  const user = allUsers.find(u => u.id === userId);
+  if (!user) return;
+  
+  editingUserId = userId;
+  const profile = user.userprofile || {};
+  
+  document.getElementById('edit-user-id').value = userId;
+  document.getElementById('edit-user-username').value = user.username;
+  document.getElementById('edit-user-role').value = profile.role_name || '';
+  document.getElementById('edit-user-fullname').value = profile.full_name || '';
+  document.getElementById('edit-user-designation').value = profile.designation || '';
+  document.getElementById('edit-user-qualification').value = profile.qualification || '';
+  document.getElementById('edit-user-contact').value = profile.contact_number || '';
+  document.getElementById('edit-user-bmdc').value = profile.bmdc_reg_no || '';
+  
+  document.getElementById('edit-perm-assign-doctors').checked = profile.can_assign_doctors || false;
+  document.getElementById('edit-perm-write-reports').checked = profile.can_write_reports || false;
+  document.getElementById('edit-perm-manage-templates').checked = profile.can_manage_templates || false;
+  document.getElementById('edit-perm-view-images').checked = profile.can_view_images || false;
+  
+  document.getElementById('edit-user-signature').value = '';
+  document.getElementById('edit-signature-preview').style.display = 'none';
+  
+  const sigInfo = document.getElementById('current-signature-info');
+  if (profile.signature) {
+    sigInfo.textContent = 'Current signature uploaded';
+    sigInfo.style.color = 'var(--green)';
+  } else {
+    sigInfo.textContent = 'No signature uploaded';
+    sigInfo.style.color = 'var(--text3)';
+  }
+  
+  const instSection = document.getElementById('edit-institution-section');
+  if (profile.role_name === 'Doctor') {
+    instSection.style.display = 'block';
+    await loadEditInstitutionsMultiSelect(userId);
+  } else {
+    instSection.style.display = 'none';
+  }
+  
+  document.getElementById('edit-user-modal-error').style.display = 'none';
+  openModal('edit-user-modal');
+}
+
+async function loadEditInstitutionsMultiSelect(userId) {
+  const container = document.getElementById('edit-institution-multi-select');
+  if (!allCenters.length) {
+    container.innerHTML = '<div style="padding:10px;color:var(--text3);">No centers available</div>';
+    return;
+  }
+  
+  let assignedInsts = [];
+  try {
+    const res = await api(`/api/user-assigned-institutions/${userId}/`);
+    if (res.ok) {
+      const data = await res.json();
+      assignedInsts = data.assigned_institutions || [];
+    }
+  } catch {}
+  
+  container.innerHTML = allCenters.map(c => {
+    const checked = assignedInsts.includes(c.id) ? 'checked' : '';
+    return `
+      <div class="multi-select-item">
+        <input type="checkbox" class="checkbox" id="edit-inst-${c.id}" value="${c.id}" ${checked} />
+        <label for="edit-inst-${c.id}" style="cursor:pointer;flex:1;">${c.institute_name}</label>
+      </div>
+    `;
+  }).join('');
+}
+
+function previewEditSignature() {
+  const file = document.getElementById('edit-user-signature').files[0];
+  const preview = document.getElementById('edit-signature-preview');
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      preview.src = e.target.result;
+      preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+async function updateUser() {
+  const userId = document.getElementById('edit-user-id').value;
+  const username = document.getElementById('edit-user-username').value;
+  const errEl = document.getElementById('edit-user-modal-error');
+  
+  const fullName = document.getElementById('edit-user-fullname').value.trim();
+  const qualification = document.getElementById('edit-user-qualification').value.trim();
+  const role = document.getElementById('edit-user-role').value;
+  
+  if (role === 'Doctor' && (!fullName || !qualification)) {
+    errEl.textContent = 'Full name and qualification are required for doctors.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+  
+  const profileData = new FormData();
+  profileData.append('user_id', userId);
+  profileData.append('username', username);
+  profileData.append('full_name', fullName);
+  profileData.append('designation', document.getElementById('edit-user-designation').value.trim());
+  profileData.append('qualification', qualification);
+  profileData.append('contact_number', document.getElementById('edit-user-contact').value.trim());
+  profileData.append('bmdc_reg_no', document.getElementById('edit-user-bmdc').value.trim());
+  
+  profileData.append('can_assign_doctors', document.getElementById('edit-perm-assign-doctors').checked);
+  profileData.append('can_write_reports', document.getElementById('edit-perm-write-reports').checked);
+  profileData.append('can_manage_templates', document.getElementById('edit-perm-manage-templates').checked);
+  profileData.append('can_view_images', document.getElementById('edit-perm-view-images').checked);
+  
+  const signatureFile = document.getElementById('edit-user-signature').files[0];
+  if (signatureFile) {
+    profileData.append('signature', signatureFile);
+  }
+  
+  if (role === 'Doctor') {
+    const selectedInsts = Array.from(document.querySelectorAll('#edit-institution-multi-select input:checked'))
+      .map(cb => cb.value);
+    profileData.append('assigned_institutions', JSON.stringify(selectedInsts));
+  }
+  
+  const res = await fetch('/api/update-user-profile/', {
+    method: 'POST',
+    headers: { 'Authorization': `Token ${getToken()}` },
+    body: profileData
+  });
+  
+  const data = await res.json();
+  
+  if (res.ok) {
+    toast('User profile updated successfully!', 'success');
+    closeModal('edit-user-modal');
+    loadUsers();
+  } else {
+    errEl.textContent = data.error || 'Failed to update user profile.';
+    errEl.style.display = 'inline-flex';
+  }
+}
+
+function deleteUser(userId, username) {
+  openConfirm('Delete User?', `Delete user "${username}"? This cannot be undone.`, async () => {
+    const res = await api(`/api/users/${userId}/`, { method: 'DELETE' });
+    if (res.ok || res.status === 204) {
+      toast('User deleted.', 'success');
+      loadUsers();
+      loadDashboard();
+    } else {
+      toast('Failed to delete user.', 'error');
+    }
+  });
+}
+
+async function loadCenters() {
+  document.getElementById('centers-table-body').innerHTML = '<tr><td colspan="7" class="loading">Loading centers</td></tr>';
+  try {
+    const res = await api('/api/centers/');
+    if (!res.ok) throw new Error();
+    allCenters = await res.json();
+    renderCenters(allCenters);
+  } catch {
+    document.getElementById('centers-table-body').innerHTML = '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--red);">Failed to load centers</td></tr>';
+  }
+}
+
+function renderCenters(centers) {
+  const tbody = document.getElementById('centers-table-body');
+  if (!centers.length) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🏢</div><div class="empty-title">No centers yet</div><div class="empty-text">Click "New Center" to create one.</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = centers.map(c => {
+    const centerNames = (c.center_names || []).join(', ') || '—';
+    const defaultBadge = c.is_default ? '<span class="badge badge-green">Yes</span>' : '<span class="badge badge-gray">No</span>';
+    const doctors = c.assigned_doctors_names ? c.assigned_doctors_names.join(', ') : '—';
+    return `<tr>
+    <td><span class="tag">${c.id}</span></td>
+    <td><span style="font-weight:500;color:var(--text);">${c.institute_name || '—'}</span></td>
+    <td>${centerNames}</td>
+    <td>${defaultBadge}</td>
+    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${doctors}</td>
+    <td>${c.user ? `<span style="color:var(--text2);">User #${c.user}</span>` : '<span style="color:var(--text3);">—</span>'}</td>
+    <td><div class="actions-cell">
+      <button class="btn btn-ghost btn-xs" onclick="openEditCenterModal(${c.id})">Edit</button>
+      <button class="btn btn-danger btn-xs" onclick="deleteCenter(${c.id}, '${(c.institute_name || c.id).toString().replace(/'/g,"\\'")}')">Delete</button>
+    </div></td>
+  </tr>`}).join('');
+}
+
+function deleteCenter(id, name) {
+  openConfirm('Delete Center?', `Delete "${name}"? This cannot be undone.`, async () => {
+    const res = await api(`/api/centers/${id}/`, { method: 'DELETE' });
+    if (res.status === 204 || res.ok) { toast('Center deleted.', 'success'); loadCenters(); loadDashboard(); }
+    else { toast('Failed to delete center.', 'error'); }
+  });
+}
+
+function openEditCenterModal(id) {
+  const center = allCenters.find(c => c.id === id);
+  if (!center) return;
+  document.getElementById('edit-center-id').value = id;
+  document.getElementById('edit-institute-name').value = center.institute_name || '';
+  document.getElementById('edit-center-names').value = (center.center_names || []).join(', ');
+  document.getElementById('edit-center-error').style.display = 'none';
+  openModal('edit-center-modal');
+}
+
+async function updateCenter() {
+  const id = document.getElementById('edit-center-id').value;
+  const institute_name = document.getElementById('edit-institute-name').value.trim();
+  const centerNamesInput = document.getElementById('edit-center-names').value.trim();
+  const errEl = document.getElementById('edit-center-error');
+
+  if (!institute_name) {
+    errEl.textContent = 'Institute name is required.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+
+  const res = await api(`/api/centers/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ institute_name })
+  });
+
+  if (!res.ok) {
+    errEl.textContent = 'Failed to update center.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+
+  if (centerNamesInput) {
+    const newNames = centerNamesInput.split(',').map(n => n.trim()).filter(n => n);
+    const center = allCenters.find(c => c.id === parseInt(id));
+    const existingNames = center ? (center.center_names || []) : [];
+
+    for (const name of newNames) {
+      if (!existingNames.includes(name)) {
+        await api('/api/center-names/', {
+          method: 'POST',
+          body: JSON.stringify({ center: id, name })
+        });
+      }
+    }
+  }
+
+  toast('Center updated successfully!', 'success');
+  closeModal('edit-center-modal');
+  loadCenters();
+}
+
+function openCreateCenterModal() {
+  document.getElementById('new-institute').value = '';
+  document.getElementById('new-center-names').value = '';
+  document.getElementById('create-center-error').style.display = 'none';
+  openModal('create-center-modal');
+}
+
+async function createCenter() {
+  const institute_name = document.getElementById('new-institute').value.trim();
+  const centerNamesInput = document.getElementById('new-center-names').value.trim();
+  const errEl = document.getElementById('create-center-error');
+  
+  if (!institute_name) {
+    errEl.textContent = 'Institute name is required.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+  
+  const payload = { institute_name, is_default: true };
+  
+  const res = await api('/api/centers/', { method: 'POST', body: JSON.stringify(payload) });
+  const data = await res.json();
+  
+  if (res.ok) {
+    const centerId = data.id;
+    
+    if (centerNamesInput) {
+      const centerNames = centerNamesInput.split(',').map(n => n.trim()).filter(n => n);
+      for (const name of centerNames) {
+        await api('/api/center-names/', {
+          method: 'POST',
+          body: JSON.stringify({ center: centerId, name })
+        });
+      }
+    }
+    
+    toast('Center created!', 'success');
+    closeModal('create-center-modal');
+    loadCenters();
+    loadDashboard();
+  } else {
+    errEl.textContent = data.detail || 'Failed to create center.';
+    errEl.style.display = 'inline-flex';
+  }
+}
+
+let allDicom = [], dicomPage = 1, dicomPageSize = 50, allDoctorsList = [];
+
+async function loadDoctorsList() {
+  try {
+    const res = await api('/api/doctors/');
+    if (res.ok) {
+      const d = await res.json();
+      allDoctorsList = d.doctors || [];
+      const sel = document.getElementById('dicom-assign-doctor');
+      sel.innerHTML = '<option value="">Select Doctor</option>' +
+        allDoctorsList.map(doc => `<option value="${doc.name}">${doc.name}</option>`).join('');
+    }
+  } catch {}
+}
+
+async function loadDicom() {
+  const resultsCard = document.getElementById('dicom-results-card');
+  if (resultsCard) resultsCard.style.display = 'none';
+  document.getElementById('dicom-count').textContent = '';
+  await loadDoctorsList();
+  try {
+    const res = await api(`/api/dicom-list/?page=${dicomPage}&page_size=${dicomPageSize}`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    allDicom = data.results || [];
+    populateDicomInstituteFilter();
+  } catch {}
+}
+
+function populateDicomInstituteFilter() {
+  const institutes = [...new Set(allDicom.map(d => d.institute_name || d.center_name).filter(Boolean))].sort();
+  const sel = document.getElementById('dicom-institute-filter');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All Institutes</option>' +
+    institutes.map(i => `<option value="${i}"${i === current ? ' selected' : ''}>${i}</option>`).join('');
+}
+
+function filterDicom() {
+  const q = (document.getElementById('dicom-search').value || '').toLowerCase();
+  const idQ = (document.getElementById('dicom-id-filter').value || '').toLowerCase();
+  const st = document.getElementById('dicom-status-filter').value;
+  const inst = document.getElementById('dicom-institute-filter').value;
+  const mod = document.getElementById('dicom-modality-filter').value;
+  const fromDate = document.getElementById('dicom-date-from').value;
+  const toDate = document.getElementById('dicom-date-to').value;
+  const emergencyOnly = document.getElementById('dicom-emergency-filter').checked;
+
+  const filtered = allDicom.filter(d => {
+    const matchName = !q || (d.patient_name || '').toLowerCase().includes(q);
+    const matchId = !idQ || (d.patient_id || '').toLowerCase().includes(idQ);
+    const matchSt = !st || d.status === st;
+    const matchInst = !inst || (d.institute_name || d.center_name) === inst;
+    const matchMod = !mod || d.modality === mod;
+    const matchEmergency = !emergencyOnly || d.is_emergency === true;
+
+    let matchFrom = true, matchTo = true;
+    if (fromDate || toDate) {
+      const raw = d.formatted_study_date || d.study_date || '';
+      const dateStr = raw.length === 8 ? `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}` : raw;
+      if (fromDate) matchFrom = dateStr >= fromDate;
+      if (toDate) matchTo = dateStr <= toDate;
+    }
+
+    return matchName && matchId && matchSt && matchInst && matchMod && matchFrom && matchTo && matchEmergency;
+  });
+
+  document.getElementById('dicom-results-card').style.display = 'block';
+  renderDicom(filtered);
+}
+
+function clearDicomFilters() {
+  document.getElementById('dicom-search').value = '';
+  document.getElementById('dicom-id-filter').value = '';
+  document.getElementById('dicom-date-from').value = '';
+  document.getElementById('dicom-date-to').value = '';
+  document.getElementById('dicom-status-filter').value = '';
+  document.getElementById('dicom-institute-filter').value = '';
+  document.getElementById('dicom-modality-filter').value = '';
+  renderDicom(allDicom);
+}
+
+function toggleAllDicomRows(masterCb) {
+  document.querySelectorAll('.dicom-row-cb').forEach(cb => { cb.checked = masterCb.checked; });
+  updateDicomAssignPanel();
+}
+
+function updateDicomAssignPanel() {
+  const checked = document.querySelectorAll('.dicom-row-cb:checked');
+  if (checked.length === 0) {
+    const masterCb = document.getElementById('dicom-select-all');
+    if (masterCb) masterCb.checked = false;
+  }
+}
+
+async function assignSelectedStudies() {
+  const doctorName = document.getElementById('dicom-assign-doctor').value;
+  if (!doctorName) { toast('Please select a doctor first.', 'error'); return; }
+  const ids = Array.from(document.querySelectorAll('.dicom-row-cb:checked')).map(cb => parseInt(cb.value));
+  if (!ids.length) { toast('No studies selected.', 'error'); return; }
+  const res = await api('/api/assign-doctors/', {
+    method: 'POST',
+    body: JSON.stringify({ image_ids: ids, doctor_names: [doctorName] })
+  });
+  if (res.ok) {
+    toast(`Assigned ${ids.length} study${ids.length > 1 ? 'ies' : ''} to ${doctorName}.`, 'success');
+    const freshRes = await api(`/api/dicom-list/?page=${dicomPage}&page_size=${dicomPageSize}`);
+    if (freshRes.ok) { const d = await freshRes.json(); allDicom = d.results || []; }
+    document.getElementById('dicom-results-card').style.display = 'block';
+    filterDicom();
+  } else {
+    toast('Failed to assign studies.', 'error');
+  }
+}
+
+function renderDicom(images) {
+  const statusColors = { 'Not Assigned': 'gray', 'Unreported': 'yellow', 'Draft': 'blue', 'Reviewed': 'purple', 'Reported': 'green' };
+  const tbody = document.getElementById('dicom-table-body');
+  document.getElementById('dicom-count').textContent = `${images.length} records shown`;
+  const masterCb = document.getElementById('dicom-select-all');
+  if (masterCb) masterCb.checked = false;
+  if (!images.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🖼</div><div class="empty-title">No studies found</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = images.map(d => {
+    const sc = statusColors[d.status] || 'gray';
+    const date = d.formatted_study_date || d.study_date || '—';
+    const assigned = (d.assigned_doctors_list || []).join(', ') || '<span style="color:var(--text3);">—</span>';
+    const institute = d.institute_name || '—';
+    return `<tr>
+      <td><input type="checkbox" class="dicom-row-cb" value="${d.id}" onchange="updateDicomAssignPanel()" /></td>
+      <td><span style="font-weight:500;color:var(--text);">${d.patient_name || '—'}</span></td>
+      <td><span class="tag">${d.patient_id || '—'}</span></td>
+      <td><span class="badge badge-purple">${d.modality || '—'}</span></td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${assigned}</td>
+      <td style="font-size:12px;">${institute}</td>
+      <td style="font-family:var(--mono);font-size:12px;">${date}</td>
+      <td><span class="badge badge-${sc}" style="cursor:pointer;" onclick="openStatusModal(${d.id}, '${d.status}')">${d.status || '—'}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+let currentDicomId = null;
+
+function openStatusModal(dicomId, currentStatus) {
+  currentDicomId = dicomId;
+  document.getElementById('status-select').value = currentStatus;
+  document.getElementById('status-reported-by').value = '';
+  document.getElementById('status-modal-error').style.display = 'none';
+  openModal('update-status-modal');
+}
+
+async function submitStatusUpdate() {
+  const newStatus = document.getElementById('status-select').value;
+  const reportedBy = document.getElementById('status-reported-by').value.trim();
+  const errEl = document.getElementById('status-modal-error');
+  if (!newStatus) { errEl.textContent = 'Please select a status.'; errEl.style.display = 'inline-flex'; return; }
+  const body = { status: newStatus };
+  if (reportedBy) body.reported_by = reportedBy;
+  const res = await api(`/api/dicom-images/${currentDicomId}/update_status/`, { method: 'PATCH', body: JSON.stringify(body) });
+  const data = await res.json();
+  if (res.ok) {
+    toast('Status updated successfully.', 'success');
+    closeModal('update-status-modal');
+    const freshRes = await api(`/api/dicom-list/?page=${dicomPage}&page_size=${dicomPageSize}`);
+    if (freshRes.ok) { const d = await freshRes.json(); allDicom = d.results || []; }
+    document.getElementById('dicom-results-card').style.display = 'block';
+    filterDicom();
+  } else {
+    errEl.textContent = data.error || data.detail || 'Failed to update status.';
+    errEl.style.display = 'inline-flex';
+  }
+}
+
+let allTemplates = [], editingTemplateId = null;
+
+async function loadTemplates() {
+  document.getElementById('templates-table-body').innerHTML = '<tr><td colspan="6" class="loading">Loading templates</td></tr>';
+  try {
+    const res = await api('/api/manage-templates/');
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    allTemplates = data.templates || [];
+    renderTemplates(allTemplates);
+  } catch {
+    document.getElementById('templates-table-body').innerHTML = '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--red);">Failed to load templates</td></tr>';
+  }
+}
+
+function renderTemplates(templates) {
+  const tbody = document.getElementById('templates-table-body');
+  if (!templates.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No templates yet</div><div class="empty-text">Click "New Template" to create one.</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = templates.map(t => {
+    const date = t.created_at ? new Date(t.created_at).toLocaleDateString() : '—';
+    return `<tr>
+      <td><span class="badge badge-blue">${t.body_part}</span></td>
+      <td><span style="font-weight:500;color:var(--text);">${t.template_name}</span></td>
+      <td>${t.created_by_username || '<span style="color:var(--text3);">System</span>'}</td>
+      <td>${t.is_active ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">Inactive</span>'}</td>
+      <td style="font-size:12px;color:var(--text3);">${date}</td>
+      <td><div class="actions-cell">
+        <button class="btn btn-ghost btn-xs" onclick="openEditTemplate(${t.id})">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteTemplate(${t.id}, '${(t.template_name || '').replace(/'/g,"\\'")}')">Delete</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+
+function goToCreateTemplate() {
+  document.querySelectorAll(".nav-item").forEach(i => i.classList.remove("active"));
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelector(".nav-item[data-page=templates]").classList.add("active");
+  document.getElementById("templates-page").classList.add("active");
+  document.getElementById("page-title").textContent = "Report Templates";
+  document.getElementById("page-subtitle").textContent = "Manage report templates";
+  loadTemplates();
+  openCreateTemplateModal();
+}
+function openCreateTemplateModal() {
+  editingTemplateId = null;
+  document.getElementById('tpl-modal-title').textContent = 'New Template';
+  document.getElementById('tpl-body-part').value = '';
+  document.getElementById('tpl-name').value = '';
+  document.getElementById('tpl-content').value = '';
+  document.getElementById('tpl-active').checked = true;
+  document.getElementById('tpl-modal-error').style.display = 'none';
+  openModal('template-modal');
+}
+
+function openEditTemplate(id) {
+  const t = allTemplates.find(x => x.id === id);
+  if (!t) return;
+  editingTemplateId = id;
+  document.getElementById('tpl-modal-title').textContent = 'Edit Template';
+  document.getElementById('tpl-body-part').value = t.body_part || '';
+  document.getElementById('tpl-name').value = t.template_name || '';
+  document.getElementById('tpl-content').value = t.content || '';
+  document.getElementById('tpl-active').checked = t.is_active !== false;
+  document.getElementById('tpl-modal-error').style.display = 'none';
+  openModal('template-modal');
+}
+
+async function saveTemplate() {
+  const body_part = document.getElementById('tpl-body-part').value.trim();
+  const template_name = document.getElementById('tpl-name').value.trim();
+  const content = document.getElementById('tpl-content').value.trim();
+  const is_active = document.getElementById('tpl-active').checked;
+  const errEl = document.getElementById('tpl-modal-error');
+  if (!body_part || !template_name || !content) { errEl.textContent = 'Body part, name and content are required.'; errEl.style.display = 'inline-flex'; return; }
+  const payload = { body_part, template_name, content, is_active };
+  let res;
+  if (editingTemplateId) {
+    res = await api('/api/manage-templates/', { method: 'PUT', body: JSON.stringify({ ...payload, id: editingTemplateId }) });
+  } else {
+    res = await api('/api/manage-templates/', { method: 'POST', body: JSON.stringify(payload) });
+  }
+  const data = await res.json();
+  if (res.ok) {
+    toast(editingTemplateId ? 'Template updated!' : 'Template created!', 'success');
+    closeModal('template-modal');
+    loadTemplates();
+    loadDashboard();
+  } else {
+    errEl.textContent = data.detail || data.error || 'Failed to save template.';
+    errEl.style.display = 'inline-flex';
+  }
+}
+
+function deleteTemplate(id, name) {
+  openConfirm('Delete Template?', `Delete "${name}"? This cannot be undone.`, async () => {
+    const res = await api('/api/manage-templates/', { method: 'DELETE', body: JSON.stringify({ id }) });
+    if (res.ok || res.status === 204) { toast('Template deleted.', 'success'); loadTemplates(); loadDashboard(); }
+    else { toast('Failed to delete template.', 'error'); }
+  });
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open, .confirm-dialog.open').forEach(m => m.classList.remove('open'));
+});
+
+let allGroups = [];
+let editingGroupId = null;
+const GROUPS_STORAGE_KEY = 'pacs_doctor_groups';
+
+function loadGroupsFromStorage() {
+  try {
+    return JSON.parse(localStorage.getItem(GROUPS_STORAGE_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveGroupsToStorage(groups) {
+  localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(groups));
+}
+
+function generateGroupId() {
+  return 'grp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+}
+
+async function loadGroups() {
+  allGroups = loadGroupsFromStorage();
+  renderGroups(allGroups);
+}
+
+function filterGroups() {
+  const q = document.getElementById('group-search').value.toLowerCase();
+  const filtered = allGroups.filter(g => (g.name || '').toLowerCase().includes(q));
+  renderGroups(filtered);
+}
+
+function renderGroups(groups) {
+  const tbody = document.getElementById('groups-table-body');
+  if (!groups.length) {
+    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">No groups yet</div><div class="empty-text">Click "New Group" to create a doctor team.</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = groups.map(g => {
+    const memberBadges = (g.members || []).map(m => `<span class="badge badge-blue" style="margin:2px;">${m}</span>`).join('');
+    const date = g.created_at ? new Date(g.created_at).toLocaleDateString() : '—';
+    return `<tr>
+      <td><span style="font-weight:600;color:var(--text);">${g.name}</span></td>
+      <td style="max-width:320px;">${memberBadges || '<span style="color:var(--text3);">No members</span>'}</td>
+      <td><span class="badge badge-purple">${(g.members || []).length}</span></td>
+      <td style="font-size:12px;color:var(--text3);">${date}</td>
+      <td><div class="actions-cell">
+        <button class="btn btn-ghost btn-xs" onclick="openEditGroupModal('${g.id}')">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteGroup('${g.id}', '${(g.name || '').replace(/'/g, "\\'")}')">Delete</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+async function buildDoctorCheckboxes(containerId, selectedMembers) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '<div style="padding:10px;color:var(--text3);font-size:13px;">Loading doctors...</div>';
+  let doctors = [];
+  try {
+    const res = await api('/api/doctors/');
+    if (res.ok) {
+      const d = await res.json();
+      doctors = (d.doctors || []).map(doc => doc.name).filter(Boolean);
+    }
+  } catch {}
+  if (!doctors.length) {
+    container.innerHTML = '<div style="padding:10px;color:var(--text3);font-size:13px;">No doctors found.</div>';
+    return;
+  }
+  container.innerHTML = doctors.map(name => {
+    const checked = (selectedMembers || []).includes(name) ? 'checked' : '';
+    const safeId = 'doc_cb_' + containerId + '_' + name.replace(/\W/g, '_');
+    return `<div class="multi-select-item">
+      <input type="checkbox" class="checkbox" id="${safeId}" value="${name}" ${checked} />
+      <label class="permission-label" for="${safeId}" style="cursor:pointer;">${name}</label>
+    </div>`;
+  }).join('');
+}
+
+function getCheckedDoctors(containerId) {
+  return Array.from(document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`)).map(cb => cb.value);
+}
+
+async function openCreateGroupModal() {
+  editingGroupId = null;
+  document.getElementById('group-name').value = '';
+  document.getElementById('group-modal-error').style.display = 'none';
+  await buildDoctorCheckboxes('group-doctor-select', []);
+  openModal('create-group-modal');
+}
+
+async function openEditGroupModal(id) {
+  const group = allGroups.find(g => g.id === id);
+  if (!group) return;
+  editingGroupId = id;
+  document.getElementById('edit-group-id').value = id;
+  document.getElementById('edit-group-name').value = group.name || '';
+  document.getElementById('edit-group-modal-error').style.display = 'none';
+  await buildDoctorCheckboxes('edit-group-doctor-select', group.members || []);
+  openModal('edit-group-modal');
+}
+
+function saveGroup() {
+  const name = document.getElementById('group-name').value.trim();
+  const errEl = document.getElementById('group-modal-error');
+  if (!name) {
+    errEl.textContent = 'Group name is required.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+  const members = getCheckedDoctors('group-doctor-select');
+  const newGroup = {
+    id: generateGroupId(),
+    name,
+    members,
+    created_at: new Date().toISOString()
+  };
+  allGroups.push(newGroup);
+  saveGroupsToStorage(allGroups);
+  toast('Group created!', 'success');
+  closeModal('create-group-modal');
+  renderGroups(allGroups);
+}
+
+function updateGroup() {
+  const name = document.getElementById('edit-group-name').value.trim();
+  const errEl = document.getElementById('edit-group-modal-error');
+  if (!name) {
+    errEl.textContent = 'Group name is required.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+  const members = getCheckedDoctors('edit-group-doctor-select');
+  const idx = allGroups.findIndex(g => g.id === editingGroupId);
+  if (idx === -1) return;
+  allGroups[idx] = { ...allGroups[idx], name, members };
+  saveGroupsToStorage(allGroups);
+  toast('Group updated!', 'success');
+  closeModal('edit-group-modal');
+  renderGroups(allGroups);
+}
+
+function deleteGroup(id, name) {
+  openConfirm('Delete Group?', `Delete "${name}"? This cannot be undone.`, () => {
+    allGroups = allGroups.filter(g => g.id !== id);
+    saveGroupsToStorage(allGroups);
+    toast('Group deleted.', 'success');
+    renderGroups(allGroups);
+  });
+}
+
+let allSessions = [];
+
+async function loadSessions() {
+  document.getElementById('sessions-table-body').innerHTML = '<tr><td colspan="6" class="loading">Loading sessions</td></tr>';
+  try {
+    const res = await api('/api/active-sessions/');
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    allSessions = data.sessions || [];
+    renderSessions(allSessions);
+  } catch {
+    document.getElementById('sessions-table-body').innerHTML = '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--red);">Failed to load sessions</td></tr>';
+  }
+}
+
+function renderSessions(sessions) {
+  const tbody = document.getElementById('sessions-table-body');
+  if (!sessions.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🔒</div><div class="empty-title">No active sessions</div><div class="empty-text">No users are currently logged in.</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = sessions.map(s => {
+    const loginTime = s.login_time ? new Date(s.login_time).toLocaleString() : '—';
+    const lastActivity = s.last_activity ? new Date(s.last_activity).toLocaleString() : '—';
+    const isMe = currentUser && currentUser.id === s.user_id;
+    return `<tr>
+      <td><span style="font-weight:500;color:var(--text);">${s.username}${isMe ? ' <span class="badge badge-blue" style="font-size:10px;">You</span>' : ''}</span></td>
+      <td><span class="badge badge-purple">${s.role}</span></td>
+      <td><span class="tag">${s.client_ip}</span></td>
+      <td style="font-size:12px;color:var(--text3);">${loginTime}</td>
+      <td style="font-size:12px;color:var(--text3);">${lastActivity}</td>
+      <td>
+        ${isMe ? '<span style="color:var(--text3);font-size:12px;">—</span>' : `<button class="btn btn-danger btn-xs" onclick="killSession(${s.user_id}, '${(s.username || '').replace(/'/g, "\\'")}')">Kill Session</button>`}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function killSession(userId, username) {
+  openConfirm('Disconnect User?', `Force logout "${username}"? Their session will be terminated immediately.`, async () => {
+    const res = await api('/api/kill-session/', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+    if (res.ok) {
+      toast(`${username} has been disconnected.`, 'success');
+      loadSessions();
+    } else {
+      toast('Failed to disconnect user.', 'error');
+    }
+  });
+}
+
+loadCurrentUser();
+loadDashboard();
+</script>
+</body>
+</html>
