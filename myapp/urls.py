@@ -11,6 +11,7 @@ from .views import (
 )
 
 from . import views
+from . import viewer_manifests
 
 router = DefaultRouter()
 router.register(r'patients', PatientViewSet)
@@ -23,6 +24,7 @@ urlpatterns = [
     path('', include(router.urls)),
     path('studies-grouped/', views.get_studies_grouped, name='get_studies_grouped'),
     path('studies/<str:study_uid>/images/', views.get_study_images, name='get_study_images'),
+    path('studies/<str:study_uid>/series-preview/', views.get_study_series_preview, name='get_study_series_preview'),
     path('login/', CustomLoginView.as_view(), name='login'),
     path('dicom/receive/', ReceiveDICOMView.as_view(), name='receive_dicom'),
     path('info/', views.api_info, name='api_info'),
@@ -60,9 +62,13 @@ urlpatterns = [
     path('viewer/am-i-active/', am_i_active, name='am_i_active'),
     path('dicom-images/<int:dicom_id>/report/', get_image_report, name='get_image_report'),
     path('dicom-images/<int:dicom_id>/report-history/', get_report_history, name='get_report_history'),
+    path('delete-report-history/', views.delete_report_history, name='delete_report_history'),
     path('study-reports/', get_study_reports, name='get_study_reports'),
     path('study-zip/', views.download_study_zip, name='download_study_zip'),
     path('patient-history/', get_patient_history_data, name='get_patient_history_data'),
+
+    path('viewer-manifest/<str:study_uid>/weasis.xml', viewer_manifests.weasis_manifest, name='weasis_manifest'),
+    path('viewer-manifest/<str:study_uid>/ohif.json', viewer_manifests.ohif_manifest, name='ohif_manifest'),
 
     path('update-user-profile/', views.update_user_profile, name='update_user_profile'),
     path('user-assigned-institutions/<int:user_id>/', views.get_user_assigned_institutions, name='user_assigned_institutions'),
@@ -71,6 +77,7 @@ urlpatterns = [
     path('centers-with-doctors/', views.get_centers_with_doctors, name='centers_with_doctors'),
     path('active-sessions/', list_active_sessions, name='list_active_sessions'),
     path('kill-session/', kill_session, name='kill_session'),
+    path('online-doctors/', views.online_doctors, name='online_doctors'),
 
     path('server-info/', views.server_info, name='server_info'),
     path('change-user-password/', change_user_password, name='change_user_password'),

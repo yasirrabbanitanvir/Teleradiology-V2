@@ -75,6 +75,58 @@ function checkAuthentication() {
   return true;
 }
 
+const WAIT_GIF_WINDOW_MS = 25000;
+const WAIT_GIF_POLL_MS = 4000;
+let serverClockOffset = 0;
+let receivingStudies = new Map();
+let receivingPollTimer = null;
+
+function syncServerClock(res) {
+  const header = res && res.headers ? res.headers.get('Date') : null;
+  const serverNow = header ? new Date(header).getTime() : NaN;
+  if (!isNaN(serverNow)) serverClockOffset = serverNow - Date.now();
+}
+
+function detectReceivingStudies(rows) {
+  const latest = {};
+  rows.forEach(r => {
+    const uid = r.studyUID;
+    const t = new Date(r.createdAt).getTime();
+    if (!uid || isNaN(t)) return;
+    if (!latest[uid] || t > latest[uid]) latest[uid] = t;
+  });
+  const serverNow = Date.now() + serverClockOffset;
+  receivingStudies = new Map();
+  Object.keys(latest).forEach(uid => {
+    if (serverNow - latest[uid] < WAIT_GIF_WINDOW_MS) {
+      receivingStudies.set(uid, latest[uid] + WAIT_GIF_WINDOW_MS - serverClockOffset);
+    }
+  });
+}
+
+function waitGifHtml(studyUID) {
+  const until = receivingStudies.get(studyUID);
+  if (!until) return '';
+  return `<img class="study-wait-gif" src="images/wait_hover.gif" alt="" title="Receiving new study..." data-until="${until}" width="17" height="19" style="margin-left:4px;vertical-align:middle;">`;
+}
+
+function scheduleReceivingPoll(refetch) {
+  clearTimeout(receivingPollTimer);
+  receivingPollTimer = null;
+  if (!document.querySelector('.study-wait-gif')) return;
+  receivingPollTimer = setTimeout(() => {
+    if (document.querySelector('.row-checkbox:checked, .series-detail-row')) {
+      const now = Date.now();
+      document.querySelectorAll('.study-wait-gif').forEach(img => {
+        if (now > Number(img.dataset.until)) img.remove();
+      });
+      scheduleReceivingPoll(refetch);
+      return;
+    }
+    refetch();
+  }, WAIT_GIF_POLL_MS);
+}
+
 function removeDuplicateStudies(studies) {
   const seen = new Set();
   const duplicatesRemoved = [];
@@ -210,7 +262,34 @@ function goToPage(page) {
   searchStudies(true);
 }
 
+function isSearchPanelEmpty() {
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const today = new Date();
+  const past = new Date();
+  past.setDate(today.getDate() - 3);
+
+  const nameQ = document.getElementById('patient-name')?.value.trim() || '';
+  const idQ = document.getElementById('patient-id')?.value.trim() || '';
+  const statusQ = document.getElementById('status')?.value || 'All';
+  const centerQ = document.getElementById('center')?.value || 'ALL';
+  const emergency = document.getElementById('emergency')?.checked || false;
+  const startDate = document.getElementById('scan-start-date')?.value || '';
+  const endDate = document.getElementById('scan-end-date')?.value || '';
+  const allModalities = Array.from(document.querySelectorAll('.modality-checkbox')).every(cb => cb.checked);
+
+  const startIsDefault = !startDate || startDate === fmt(past);
+  const endIsDefault = !endDate || endDate === fmt(today);
+
+  return !nameQ && !idQ && statusQ === 'All' && centerQ === 'ALL' && !emergency && allModalities && startIsDefault && endIsDefault;
+}
+
 async function searchStudies(maintainPage = false) {
+  if (!maintainPage && isSearchPanelEmpty()) {
+    sessionStorage.removeItem('currentPage');
+    window.location.reload();
+    return;
+  }
+
   if (!checkAuthentication()) {
     return;
   }
@@ -270,6 +349,8 @@ async function searchStudies(maintainPage = false) {
     }
 
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+
+    syncServerClock(res);
 
     try {
       if (doctorsRes.ok) {
@@ -357,6 +438,7 @@ async function searchStudies(maintainPage = false) {
         center: dicom.center_name || 'Default',
         institute: displayInstitute,
         scanDateTime: scanDateTime,
+        receiveDateTime: formatReceiveDateTime(dicom.received_at || dicom.created_at) || scanDateTime,
         status: dicom.status || 'Not Assigned',
         reportedBy: dicom.reported_by || '',
         group: dicom.assigned_doctors || '',
@@ -371,9 +453,12 @@ async function searchStudies(maintainPage = false) {
         dbId: dicom.id,
         referredBy: dicom.referring_physician || '',
         patientHistory: dicom.patient_history || '',
-        referralFile: dicom.referral_file || ''
+        referralFile: dicom.referral_file || '',
+        createdAt: dicom.created_at || ''
       };
     });
+
+    detectReceivingStudies(processedStudies);
 
     allStudies = removeDuplicateStudies(processedStudies);
     allStudies.sort((a, b) => b.dbId - a.dbId);
@@ -411,6 +496,7 @@ async function searchStudies(maintainPage = false) {
     loadStudies();
     createPaginationControls();
     refreshLocks();
+    scheduleReceivingPoll(() => fetchAndLoadStudies(true));
 
   } catch (err) {
     console.error('Error fetching studies:', err);
@@ -596,11 +682,207 @@ function generateDoctorsList(study) {
 
 let studyLockCache = {};
 
+function escapeLockHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function ensureLockStyles() {
+  if (document.getElementById('lock-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'lock-styles';
+  style.textContent = `
+    .lock-box {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 170px;
+      padding: 4px 2px;
+      font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+    }
+    .lock-head {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #475569;
+    }
+    .lock-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+      animation: lock-pulse 1.8s infinite;
+    }
+    @keyframes lock-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
+      70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+    .lock-count {
+      min-width: 18px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      color: #334155;
+      font-size: 10.5px;
+      line-height: 1.5;
+    }
+    .lock-user {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 5px 4px 4px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 999px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+      transition: box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+    .lock-user:hover {
+      border-color: #cbd5e1;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1);
+    }
+    .lock-avatar {
+      flex: 0 0 auto;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .lock-name {
+      flex: 1 1 auto;
+      min-width: 0;
+      max-width: 130px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: left;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: #0f172a;
+    }
+    .lock-remove {
+      flex: 0 0 auto;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: transparent;
+      color: #94a3b8;
+      font-size: 15px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .lock-remove:hover {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+    .lock-clear {
+      align-self: center;
+      padding: 3px 12px;
+      border: 1px solid #fecaca;
+      border-radius: 6px;
+      background: #fef2f2;
+      color: #dc2626;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .lock-clear:hover {
+      background: #fee2e2;
+      border-color: #fca5a5;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function lockInitials(name) {
+  const skip = /^(dr|md|mr|mrs|ms|prof)\.?$/i;
+  const parts = String(name).split(/\s+/).filter(p => p && !skip.test(p));
+  const source = parts.length ? parts : String(name).split(/\s+/).filter(Boolean);
+  const letters = source.slice(0, 2).map(p => p.charAt(0)).join('');
+  return (letters || '?').toUpperCase();
+}
+
+function lockAvatarStyle(name) {
+  let hash = 0;
+  const text = String(name);
+  for (let i = 0; i < text.length; i++) {
+    hash = (hash * 31 + text.charCodeAt(i)) % 360;
+  }
+  return `background:hsl(${hash},60%,91%);color:hsl(${hash},50%,30%);`;
+}
+
 function lockCellHtml(uid) {
   const viewers = studyLockCache[uid];
   if (!viewers || viewers.length === 0) return '';
-  const names = viewers.join(', ').replace(/"/g, '&quot;');
-  return `<span title="${names}" style="cursor:pointer;font-weight:bold;">V</span>`;
+  ensureLockStyles();
+
+  const users = viewers.map(v => `
+    <div class="lock-user">
+      <span class="lock-avatar" style="${lockAvatarStyle(v.name)}">${escapeLockHtml(lockInitials(v.name))}</span>
+      <span class="lock-name" title="${escapeLockHtml(v.name)}">${escapeLockHtml(v.name)}</span>
+      <button class="lock-remove" title="Remove ${escapeLockHtml(v.name)}" onclick="removeStudyViewer('${uid}', ${v.user_id})">&times;</button>
+    </div>`).join('');
+
+  const clearAll = viewers.length > 1
+    ? `<button class="lock-clear" onclick="removeStudyViewer('${uid}')">Remove all</button>`
+    : '';
+
+  return `<div class="lock-box">
+    <div class="lock-head"><span class="lock-dot"></span>Viewing<span class="lock-count">${viewers.length}</span></div>
+    ${users}
+    ${clearAll}
+  </div>`;
+}
+
+async function removeStudyViewer(uid, userId) {
+  const all = userId === undefined || userId === null;
+  const viewers = studyLockCache[uid] || [];
+  const target = all ? null : viewers.find(v => v.user_id === userId);
+  const message = all
+    ? 'Remove all users currently viewing this study?'
+    : `Remove ${target ? target.name : 'this user'} from this study?`;
+  if (!confirm(message)) return;
+
+  try {
+    const body = { study_uid: uid };
+    if (all) {
+      body.include_self = true;
+    } else {
+      body.user_id = userId;
+    }
+    const res = await fetch(`${baseUrl}/api/viewer/kick-all/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const result = await res.json();
+    if (!res.ok || !result.success) {
+      throw new Error(result.error || 'Removal failed');
+    }
+    delete studyLockCache[uid];
+    await refreshLocks();
+  } catch (error) {
+    console.error('Error removing viewer:', error);
+    alert('Error removing viewer: ' + error.message);
+  }
 }
 
 async function refreshLocks() {
@@ -610,12 +892,12 @@ async function refreshLocks() {
 
   await Promise.all(uids.map(async uid => {
     try {
-      const res = await fetch(`${baseUrl}/api/viewer/check/?study_uid=${encodeURIComponent(uid)}`, {
+      const res = await fetch(`${baseUrl}/api/viewer/check/?study_uid=${encodeURIComponent(uid)}&detailed=1`, {
         headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
       });
       if (!res.ok) return;
       const data = await res.json();
-      studyLockCache[uid] = data.success ? (data.active_viewers || []) : [];
+      studyLockCache[uid] = data.success ? (data.viewers || []) : [];
     } catch (e) {}
   }));
 
@@ -676,14 +958,14 @@ function loadStudies() {
         <td><input type="checkbox" class="row-checkbox" data-patient-pk="${s.id}" /></td>
         <td><button class="action-btn view-btn" onclick="openViewer('${dicomFileUrl}', '${s.studyUID}')" ${!dicomFileUrl ? 'disabled' : ''}><img src="images/view.png" alt="View" width="32" height="32"></button></td>
         <td><button class="action-btn" title="${hasHistory ? 'History uploaded' : 'No history'}" onclick="openHistory('${s.patientID}')">${historyIconHtml(hasHistory)}</button></td>
-        <td>${s.patientName}${s.studyUID ? `<span class="series-toggle" title="Show series" data-study-uid="${s.studyUID}" data-body-part="${(s.bodyPart || '').replace(/"/g, '&quot;')}">+</span>` : ''}</td>
+        <td>${s.patientName}${s.studyUID ? `<span class="series-toggle" title="Show series" data-study-uid="${s.studyUID}" data-body-part="${(s.bodyPart || '').replace(/"/g, '&quot;')}">+</span>` : ''}${waitGifHtml(s.studyUID)}</td>
         <td>${s.patientID}</td>
         <td>${s.age}</td>
         <td>${s.sex}</td>
         <td>${s.bodyPart}</td>
         <td>${s.modality}</td>
         <td>${s.institute}</td>
-        <td>${s.scanDateTime}</td>
+        <td>${s.receiveDateTime || s.scanDateTime}</td>
         <td class="refd-by-cell" data-id="${s.id}" data-value="${(s.referredBy || '').replace(/"/g, '&quot;')}"><span class="refd-by-text" style="cursor:pointer;" onclick="startEditRefBy(this)">${s.referredBy || '<em style=\'color:#bbb\'>—</em>'}</span></td>
         <td style="text-align:center;">${s.studyUID ? `<button class="action-btn zip-btn" title="Download Scan in ZIP Format" style="padding:0;background:none;border:none;cursor:pointer;" onclick="downloadStudyZip('${s.studyUID}', this)">${ZIP_ICON_SVG}</button>` : ''}</td>
         <td>
@@ -921,17 +1203,24 @@ async function assignSelectedStudies() {
   }
 }
 
-async function refreshStudies() {
-  const btn = document.getElementById('refresh-btn');
-  if (btn) btn.disabled = true;
-  try {
-    await fetchAndLoadStudies(true);
-  } finally {
-    if (btn) btn.disabled = false;
-  }
+function refreshStudies() {
+  window.location.reload();
 }
 
-function loadSelectedStudies() {
+function buildViewerWarning(names) {
+  const list = names.map((name, i) => `${i + 1}. ${name}`).join('\n');
+  return `Following users are currently viewing the study:\n\n${list}\n\nDo you really wish to load this study?`;
+}
+
+function confirmViewerWarning(win, names) {
+  const message = buildViewerWarning(names);
+  try {
+    if (win && !win.closed) return win.confirm(message);
+  } catch (e) {}
+  return confirm(message);
+}
+
+async function loadSelectedStudies() {
   const checked = document.querySelectorAll('.row-checkbox:checked');
   if (!checked.length) {
     alert('Please select at least one study');
@@ -962,11 +1251,25 @@ function loadSelectedStudies() {
   const screenH = screen.availHeight || window.screen.height;
   const features = `toolbar=no,menubar=no,location=no,resizable=yes,scrollbars=yes,status=no,width=${screenW},height=${screenH},left=0,top=0`;
 
-  let blocked = 0;
-  uids.forEach(uid => {
-    const w = window.open(`./viewer.html?study=${uid}`, '_blank', features);
-    if (!w) blocked++;
+  const checkHeaders = { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' };
+  const opened = uids.map(uid => {
+    const win = window.open(`./viewer.html?study=${uid}`, '_blank', features);
+    const req = win
+      ? fetch(`${baseUrl}/api/viewer/check/?study_uid=${encodeURIComponent(uid)}`, { headers: checkHeaders })
+          .then(r => (r.ok ? r.json() : null))
+          .catch(() => null)
+      : null;
+    return { win, req };
   });
+  const blocked = opened.filter(o => !o.win).length;
+
+  for (const o of opened) {
+    if (!o.req) continue;
+    const data = await o.req;
+    if (data && data.success && data.active_viewers && data.active_viewers.length > 0) {
+      if (!confirmViewerWarning(o.win, data.active_viewers) && o.win && !o.win.closed) o.win.close();
+    }
+  }
 
   if (blocked) {
     alert('Some windows were blocked by the browser. Please allow popups for this site and try again.');
@@ -978,14 +1281,25 @@ async function openViewer(fileUrl, studyUID) {
     alert("No DICOM file available");
     return;
   }
+
+  const screenW = screen.availWidth || window.screen.width;
+  const screenH = screen.availHeight || window.screen.height;
+  const fullWindowFeatures = `toolbar=no,menubar=no,location=no,resizable=yes,scrollbars=yes,status=no,width=${screenW},height=${screenH},left=0,top=0`;
+  let viewerWindow = null;
   
   try {
+    const authHeaders = {
+      'Authorization': `Token ${token}`,
+      'Content-Type': 'application/json'
+    };
+    const viewersRequest = studyUID
+      ? fetch(`${baseUrl}/api/viewer/check/?study_uid=${studyUID}`, { method: 'GET', headers: authHeaders })
+      : null;
+    if (viewersRequest) viewersRequest.catch(() => {});
+
     const checkResponse = await fetch(`${baseUrl}/api/current-user/`, {
       method: 'GET',
-      headers: {
-        'Authorization': `Token ${token}`,
-        'Content-Type': 'application/json'
-      }
+      headers: authHeaders
     });
 
     if (checkResponse.ok) {
@@ -999,34 +1313,23 @@ async function openViewer(fileUrl, studyUID) {
     }
     
     if (studyUID) {
-      const viewersResponse = await fetch(`${baseUrl}/api/viewer/check/?study_uid=${studyUID}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Token ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
+      const viewerUrl = `./viewer.html?study=${studyUID}`;
+      viewerWindow = window.open(viewerUrl, "_blank", fullWindowFeatures);
+
+      const viewersResponse = await viewersRequest;
       if (viewersResponse.ok) {
         const viewersData = await viewersResponse.json();
         if (viewersData.success && viewersData.active_viewers && viewersData.active_viewers.length > 0) {
-          const viewerNames = viewersData.active_viewers.join(', ');
-          const userConfirmed = confirm(`Warning!\n\nFollowing users are currently viewing the study:\n${viewerNames}\n\nDo you really wish to load this study?`);
+          const userConfirmed = confirmViewerWarning(viewerWindow, viewersData.active_viewers);
           
           if (!userConfirmed) {
+            if (viewerWindow && !viewerWindow.closed) viewerWindow.close();
             return;
           }
         }
       }
-    }
-    
-    const screenW = screen.availWidth || window.screen.width;
-    const screenH = screen.availHeight || window.screen.height;
-    const fullWindowFeatures = `toolbar=no,menubar=no,location=no,resizable=yes,scrollbars=yes,status=no,width=${screenW},height=${screenH},left=0,top=0`;
-    
-    if (studyUID) {
-      const viewerUrl = `./viewer.html?study=${studyUID}`;
-      window.open(viewerUrl, "_blank", fullWindowFeatures);
+
+      if (!viewerWindow) window.open(viewerUrl, "_blank", fullWindowFeatures);
       return;
     }
     
@@ -1047,6 +1350,7 @@ async function openViewer(fileUrl, studyUID) {
     }
     
   } catch (error) {
+    if (viewerWindow && !viewerWindow.closed) viewerWindow.close();
     console.error('Error opening DICOM viewer:', error);
     alert("Error opening DICOM viewer. Please check the file path.");
   }
@@ -1192,7 +1496,326 @@ async function viewLatestReport(reportUrl, studyUid) {
   }
 }
 
+const REPORT_BAR_CSS = "body{padding-top:56px;font-family:'Segoe UI',Arial,sans-serif;}.report-bar{position:fixed;top:0;left:0;right:0;height:52px;z-index:1000;box-sizing:border-box;background:#0062C2;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 24px;box-shadow:0 1px 3px rgba(0,0,0,0.25);font-family:'Segoe UI',Arial,sans-serif;}.report-bar .title{font-size:16px;font-weight:600;letter-spacing:0.3px;}.report-bar .actions{display:flex;gap:10px;}.report-bar button{display:inline-flex;align-items:center;gap:7px;padding:8px 18px;border:none;border-radius:3px;font:600 14px 'Segoe UI',Arial,sans-serif;cursor:pointer;}.report-bar .btn-print{background:#4FBA5B;color:#fff;}.report-bar .btn-print:hover{background:#43a64e;}.report-bar .btn-download{background:#fff;color:#0062C2;}.report-bar .btn-download:hover{background:#e8f1fb;}.report-bar svg{width:16px;height:16px;fill:currentColor;}";
+const REPORT_PRINT_ICON = '<svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>';
+const REPORT_DOWNLOAD_ICON = '<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
+
+function buildReportBar(d, win, onDownload) {
+  const bar = d.createElement('div');
+  bar.className = 'report-bar';
+  const title = d.createElement('div');
+  title.className = 'title';
+  title.textContent = 'Report';
+  const actions = d.createElement('div');
+  actions.className = 'actions';
+  const printBtn = d.createElement('button');
+  printBtn.className = 'btn-print';
+  printBtn.innerHTML = `${REPORT_PRINT_ICON}<span>Print</span>`;
+  printBtn.onclick = () => win.print();
+  actions.appendChild(printBtn);
+  if (onDownload) {
+    const downloadBtn = d.createElement('button');
+    downloadBtn.className = 'btn-download';
+    downloadBtn.innerHTML = `${REPORT_DOWNLOAD_ICON}<span>Download</span>`;
+    downloadBtn.onclick = onDownload;
+    actions.appendChild(downloadBtn);
+  }
+  bar.appendChild(title);
+  bar.appendChild(actions);
+  d.body.appendChild(bar);
+}
+
+function cleanReportHtml(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html || '';
+  tpl.content.querySelectorAll('script,iframe,object,embed').forEach(el => el.remove());
+  tpl.content.querySelectorAll('*').forEach(el => {
+    Array.from(el.attributes).forEach(attr => {
+      if (/^on/i.test(attr.name)) el.removeAttribute(attr.name);
+    });
+  });
+  const box = document.createElement('div');
+  box.appendChild(tpl.content);
+  return box.innerHTML;
+}
+
+function escapeReportText(value) {
+  return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function openReportPopup() {
+  const w = Math.min(900, screen.availWidth || 900);
+  const h = Math.min(950, screen.availHeight || 950);
+  const left = Math.max(0, Math.round(((screen.availWidth || w) - w) / 2));
+  const top = Math.max(0, Math.round(((screen.availHeight || h) - h) / 2));
+  const features = `popup=yes,toolbar=no,menubar=no,location=no,status=no,resizable=yes,scrollbars=yes,width=${w},height=${h},left=${left},top=${top}`;
+  const win = window.open('', `reportView_${Date.now()}`, features);
+  if (win) {
+    try {
+      win.document.open();
+      win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title></head><body style="font-family:Arial,sans-serif;padding:20px;">Loading report...</body></html>');
+      win.document.close();
+    } catch (e) {}
+  }
+  return win;
+}
+
+function renderReportPopup(win, reports) {
+  const items = reports.filter(r => r.report_content && String(r.report_content).trim() !== '');
+  if (!items.length) return false;
+  const sections = items.map((r, i) => {
+    const metaParts = [];
+    if (r.reported_by) metaParts.push(`Reported by: ${escapeReportText(r.reported_by)}`);
+    if (r.created_at) metaParts.push(escapeReportText(r.created_at));
+    const meta = items.length > 1 || metaParts.length
+      ? `<div class="meta">${items.length > 1 ? `<strong>Report ${i + 1}</strong> ` : ''}${metaParts.join(' | ')}</div>`
+      : '';
+    return `<div class="report">${meta}<div class="body">${cleanReportHtml(r.report_content)}</div></div>`;
+  }).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><style>
+    body{font-family:Calibri,Arial,sans-serif;background:#e9ecef;margin:0;padding:20px;color:#000;}
+    .report{background:#fff;max-width:794px;margin:0 auto 20px;padding:40px 50px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:14px;line-height:1.5;}
+    .meta{border-bottom:1px solid #ccc;padding-bottom:8px;margin-bottom:16px;font-size:13px;color:#444;}
+    .body img{max-width:100%;}
+    .body table{border-collapse:collapse;max-width:100%;}
+    .body td,.body th{border:1px solid #999;padding:4px 6px;}
+    .ql-align-center{text-align:center;}.ql-align-right{text-align:right;}.ql-align-justify{text-align:justify;}
+    .ql-indent-1{padding-left:3em;}.ql-indent-2{padding-left:6em;}.ql-indent-3{padding-left:9em;}
+    @media print{body{background:#fff;padding:0 !important;}.report{box-shadow:none;margin:0;max-width:none;}.report-bar{display:none !important;}}
+    ${REPORT_BAR_CSS}
+  </style></head><body>${sections}</body></html>`;
+  try {
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    const fileUrl = (items.find(r => r.report_file) || {}).report_file;
+    buildReportBar(win.document, win, fileUrl ? () => {
+      const a = win.document.createElement('a');
+      a.href = fileUrl;
+      a.download = decodeURIComponent(fileUrl.split('?')[0].split('/').pop() || 'report.docx');
+      win.document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } : null);
+    win.focus();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function loadReportLib(urls) {
+  return urls.reduce((chain, url) => chain.then(ok => {
+    if (ok) return true;
+    return new Promise(resolve => {
+      const s = document.createElement('script');
+      s.src = url;
+      s.onload = () => resolve(true);
+      s.onerror = () => { s.remove(); resolve(false); };
+      document.head.appendChild(s);
+    });
+  }), Promise.resolve(false));
+}
+
+async function ensureDocxPreview() {
+  if (!window.JSZip) {
+    await loadReportLib(['./script/jszip.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js']);
+  }
+  if (!window.docx || !window.docx.renderAsync) {
+    await loadReportLib(['./script/docx-preview.min.js', 'https://cdn.jsdelivr.net/npm/docx-preview@0.4.1/dist/docx-preview.min.js']);
+  }
+  return !!(window.JSZip && window.docx && window.docx.renderAsync);
+}
+
+async function prepareReportDocx(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const frames = [];
+  const docFile = zip.file('word/document.xml');
+  if (!docFile) return { data: buffer, frames };
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(await docFile.async('string'), 'application/xml');
+  const relMap = {};
+  const relsFile = zip.file('word/_rels/document.xml.rels');
+  if (relsFile) {
+    const rels = parser.parseFromString(await relsFile.async('string'), 'application/xml');
+    Array.from(rels.getElementsByTagName('Relationship')).forEach(r => {
+      relMap[r.getAttribute('Id')] = r.getAttribute('Target');
+    });
+  }
+  const framed = Array.from(doc.getElementsByTagName('w:framePr'));
+  for (const fp of framed) {
+    const para = fp.parentNode && fp.parentNode.parentNode;
+    if (!para || para.nodeName !== 'w:p' || !para.parentNode) continue;
+    const x = parseInt(fp.getAttribute('w:x'), 10) || 0;
+    const y = parseInt(fp.getAttribute('w:y'), 10) || 0;
+    let frame = frames.find(f => f.x === x && f.y === y);
+    if (!frame) {
+      frame = { x, y, image: '', imageWidthPt: 0, text: '' };
+      frames.push(frame);
+    }
+    const blip = para.getElementsByTagName('a:blip')[0];
+    if (blip) {
+      const target = relMap[blip.getAttribute('r:embed')];
+      const imgFile = target ? zip.file('word/' + target.replace(/^\/?(word\/)?/, '')) : null;
+      if (imgFile) {
+        const ext = (target.split('.').pop() || 'png').toLowerCase();
+        const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : `image/${ext}`;
+        frame.image = `data:${mime};base64,${await imgFile.async('base64')}`;
+        const extent = para.getElementsByTagName('wp:extent')[0];
+        if (extent) frame.imageWidthPt = (parseInt(extent.getAttribute('cx'), 10) || 0) / 12700;
+      }
+    }
+    const text = Array.from(para.getElementsByTagName('w:t')).map(t => t.textContent).join('');
+    if (text) frame.text = text;
+    para.parentNode.removeChild(para);
+  }
+  if (!frames.length) return { data: buffer, frames };
+  zip.file('word/document.xml', new XMLSerializer().serializeToString(doc));
+  return { data: await zip.generateAsync({ type: 'arraybuffer' }), frames };
+}
+
+async function renderDocxPopup(win, reports) {
+  const files = reports.map(r => r.report_file).filter(f => f && /\.docx(\?|$)/i.test(f));
+  if (!files.length) return false;
+  try {
+    if (!(await ensureDocxPreview())) return false;
+    const prepared = await Promise.all(files.map(async f => {
+      const res = await fetch(f);
+      if (!res.ok) throw new Error('docx unavailable');
+      const original = await res.arrayBuffer();
+      const result = await prepareReportDocx(original.slice(0));
+      return Object.assign(result, { original, name: decodeURIComponent(f.split('?')[0].split('/').pop() || 'report.docx') });
+    }));
+    if (win.closed) return true;
+    const d = win.document;
+    d.open();
+    d.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><style>html,body{margin:0;background:#e9ecef;}.docx-wrapper{background:#e9ecef !important;padding:20px 0 !important;}${REPORT_BAR_CSS}@page{size:A4;margin:0;}@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}html,body{background:#fff !important;margin:0 !important;}.report-bar{display:none !important;}body{padding-top:0 !important;}.docx-wrapper{background:#fff !important;padding:0 !important;display:block !important;}.docx-wrapper > section.docx{box-shadow:none !important;margin:0 auto !important;min-height:0 !important;break-after:page;page-break-after:always;}.docx-wrapper > section.docx:last-child{break-after:auto;page-break-after:auto;}}</style></head><body></body></html>`);
+    d.close();
+    const first = prepared[0];
+    buildReportBar(d, win, () => {
+      const a = d.createElement('a');
+      a.href = URL.createObjectURL(new Blob([first.original], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
+      a.download = first.name;
+      d.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    });
+    for (const item of prepared) {
+      const holder = d.createElement('div');
+      d.body.appendChild(holder);
+      await docx.renderAsync(item.data, holder, holder, {
+        className: 'docx',
+        inWrapper: true,
+        ignoreWidth: false,
+        ignoreHeight: false,
+        breakPages: true,
+        renderHeaders: true,
+        renderFooters: true
+      });
+      const page = holder.querySelector('section');
+      if (page) {
+        page.style.position = 'relative';
+        item.frames.forEach(frame => {
+          const box = d.createElement('div');
+          box.style.cssText = `position:absolute;left:${frame.x / 20}pt;top:${frame.y / 20}pt;z-index:5;`;
+          if (frame.image) {
+            const img = d.createElement('img');
+            img.src = frame.image;
+            img.style.cssText = `display:block;width:${frame.imageWidthPt || 64.8}pt;height:auto;`;
+            box.appendChild(img);
+          }
+          if (frame.text) {
+            const label = d.createElement('div');
+            label.textContent = frame.text;
+            label.style.cssText = 'font:8pt Calibri,Arial,sans-serif;color:#0066cc;white-space:nowrap;margin-top:2pt;';
+            box.appendChild(label);
+          }
+          page.appendChild(box);
+        });
+      }
+    }
+    win.focus();
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
+}
+
+function pickLatestReport(reports) {
+  const stamp = r => {
+    const m = String(r.created_at || '').match(/^(\d{2})-(\d{2})-(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!m) return Infinity;
+    return new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0)).getTime();
+  };
+  let best = null;
+  let bestStamp = -Infinity;
+  reports.forEach(r => {
+    const t = stamp(r);
+    if (best === null || t >= bestStamp) {
+      best = r;
+      bestStamp = t;
+    }
+  });
+  return best;
+}
+
+async function showReportPopup(report, fallbackUrl) {
+  const win = openReportPopup();
+  if (win && await renderDocxPopup(win, [report])) {
+    return;
+  }
+  if (win && renderReportPopup(win, [report])) {
+    return;
+  }
+  const fileUrl = report.report_file || fallbackUrl;
+  if (win) {
+    if (fileUrl) {
+      win.location.href = fileUrl;
+    } else {
+      win.close();
+      alert('No report available');
+    }
+    return;
+  }
+  if (fileUrl) {
+    window.open(fileUrl, '_blank');
+  } else {
+    alert('No report available');
+  }
+}
+
+function openReportChooser(reports, onPick) {
+  const existing = document.getElementById('combined-report-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'combined-report-modal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  const linksHtml = reports.map((r, i) => {
+    let label = `Report ${i+1}`;
+    if (r.reported_by) label += ` - ${r.reported_by}`;
+    if (r.created_at) label += ` (${r.created_at})`;
+    return `<div style="margin:8px 0;"><a href="#" class="report-chooser-link" data-index="${i}" style="color:#0066cc;font-size:15px;text-decoration:none;padding:8px 12px;background:#f0f7ff;border:1px solid #cce;border-radius:4px;display:inline-block;">📄 ${label}</a></div>`;
+  }).join('');
+  modal.innerHTML = `<div style="background:#fff;border-radius:8px;padding:30px;min-width:360px;max-width:500px;box-shadow:0 4px 20px rgba(0,0,0,0.3);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><strong style="font-size:17px;">Reports (${reports.length})</strong><button type="button" class="report-chooser-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;">✕</button></div>${linksHtml}</div>`;
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+  modal.querySelector('.report-chooser-close').addEventListener('click', function() { modal.remove(); });
+  modal.querySelectorAll('.report-chooser-link').forEach(link => {
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      const picked = reports[Number(this.dataset.index)];
+      modal.remove();
+      onPick(picked);
+    });
+  });
+  document.body.appendChild(modal);
+}
+
 async function openReport(reportUrl, studyUid) {
+  const win = openReportPopup();
+  let reports = [];
+  let allReports = [];
   if (studyUid && studyUid !== 'undefined' && studyUid !== '') {
     try {
       const res = await fetch(`${baseUrl}/api/study-reports/?study_uid=${encodeURIComponent(studyUid)}`, {
@@ -1201,21 +1824,44 @@ async function openReport(reportUrl, studyUid) {
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.reports && data.reports.length > 0) {
-          if (data.reports.length === 1) {
-            const url = data.reports[0].report_file || reportUrl;
-            if (url) window.open(url, '_blank');
+          if (data.reports.length > 1) {
+            allReports = data.reports;
           } else {
-            openCombinedReportModal(data.reports);
+            reports = [pickLatestReport(data.reports)];
           }
-          return;
         }
       }
-    } catch(e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   }
-  if (reportUrl) {
-    window.open(reportUrl, "_blank");
+  if (allReports.length > 1) {
+    if (win) win.close();
+    openReportChooser(allReports, picked => showReportPopup(picked, reportUrl));
+    return;
+  }
+  if (win && reports.length && await renderDocxPopup(win, reports)) {
+    return;
+  }
+  if (win && reports.length && renderReportPopup(win, reports)) {
+    return;
+  }
+  const fileUrl = (reports.find(r => r.report_file) || {}).report_file || reportUrl;
+  if (win) {
+    if (fileUrl) {
+      win.location.href = fileUrl;
+    } else {
+      win.close();
+      alert('No report available');
+    }
+    return;
+  }
+  if (reports.length > 1) {
+    openCombinedReportModal(reports);
+  } else if (fileUrl) {
+    window.open(fileUrl, '_blank');
   } else {
-    alert("No report available");
+    alert('No report available');
   }
 }
 
@@ -1276,12 +1922,178 @@ window.onload = async function() {
     displayElement.textContent = userData.doctor_name || userData.username || 'User';
   }
 
+  setupOnlineDoctorButton();
+
   setInterval(() => {
     fetchAndLoadStudies(true);
   }, 30000);
 
   setInterval(refreshLocks, 10000);
 };
+
+let onlineDoctorTimer = null;
+
+function fillOnlineDoctorPanel(headText, doctors, message) {
+  const panel = document.getElementById('online-doctor-panel');
+  if (!panel) return;
+  panel.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.className = 'online-doctor-head';
+  head.textContent = headText;
+  panel.appendChild(head);
+
+  if (message) {
+    const note = document.createElement('div');
+    note.className = 'online-doctor-empty';
+    note.textContent = message;
+    panel.appendChild(note);
+    return;
+  }
+
+  doctors.forEach(d => {
+    const row = document.createElement('div');
+    row.className = 'online-doctor-row';
+    const dot = document.createElement('span');
+    dot.className = 'online-doctor-dot';
+    const name = document.createElement('span');
+    name.textContent = d.name;
+    row.appendChild(dot);
+    row.appendChild(name);
+    panel.appendChild(row);
+  });
+}
+
+function renderOnlineDoctors(doctors) {
+  const btn = document.getElementById('online-doctor-btn');
+  if (!btn) return;
+  btn.textContent = `Online Doctor (${doctors.length})`;
+  fillOnlineDoctorPanel(
+    `Online Doctors: ${doctors.length}`,
+    doctors,
+    doctors.length ? '' : 'No doctor is online right now'
+  );
+}
+
+async function loadOnlineDoctors() {
+  try {
+    const res = await fetch(`${baseUrl}/api/online-doctors/`, {
+      headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) {
+      fillOnlineDoctorPanel('Online Doctors', [], `Could not load list (HTTP ${res.status})`);
+      return;
+    }
+    const data = await res.json();
+    if (data.success) {
+      renderOnlineDoctors(data.doctors || []);
+    } else {
+      fillOnlineDoctorPanel('Online Doctors', [], data.error || 'Could not load list');
+    }
+  } catch (err) {
+    console.error('Error loading online doctors:', err);
+    fillOnlineDoctorPanel('Online Doctors', [], 'Could not load list');
+  }
+}
+
+function positionOnlineDoctorPanel() {
+  const btn = document.getElementById('online-doctor-btn');
+  const panel = document.getElementById('online-doctor-panel');
+  if (!btn || !panel) return;
+  const rect = btn.getBoundingClientRect();
+  const width = panel.offsetWidth || 260;
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+  panel.style.top = `${rect.bottom + 4}px`;
+  panel.style.left = `${left}px`;
+}
+
+function setupOnlineDoctorButton() {
+  const list = document.querySelector('header nav ul');
+  if (!list || document.getElementById('online-doctor-btn')) return;
+
+  if (!document.getElementById('online-doctor-styles')) {
+    const style = document.createElement('style');
+    style.id = 'online-doctor-styles';
+    style.textContent = `
+      .online-doctor-item { list-style: none; }
+      .online-doctor-panel {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        min-width: 260px;
+        max-height: 320px;
+        overflow-y: auto;
+        background: #fff;
+        color: #222;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        z-index: 100000;
+      }
+      .online-doctor-panel.open { display: block; }
+      .online-doctor-head {
+        padding: 8px 12px;
+        font-weight: 600;
+        background: #f3f6fa;
+        border-bottom: 1px solid #ddd;
+      }
+      .online-doctor-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 12px;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 14px;
+      }
+      .online-doctor-row:last-child { border-bottom: none; }
+      .online-doctor-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #2ecc40;
+        flex: 0 0 auto;
+      }
+      .online-doctor-empty { padding: 12px; color: #777; font-size: 14px; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  const item = document.createElement('li');
+  item.className = 'online-doctor-item';
+  item.innerHTML = '<button type="button" id="online-doctor-btn" style="background:#f5deb3;color:#000;font-weight:bold;border:1px solid #999;padding:3px 10px;cursor:pointer;">Online Doctor</button>';
+  list.insertBefore(item, list.firstChild);
+
+  const panel = document.createElement('div');
+  panel.id = 'online-doctor-panel';
+  panel.className = 'online-doctor-panel';
+  document.body.appendChild(panel);
+  fillOnlineDoctorPanel('Online Doctors', [], 'Loading...');
+
+  const btn = document.getElementById('online-doctor-btn');
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const opening = !panel.classList.contains('open');
+    if (opening) {
+      panel.classList.add('open');
+      positionOnlineDoctorPanel();
+      loadOnlineDoctors().then(positionOnlineDoctorPanel);
+    } else {
+      panel.classList.remove('open');
+    }
+  });
+
+  document.addEventListener('click', e => {
+    if (!panel.contains(e.target) && e.target !== btn) panel.classList.remove('open');
+  });
+
+  window.addEventListener('resize', () => panel.classList.remove('open'));
+
+  loadOnlineDoctors();
+  clearInterval(onlineDoctorTimer);
+  onlineDoctorTimer = setInterval(loadOnlineDoctors, 30000);
+}
 
 function showTableSkeleton() {
   const tbody = document.getElementById('study-table-body');
@@ -1312,4 +2124,13 @@ function showTableSkeleton() {
     `;
     document.head.appendChild(style);
   }
+}
+
+
+function formatReceiveDateTime(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }

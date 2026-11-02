@@ -1,6 +1,40 @@
 let viewerTrackingInterval = null;
 let viewerKickCheckInterval = null;
 let currentStudyUID = null;
+let viewerRegistered = false;
+let viewerRemoved = false;
+let viewerTickWorker = null;
+
+function startViewerTicker(fn, ms) {
+  try {
+    const src = "setInterval(function(){postMessage(1)}," + ms + ");";
+    const url = URL.createObjectURL(new Blob([src], { type: "application/javascript" }));
+    const w = new Worker(url);
+    URL.revokeObjectURL(url);
+    w.onmessage = fn;
+    w.onerror = function() {
+      try { w.terminate(); } catch (e) {}
+      if (viewerTickWorker === w) {
+        viewerTickWorker = null;
+        if (!viewerRemoved && !viewerKickCheckInterval) viewerKickCheckInterval = setInterval(fn, ms);
+      }
+    };
+    viewerTickWorker = w;
+    return;
+  } catch (e) {}
+  viewerKickCheckInterval = setInterval(fn, ms);
+}
+
+function stopViewerTicker() {
+  if (viewerTickWorker) {
+    try { viewerTickWorker.terminate(); } catch (e) {}
+    viewerTickWorker = null;
+  }
+  if (viewerKickCheckInterval) {
+    clearInterval(viewerKickCheckInterval);
+    viewerKickCheckInterval = null;
+  }
+}
 
 function getStudyUIDFromURL() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -26,6 +60,7 @@ async function registerViewer(studyUID) {
     });
     
     if (response.ok) {
+      viewerRegistered = true;
       console.log('Viewer registered successfully');
     }
   } catch (error) {
@@ -38,7 +73,7 @@ async function updateViewerActivity(studyUID) {
   if (!token || !studyUID) return;
   
   try {
-    await fetch(`${window.location.origin}/api/viewer/update/`, {
+    const response = await fetch(`${window.location.origin}/api/viewer/update/`, {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -46,16 +81,68 @@ async function updateViewerActivity(studyUID) {
       },
       body: JSON.stringify({ study_uid: studyUID })
     });
+    if (response.status === 404 && viewerRegistered) {
+      closeRemovedViewer();
+    }
   } catch (error) {
     console.error('Error updating viewer activity:', error);
   }
 }
 
 async function checkIfKickedOut(studyUID) {
-  // Auto-disconnect on another user opening the same study has been disabled.
-  // Multiple users are now allowed to view the same study simultaneously;
-  // this function is intentionally left as a no-op to avoid breaking callers.
-  return;
+  const token = getToken();
+  if (!token || !studyUID || !viewerRegistered || viewerRemoved) return;
+
+  try {
+    const response = await fetch(`${window.location.origin}/api/viewer/am-i-active/?study_uid=${encodeURIComponent(studyUID)}&_=${Date.now()}`, {
+
+      cache: 'no-store',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (data.success && data.is_active === false) {
+      closeRemovedViewer();
+    }
+  } catch (error) {
+    console.error('Error checking viewer status:', error);
+  }
+}
+
+function closeRemovedViewer() {
+  if (viewerRemoved) return;
+  viewerRemoved = true;
+
+  if (viewerTrackingInterval) {
+    clearInterval(viewerTrackingInterval);
+    viewerTrackingInterval = null;
+  }
+  stopViewerTicker();
+  currentStudyUID = null;
+
+  try {
+    if (typeof openReportWindows !== "undefined" && openReportWindows) {
+      openReportWindows.forEach(function(win) {
+        try { if (win && !win.closed) win.close(); } catch (e) {}
+      });
+      openReportWindows.clear();
+    }
+  } catch (e) {}
+
+  try {
+    const bc = new BroadcastChannel("doctor_refresh");
+    bc.postMessage({ type: "closeViewer" });
+    bc.close();
+  } catch (e) {}
+
+  window.close();
+
+  setTimeout(() => {
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0f172a;color:#e2e8f0;font-family:Inter,Segoe UI,Arial,sans-serif;font-size:18px;text-align:center;padding:24px;">You have been removed from this study. You can close this tab.</div>';
+  }, 300);
 }
 
 async function unregisterViewer(studyUID) {
@@ -92,9 +179,24 @@ function startViewerTracking() {
     updateViewerActivity(currentStudyUID);
   }, 60000);
   
-  // Kick-check interval removed: viewers are no longer auto-disconnected
-  // when another user opens the same study. The "currently viewing"
-  // notification (shown before opening a study) is still active.
+  startViewerTicker(() => {
+    if (viewerRemoved || !currentStudyUID) return;
+    if (!viewerRegistered) {
+      registerViewer(currentStudyUID);
+      return;
+    }
+    checkIfKickedOut(currentStudyUID);
+  }, 2000);
+
+  document.addEventListener("visibilitychange", function() {
+    if (!document.hidden) checkIfKickedOut(currentStudyUID);
+  });
+
+  window.addEventListener('focus', function() {
+    checkIfKickedOut(currentStudyUID);
+  });
+
+  console.log('Viewer removal watcher active');
 }
 
 function stopViewerTracking() {
@@ -103,10 +205,7 @@ function stopViewerTracking() {
     viewerTrackingInterval = null;
   }
   
-  if (viewerKickCheckInterval) {
-    clearInterval(viewerKickCheckInterval);
-    viewerKickCheckInterval = null;
-  }
+  stopViewerTicker();
   
   if (currentStudyUID) {
     unregisterViewer(currentStudyUID);
@@ -123,9 +222,5 @@ window.addEventListener('beforeunload', function() {
 });
 
 window.addEventListener('pagehide', function() {
-  stopViewerTracking();
-});
-
-window.addEventListener('unload', function() {
   stopViewerTracking();
 });

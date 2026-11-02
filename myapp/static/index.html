@@ -26,6 +26,7 @@
       <label>Logged in as:</label>
       <strong id="user-display-name">Loading...</strong>
     </div>
+    <div class="live-clock" id="live-clock"></div>
   </div>
 
   <section class="search-panel">
@@ -45,6 +46,10 @@
       <select id="center">
         <option value="ALL">All Centers</option>
       </select>
+      <div class="center-search">
+        <input type="text" id="center-search-input" placeholder="All Centers" autocomplete="off" />
+        <div class="center-search-list" id="center-search-list"></div>
+      </div>
       <label>
         <input type="checkbox" id="emergency" />
         Show only Emergency Cases
@@ -129,7 +134,8 @@
     </div>
   </footer>
 
-  <script src="./script/seriesPanel.js?v=4"></script>
+  <script src="./script/seriesPanel.js?v=5"></script>
   <script src="./script/script.js"></script>
+  <script src="./script/extraViewers.js"></script>
 </body>
 </html>

@@ -427,12 +427,120 @@
     setInterval(refreshLabel, 500);
   }
 
+  function initClock() {
+    const clock = document.getElementById('live-clock');
+    if (!clock) return;
+
+    const pad = n => String(n).padStart(2, '0');
+
+    function tick() {
+      const d = new Date();
+      let h = d.getHours();
+      const suffix = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      clock.textContent = `${pad(h)}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${suffix}`;
+    }
+
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  function initCenterSearch() {
+    const select = document.getElementById('center');
+    const input = document.getElementById('center-search-input');
+    const list = document.getElementById('center-search-list');
+    if (!select || !input || !list) return;
+
+    function currentText() {
+      if (select.value === 'ALL') return '';
+      const opt = select.options[select.selectedIndex];
+      return opt ? opt.text : '';
+    }
+
+    function matches(q) {
+      q = q.trim().toLowerCase();
+      return Array.from(select.options).filter(o => !q || o.text.toLowerCase().includes(q));
+    }
+
+    function choose(opt) {
+      const changed = select.value !== opt.value;
+      select.value = opt.value;
+      input.value = currentText();
+      list.classList.remove('open');
+      if (changed) select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function render(q) {
+      list.innerHTML = '';
+      const found = matches(q);
+      if (!found.length) {
+        const none = document.createElement('div');
+        none.className = 'center-search-empty';
+        none.textContent = 'No match';
+        list.appendChild(none);
+        return;
+      }
+      found.forEach(o => {
+        const row = document.createElement('div');
+        row.className = 'center-search-item';
+        row.textContent = o.text;
+        row.addEventListener('mousedown', e => {
+          e.preventDefault();
+          choose(o);
+        });
+        list.appendChild(row);
+      });
+    }
+
+    function show(q) {
+      render(q);
+      list.classList.add('open');
+    }
+
+    input.addEventListener('focus', () => {
+      input.select();
+      show('');
+    });
+
+    input.addEventListener('input', () => show(input.value));
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const found = matches(input.value);
+        if (found.length) choose(found[0]);
+      } else if (e.key === 'Escape') {
+        input.blur();
+      }
+    });
+
+    input.addEventListener('blur', () => {
+      list.classList.remove('open');
+      if (!input.value.trim() && select.value !== 'ALL') {
+        const all = Array.from(select.options).find(o => o.value === 'ALL');
+        if (all) choose(all);
+      }
+      input.value = currentText();
+    });
+
+    input.value = currentText();
+    setInterval(() => {
+      if (document.activeElement !== input && input.value !== currentText()) {
+        input.value = currentText();
+      }
+    }, 500);
+  }
+
   injectStyles();
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initAssignSearch);
     document.addEventListener('DOMContentLoaded', initAssignPanelDesign);
+    document.addEventListener('DOMContentLoaded', initCenterSearch);
+    document.addEventListener('DOMContentLoaded', initClock);
   } else {
     initAssignSearch();
     initAssignPanelDesign();
+    initCenterSearch();
+    initClock();
   }
 })();

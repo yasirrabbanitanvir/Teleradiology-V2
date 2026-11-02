@@ -12,6 +12,7 @@ class Center(models.Model):
     user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True)
     is_default = models.BooleanField(default=True)
     allowed_users = models.JSONField(default=list, blank=True)
+    report_format = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return self.institute_name or "Unnamed Center"
@@ -225,6 +226,7 @@ class DICOMImage(models.Model):
             models.Index(fields=['center_name', 'study_instance_uid']),
             models.Index(fields=['patient_id', 'study_instance_uid']),
             models.Index(fields=['study_instance_uid', 'series_instance_uid']),
+            models.Index(fields=['study_instance_uid', 'series_number', 'instance_number']),
             models.Index(fields=['modality', 'study_date']),
             models.Index(fields=['study_date']),
             models.Index(fields=['status', 'assigned_doctors']),
@@ -296,6 +298,29 @@ class DICOMImage(models.Model):
             'total_size_bytes': stats['total_size'] or 0,
             'total_size_mb': round((stats['total_size'] or 0) / (1024 * 1024), 2)
         }
+
+class ReportHistory(models.Model):
+    dicom_image = models.ForeignKey(
+        DICOMImage,
+        on_delete=models.CASCADE,
+        related_name='report_history'
+    )
+    reported_by = models.CharField(max_length=200, blank=True, default='', db_index=True)
+    status = models.CharField(max_length=20, blank=True, default='')
+    report_content = models.TextField(blank=True, default='')
+    report_file = models.FileField(upload_to='reports/', max_length=500, null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        db_table = 'report_history'
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['dicom_image', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.dicom_image_id} - {self.reported_by} - {self.created_at:%Y-%m-%d %H:%M}"
+
 
 class ReportTemplate(models.Model):
     BODY_PART_CHOICES = [

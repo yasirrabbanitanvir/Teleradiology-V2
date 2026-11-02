@@ -2,9 +2,169 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
+<meta name="viewport" content="width=1280" />
     <title>DICOM Viewer</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+    <style>
+    #loadingOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #000;
+        z-index: 100000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font: 16px Arial, sans-serif;
+        text-align: center;
+        transition: opacity 0.1s;
+    }
+    #loadingOverlay.hide {
+        opacity: 0;
+        pointer-events: none;
+    }
+    .ld-spinner {
+        position: relative;
+        width: 90px;
+        height: 90px;
+        margin-bottom: 34px;
+    }
+    .ld-spinner i {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 10px;
+        height: 10px;
+        margin: -5px 0 0 -5px;
+        border-radius: 50%;
+        background: #fff;
+        animation: ldPulse 1s linear infinite;
+    }
+    @keyframes ldPulse {
+        0% { transform: var(--t) scale(1.9); }
+        100% { transform: var(--t) scale(0.7); }
+    }
+    .series-progress {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 2px;
+    }
+    .series-progress-track {
+        flex: 1;
+        height: 12px;
+        background: #111;
+        border: 1px solid #3a3a3a;
+        border-radius: 7px;
+        overflow: hidden;
+    }
+    .series-progress-fill {
+        height: 100%;
+        width: 0;
+        background: linear-gradient(#dda073, #b9703f);
+        border-radius: 7px;
+        transition: width 0.3s ease;
+    }
+    .series-progress.done .series-progress-fill {
+        background: linear-gradient(#3bd655, #17a02f);
+    }
+    .series-progress-count {
+        font: bold 12px Arial, sans-serif;
+        color: #3b9ae8;
+        min-width: 48px;
+        text-align: right;
+    }
+    .image-wait {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 54%;
+        text-align: center;
+        color: #cfcfcf;
+        font: 13px Arial, sans-serif;
+        pointer-events: none;
+        z-index: 11;
+    }
+    </style>
+    <link rel="preload" as="script" href="/static/js/diacom/jquery-3.6.0.min.js" />
+    <link rel="preload" as="script" href="/static/js/diacom/hammer.js" />
+    <link rel="preload" as="script" href="/static/js/diacom/dicomParser.min.js" />
+    <link rel="preload" as="script" href="/static/js/diacom/cornerstone.js" />
+    <link rel="preload" as="script" href="/static/js/diacom/cornerstoneMath.min.js" />
+    <link rel="preload" as="script" href="/static/js/diacom/cornerstoneWADOImageLoader.bundle.min.js" />
+    <link rel="preload" as="script" href="/static/js/diacom/cornerstoneTools.min.js" />
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+        <script>
+    (function () {
+        var q = new URLSearchParams(window.location.search);
+        var uid = q.get("study");
+        var seriesParam = q.get("series");
+        window.__trkT = Date.now();
+        document.write('<link rel="preload" as="script" href="./script/tracking.js?t=' + window.__trkT + '">');
+        if (!uid) return;
+        var base = "/api/studies/" + uid;
+        var toJson = function (r) {
+            if (!r.ok) throw new Error("http " + r.status);
+            return r.json();
+        };
+        var dicomUrl = function (fp) {
+            return "/dicom/" + String(fp).split("/").map(encodeURIComponent).join("/") + "/";
+        };
+        var authToken = null;
+        try { authToken = sessionStorage.getItem("token") || localStorage.getItem("token"); } catch (e) {}
+        var authHeaders = authToken ? { Authorization: "Token " + authToken } : {};
+        window.__authToken = authToken;
+        var fileBlobs = {};
+        window.__fileBlobs = fileBlobs;
+        window.__startFull = function () {
+            if (!window.__fullReq) {
+                window.__fullReq = fetch(base + "/images/", { headers: authHeaders }).then(toJson);
+                window.__fullReq.catch(function () {});
+            }
+            return window.__fullReq;
+        };
+        var previewUrl = base + "/series-preview/" + (seriesParam ? "?series=" + encodeURIComponent(seriesParam) : "");
+        window.__previewReq = fetch(previewUrl, { priority: "high", headers: authHeaders }).then(toJson).then(function (d) {
+            if (!d || !d.success || !d.series || !d.series.length) throw new Error("empty");
+            return d;
+        });
+        var grabFile = function (im) {
+            if (!im || !im.file_path) return null;
+            if (!fileBlobs[im.file_path]) {
+                fileBlobs[im.file_path] = fetch(dicomUrl(im.file_path), { priority: "high", headers: authHeaders })
+                    .then(function (r) { return r.ok ? r.blob() : null; })
+                    .catch(function () { return null; });
+            }
+            return fileBlobs[im.file_path];
+        };
+        window.__previewReq.then(function (d) {
+            var first = grabFile(d.series[0]);
+            var rest = function () {
+                window.__startFull();
+                var queue = d.series.slice(1);
+                var running = 0;
+                var next = function () {
+                    while (running < 3 && queue.length) {
+                        var p = grabFile(queue.shift());
+                        if (!p) continue;
+                        running++;
+                        var finish = function () { running--; next(); };
+                        p.then(finish, finish);
+                    }
+                };
+                next();
+            };
+            if (first) first.then(rest, rest); else rest();
+        }, function () {
+            window.__startFull();
+        });
+    })();
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" /></noscript>
     
     <style>
     * {
@@ -518,10 +678,25 @@
     .mpr-slider {
     width: 100%;
     }
+
+    @media (min-width: 768px) and (max-width: 1280px) {
+    .main-content {
+    grid-template-columns: 125px 1fr;
+    gap: 8px;
+    padding: 8px;
+    }
+    .mpr-modal {
+    width: 96vw;
+    }
+    }
 </style>
 
   </head>
   <body>
+    <div id="loadingOverlay">
+      <div class="ld-spinner"><i style="--t:rotate(0deg) translateY(-38px);animation-delay:-1.000s"></i><i style="--t:rotate(45deg) translateY(-38px);animation-delay:-0.875s"></i><i style="--t:rotate(90deg) translateY(-38px);animation-delay:-0.750s"></i><i style="--t:rotate(135deg) translateY(-38px);animation-delay:-0.625s"></i><i style="--t:rotate(180deg) translateY(-38px);animation-delay:-0.500s"></i><i style="--t:rotate(225deg) translateY(-38px);animation-delay:-0.375s"></i><i style="--t:rotate(270deg) translateY(-38px);animation-delay:-0.250s"></i><i style="--t:rotate(315deg) translateY(-38px);animation-delay:-0.125s"></i></div>
+      <div id="ldTitle">Loading study, This may take 0.1 seconds...</div>
+    </div>
     <div class="main-content" id="mainContent">
       <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -657,6 +832,7 @@
 
         <div class="image-container">
           <div id="dicomImage" class="cornerstone-element"></div>
+          <div class="image-wait" id="imageWait">Image Loading Please Wait...</div>
           <div class="viewport-overlay">
             <div class="overlay-top-left" id="topLeft"></div>
             <div class="overlay-top-right" id="topRight"></div>
@@ -713,6 +889,157 @@
         const openReportWindows = new Map();
         let panelImagePositions = new Map();
         const imageCache = new Map();
+
+        window.__fgActive = 0;
+        window.__fgSince = 0;
+        const filePathByImageId = new Map();
+        const resolvedBlobIds = {};
+        const loadImageFast = (function installFastLoader() {
+            const origLoad = cornerstone.loadImage.bind(cornerstone);
+            const inflight = new Map();
+
+            function sourceFor(imageId) {
+                const filePath = filePathByImageId.get(imageId);
+                const pending = filePath && window.__fileBlobs ? window.__fileBlobs[filePath] : null;
+                if (!pending) return imageId;
+                if (resolvedBlobIds[imageId]) return resolvedBlobIds[imageId];
+                return pending.then(blob => {
+                    const fm = cornerstoneWADOImageLoader.wadouri && cornerstoneWADOImageLoader.wadouri.fileManager;
+                    if (blob && fm) {
+                        resolvedBlobIds[imageId] = fm.add(blob);
+                        return resolvedBlobIds[imageId];
+                    }
+                    return imageId;
+                }, () => imageId);
+            }
+
+            function fastLoad(imageId, options) {
+                const existing = inflight.get(imageId);
+                if (existing) return existing;
+                const isBg = !!(options && options.__bg);
+                if (!isBg) {
+                    if (window.__fgActive === 0) window.__fgSince = Date.now();
+                    window.__fgActive++;
+                }
+                const run = id => origLoad(id, isBg ? { priority: -5, requestType: 'prefetch' } : options);
+                const src = sourceFor(imageId);
+                let p;
+                try {
+                    p = typeof src === 'string' ? run(src) : src.then(run);
+                } catch (e) {
+                    if (!isBg) window.__fgActive = Math.max(0, window.__fgActive - 1);
+                    return Promise.reject(e);
+                }
+                inflight.set(imageId, p);
+                const done = () => {
+                    inflight.delete(imageId);
+                    if (!isBg) window.__fgActive = Math.max(0, window.__fgActive - 1);
+                };
+                p.then(() => { done(); markImageLoaded(imageId); }, done);
+                return p;
+            }
+
+            try { cornerstone.loadImage = fastLoad; } catch (e) {}
+            return fastLoad;
+        })();
+
+        const imageSeriesKey = new Map();
+        const seriesLoadedSets = {};
+        const pendingProgressKeys = new Set();
+        let progressFlushQueued = false;
+
+        function hideLoadingOverlay() {
+            const overlay = document.getElementById("loadingOverlay");
+            if (!overlay) return;
+            overlay.classList.add("hide");
+            setTimeout(() => {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }, 120);
+        }
+
+        function showLoadingError(message) {
+            const overlay = document.getElementById("loadingOverlay");
+            if (!overlay) return;
+            const spinner = overlay.querySelector(".ld-spinner");
+            if (spinner) spinner.style.display = "none";
+            const title = document.getElementById("ldTitle");
+            if (title) title.textContent = message;
+        }
+
+        function removeImageWait() {
+            const wait = document.getElementById("imageWait");
+            if (wait && wait.parentNode) wait.parentNode.removeChild(wait);
+        }
+
+        function setImageWait(text) {
+            const wait = document.getElementById("imageWait");
+            if (wait) wait.textContent = text;
+        }
+
+        function paintSeriesProgress(card) {
+            const key = card.dataset.seriesKey;
+            const group = seriesGroups[key];
+            const total = seriesTotal(group);
+            const done = seriesLoadedSets[key] ? Math.min(seriesLoadedSets[key].size, total) : 0;
+            const fill = card.querySelector(".series-progress-fill");
+            const count = card.querySelector(".series-progress-count");
+            if (fill) fill.style.width = (total ? (done / total) * 100 : 0) + "%";
+            const bar = card.querySelector(".series-progress");
+            if (bar) bar.classList.toggle("done", total > 0 && done >= total);
+            if (count) count.textContent = done + "/" + total;
+        }
+
+        function flushSeriesProgress() {
+            progressFlushQueued = false;
+            if (!pendingProgressKeys.size) return;
+            const keys = new Set(pendingProgressKeys);
+            pendingProgressKeys.clear();
+            document.querySelectorAll(".series-thumbnail").forEach(card => {
+                if (keys.has(card.dataset.seriesKey)) paintSeriesProgress(card);
+            });
+        }
+
+        function markImageLoaded(imageId) {
+            const key = imageSeriesKey.get(imageId);
+            if (key === undefined) return;
+            let set = seriesLoadedSets[key];
+            if (!set) set = seriesLoadedSets[key] = new Set();
+            if (set.has(imageId)) return;
+            set.add(imageId);
+            pendingProgressKeys.add(key);
+            if (!progressFlushQueued) {
+                progressFlushQueued = true;
+                requestAnimationFrame(flushSeriesProgress);
+            }
+        }
+
+        function seriesTotal(group) {
+            if (!group) return 1;
+            return Math.max(group.totalCount || 0, group.images.length) || 1;
+        }
+
+        const THUMB_CONCURRENCY = 6;
+        const thumbQueue = [];
+        let thumbActive = 0;
+        let releaseThumbnails;
+        const thumbnailGate = new Promise(resolve => { releaseThumbnails = resolve; });
+        function thumbsBusy() { return thumbActive > 0 || thumbQueue.length > 0; }
+        function enqueueThumbLoad(imageId) {
+            return new Promise((resolve, reject) => {
+                thumbQueue.push({ imageId, resolve, reject });
+                pumpThumbQueue();
+            });
+        }
+        function pumpThumbQueue() {
+            while (thumbActive < THUMB_CONCURRENCY && thumbQueue.length) {
+                const job = thumbQueue.shift();
+                thumbActive++;
+                loadImageFast(job.imageId).then(job.resolve, job.reject).then(() => {
+                    thumbActive--;
+                    pumpThumbQueue();
+                });
+            }
+        }
 
         const params = new URLSearchParams(window.location.search);
         const studyUID = params.get("study") || "";
@@ -798,8 +1125,9 @@ window.addEventListener('message', function(e) {
             beforeSend: function (xhr) {
                 try {
                     const u = new URL(xhr.responseURL || "", window.location.href);
-                    if (u.origin === window.location.origin && csrftoken) {
-                        xhr.setRequestHeader("X-CSRFToken", csrftoken);
+                    if (u.origin === window.location.origin) {
+                        if (csrftoken) xhr.setRequestHeader("X-CSRFToken", csrftoken);
+                        if (window.__authToken) xhr.setRequestHeader("Authorization", "Token " + window.__authToken);
                     }
                 } catch (_) {}
             },
@@ -816,7 +1144,7 @@ window.addEventListener('message', function(e) {
         cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
         cornerstoneWADOImageLoader.external.dicomParser = dicomParser;
 
-        document.addEventListener("DOMContentLoaded", function () {
+        function bootViewer() {
             initializeCornerstone();
             setupEventListeners();
             initializeTools();
@@ -827,6 +1155,7 @@ window.addEventListener('message', function(e) {
                 loadStudyImages(studyUID);
             } else {
                 updateStatus("No study UID provided");
+                showLoadingError("No study selected");
             }
             
             const imageContainer = document.querySelector(".image-container");
@@ -840,7 +1169,7 @@ window.addEventListener('message', function(e) {
                 stackWrapper.addEventListener('touchstart', (e) => { e.stopPropagation(); }, { passive: true });
                 stackWrapper.addEventListener('touchmove', (e) => { e.stopPropagation(); }, { passive: true });
             }
-        });
+        }
 
         function customizeEllipticalRoiTool() {
             let eventListenersAdded = false;
@@ -1844,7 +2173,7 @@ function drawCrossReferenceLines() {
                 }
             }
             
-            cornerstone.loadImage(imageId).then((image) => {
+            loadImageFast(imageId).then((image) => {
                 const viewport = cornerstone.getDefaultViewportForImage(panel, image);
                 if (image.windowWidth && image.windowWidth > 0) viewport.voi.windowWidth = image.windowWidth;
                 if (image.windowCenter) viewport.voi.windowCenter = image.windowCenter;
@@ -2150,49 +2479,65 @@ function drawCrossReferenceLines() {
             for (let i = start; i <= end; i++) {
                 const imageId = studyImages[i].imageId;
                 if (!imageCache.has(imageId)) {
-                    cornerstone.loadImage(imageId).then(img => {
+                    loadImageFast(imageId).then(img => {
                         try { imageCache.set(imageId, img); } catch (e) {}
                     }).catch(() => {});
                 }
             }
         }
 
-        function backgroundLoadMetadata(concurrency = 6) {
+        function backgroundLoadMetadata(concurrency = 3) {
             if (!studyImages || studyImages.length === 0) return;
-            const queue = studyImages.map((si, idx) => ({ si, idx }));
-            let active = 0;
-
-            function next() {
-                if (queue.length === 0) return;
-                if (active >= concurrency) return;
-                const item = queue.shift();
-                active++;
-                const imageId = item.si.imageId;
-                if (item.si.seriesNumber && item.si.instanceNumber) {
-                    active--;
-                    setTimeout(next, 0);
-                    return;
-                }
-                cornerstone.loadImage(imageId).then(img => {
-                    try {
-                        const ds = img.data;
-                        if (!ds) return;
-                        const sNum = safeString(ds, 'x00200011');
-                        const iNum = safeString(ds, 'x00200013');
-                        if (sNum && !studyImages[item.idx].seriesNumber) studyImages[item.idx].seriesNumber = sNum;
-                        if (iNum && !studyImages[item.idx].instanceNumber) studyImages[item.idx].instanceNumber = iNum;
-                        updateSeriesGroupsIncremental(item.idx);
-                    } catch (e) {
-                    }
-                }).catch(() => {
-                }).finally(() => {
-                    active--;
-                    setTimeout(next, 0);
+            const order = [];
+            const seen = new Set();
+            const needMeta = studyImages.some(i => !i.seriesNumber || !i.instanceNumber);
+            const activeItem = studyImages[currentImageIndex];
+            const activeKey = activeItem ? imageSeriesKey.get(activeItem.imageId) : null;
+            Object.keys(seriesGroups)
+                .sort((a, b) => (a === activeKey ? 0 : 1) - (b === activeKey ? 0 : 1))
+                .forEach(k => {
+                    if (!needMeta && k !== activeKey) return;
+                    seriesGroups[k].images.forEach(i => {
+                        if (!seen.has(i.originalIndex)) { seen.add(i.originalIndex); order.push(i.originalIndex); }
+                    });
                 });
-                setTimeout(next, 0);
+            let active = 0;
+            let pos = 0;
+
+            function cacheHasRoom() {
+                try {
+                    const info = cornerstone.imageCache.getCacheInfo();
+                    return info.cacheSizeInBytes < info.maximumSizeInBytes * 0.8;
+                } catch (e) { return true; }
             }
 
-            for (let i = 0; i < concurrency; i++) next();
+            function pump() {
+                if (pos >= order.length) return;
+                if (document.hidden) { setTimeout(pump, 500); return; }
+                if ((window.__fgActive > 0 && Date.now() - window.__fgSince < 2000) || thumbsBusy()) { setTimeout(pump, 80); return; }
+                while (active < concurrency && pos < order.length) {
+                    if (!cacheHasRoom()) return;
+                    const idx = order[pos++];
+                    const si = studyImages[idx];
+                    if (!si) continue;
+                    active++;
+                    loadImageFast(si.imageId, { __bg: true }).then(img => {
+                        try {
+                            const ds = img.data;
+                            if (!ds) return;
+                            const sNum = safeString(ds, 'x00200011');
+                            const iNum = safeString(ds, 'x00200013');
+                            if (sNum && !studyImages[idx].seriesNumber) studyImages[idx].seriesNumber = sNum;
+                            if (iNum && !studyImages[idx].instanceNumber) studyImages[idx].instanceNumber = iNum;
+                            if (!si.seriesNumber || !si.instanceNumber) updateSeriesGroupsIncremental(idx);
+                        } catch (e) {}
+                    }).catch(() => {}).then(() => {
+                        active--;
+                        setTimeout(pump, 10);
+                    });
+                }
+            }
+            pump();
         }
 
         function safeString(dataSet, tag) {
@@ -2228,84 +2573,161 @@ function drawCrossReferenceLines() {
             } catch (e) {}
         }
 
+        let studyLoadStarted = false;
+
+        function buildStudyModel(images, isPreview) {
+            studyImages = images.map((image) => {
+                const seriesNumber = image.series_number || image.seriesNumber || null;
+                const instanceNumber = image.instance_number || image.instanceNumber || null;
+                const filePath = image.file_path;
+                const encodedPath = filePath.split('/').map(part => encodeURIComponent(part)).join('/');
+                const imageId = `wadouri:/dicom/${encodedPath}/`;
+                filePathByImageId.set(imageId, filePath);
+                return {
+                    imageId: imageId,
+                    fileName: filePath.split('/').pop(),
+                    metadata: image,
+                    seriesNumber: seriesNumber,
+                    instanceNumber: instanceNumber
+                };
+            });
+
+            seriesGroups = {};
+            studyImages.forEach((img, idx) => {
+                const seriesNum = img.seriesNumber || (img.metadata && (img.metadata.series_number || img.metadata.seriesNumber)) || 'Unknown';
+                const seriesDesc = img.metadata && (img.metadata.series_description || img.metadata.seriesDescription) ? (img.metadata.series_description || img.metadata.seriesDescription) : 'Series';
+                const seriesKey = `${seriesNum}_${seriesDesc}`;
+                if (!seriesGroups[seriesKey]) {
+                    seriesGroups[seriesKey] = {
+                        seriesNumber: seriesNum,
+                        seriesDescription: seriesDesc,
+                        images: [],
+                        totalCount: 0
+                    };
+                }
+                if (isPreview && img.metadata.series_count) {
+                    seriesGroups[seriesKey].totalCount = img.metadata.series_count;
+                }
+                seriesGroups[seriesKey].images.push({ ...img, originalIndex: idx });
+            });
+
+            Object.keys(seriesGroups).forEach(k => {
+                try {
+                    seriesGroups[k].images.sort((a, b) => {
+                        const aNum = parseInt(a.instanceNumber || a.metadata.instance_number || a.metadata.instanceNumber || 0) || 0;
+                        const bNum = parseInt(b.instanceNumber || b.metadata.instance_number || b.metadata.instanceNumber || 0) || 0;
+                        return aNum - bNum;
+                    });
+                } catch (e) {}
+            });
+
+            imageSeriesKey.clear();
+            Object.keys(seriesGroups).forEach(k => {
+                seriesGroups[k].images.forEach(i => imageSeriesKey.set(i.imageId, k));
+            });
+        }
+
+        async function fetchFullStudyImages() {
+            try {
+                let data = null;
+                try {
+                    data = window.__startFull ? await window.__startFull() : null;
+                } catch (e) { data = null; }
+                if (!data) {
+                    const response = await fetch(`/api/studies/${studyUID}/images/`, { headers: window.__authToken ? { Authorization: "Token " + window.__authToken } : {} });
+                    data = await response.json();
+                }
+                if (!data || !data.success || !Array.isArray(data.images)) return null;
+                let images = data.images;
+                const seriesParam = params.get("series");
+                if (seriesParam) {
+                    const wantedSeries = seriesParam.split(",").map(s => decodeURIComponent(s.trim())).filter(Boolean);
+                    const pickedImages = images.filter(img => wantedSeries.includes(img.series_instance_uid || `${img.series_number}_${img.series_description}`));
+                    if (pickedImages.length > 0) images = pickedImages;
+                }
+                return images.length ? images : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function showInitialStudy() {
+            totalImages = studyImages.length;
+            currentImageIndex = 0;
+            displayStudyHeader(studyImages[0].metadata);
+            currentDicomId = studyImages[0].metadata ? (studyImages[0].metadata.id || null) : null;
+            updateSeriesList();
+            hideLoadingOverlay();
+
+            try {
+                await loadAndViewImage(studyImages[0].imageId, studyImages[0].metadata);
+                removeImageWait();
+            } catch (e) {
+                setImageWait("Could not load this image");
+            } finally {
+                releaseThumbnails();
+            }
+
+            const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+            if (isTouchDevice) {
+                deactivateAllTools();
+                document.querySelectorAll(".toolButton").forEach(button => button.classList.remove("active"));
+            } else {
+                activateTool("Wwwc");
+            }
+            if (totalImages > 1) setupImageSlider();
+            updateStatus("Study loaded");
+        }
+
+        function applyFullStudy(images) {
+            const activeItem = studyImages[currentImageIndex];
+            const activeId = activeItem ? activeItem.imageId : null;
+            buildStudyModel(images, false);
+            totalImages = studyImages.length;
+            const found = activeId ? studyImages.findIndex(si => si.imageId === activeId) : -1;
+            currentImageIndex = found >= 0 ? found : 0;
+            currentDicomId = studyImages[currentImageIndex].metadata ? (studyImages[currentImageIndex].metadata.id || null) : null;
+
+            const stack = document.getElementById("stackWrapper");
+            const scrollTop = stack ? stack.scrollTop : 0;
+            updateSeriesList();
+            if (stack) stack.scrollTop = scrollTop;
+
+            setupImageSlider();
+            updateImageInfo();
+            prefetchImagesAround(currentImageIndex, 2);
+            backgroundLoadMetadata(3);
+        }
+
         async function loadStudyImages(studyUID) {
+            if (studyLoadStarted) return;
+            studyLoadStarted = true;
             try {
                 updateStatus("Loading study...");
-                const response = await fetch(`/api/studies/${studyUID}/images/`);
-                const data = await response.json();
-                
-                if (data.success && data.images && data.images.length > 0) {
-                    studyImages = data.images.map((image, idx) => {
-                        const seriesNumber = image.series_number || image.seriesNumber || null;
-                        const instanceNumber = image.instance_number || image.instanceNumber || null;
-                        const filePath = image.file_path;
-                        const pathParts = filePath.split('/');
-                        const encodedParts = pathParts.map(part => encodeURIComponent(part));
-                        const encodedPath = encodedParts.join('/');
-                        const imageId = `wadouri:/dicom/${encodedPath}`;
-                        return {
-                            imageId: imageId,
-                            fileName: filePath.split('/').pop(),
-                            metadata: image,
-                            seriesNumber: seriesNumber,
-                            instanceNumber: instanceNumber
-                        };
-                    });
-                    
-                    seriesGroups = {};
-                    studyImages.forEach((img, idx) => {
-                        const seriesNum = img.seriesNumber || (img.metadata && (img.metadata.series_number || img.metadata.seriesNumber)) || 'Unknown';
-                        const seriesDesc = img.metadata && (img.metadata.series_description || img.metadata.seriesDescription) ? (img.metadata.series_description || img.metadata.seriesDescription) : 'Series';
-                        const seriesKey = `${seriesNum}_${seriesDesc}`;
-                        if (!seriesGroups[seriesKey]) {
-                            seriesGroups[seriesKey] = {
-                                seriesNumber: seriesNum,
-                                seriesDescription: seriesDesc,
-                                images: []
-                            };
-                        }
-                        seriesGroups[seriesKey].images.push({ ...img, originalIndex: idx });
-                    });
-                    
-                    Object.keys(seriesGroups).forEach(k => {
-                        try {
-                            seriesGroups[k].images.sort((a, b) => {
-                                const aNum = parseInt(a.instanceNumber || a.metadata.instance_number || a.metadata.instanceNumber || 0) || 0;
-                                const bNum = parseInt(b.instanceNumber || b.metadata.instance_number || b.metadata.instanceNumber || 0) || 0;
-                                return aNum - bNum;
-                            });
-                        } catch (e) {}
-                    });
-                    
-                    totalImages = studyImages.length;
-                    currentImageIndex = 0;
-                    displayStudyHeader(studyImages[0].metadata);
-                    currentDicomId = studyImages[0].metadata ? (studyImages[0].metadata.id || null) : null;
+                let preview = null;
+                try {
+                    preview = window.__previewReq ? await window.__previewReq : null;
+                } catch (e) { preview = null; }
 
-                    try {
-                        const firstImageId = studyImages[0].imageId;
-                        const firstImage = await loadAndViewImage(firstImageId, studyImages[0].metadata);
-                        if (firstImage) {
-                            try { imageCache.set(firstImageId, firstImage); } catch (e) {}
-                        }
-                    } catch (e) {
-                    }
+                if (preview && preview.series && preview.series.length) {
+                    buildStudyModel(preview.series, true);
+                    await showInitialStudy();
+                    const fullImages = await fetchFullStudyImages();
+                    if (fullImages) applyFullStudy(fullImages);
+                    return;
+                }
 
-                    updateSeriesList();
-                    const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-                    if (isTouchDevice) {
-                        deactivateAllTools();
-                        document.querySelectorAll(".toolButton").forEach(button => button.classList.remove("active"));
-                    } else {
-                        activateTool("Wwwc");
-                    }
+                const images = await fetchFullStudyImages();
+                if (images) {
+                    buildStudyModel(images, false);
+                    await showInitialStudy();
                     prefetchImagesAround(0, 2);
-                    backgroundLoadMetadata(6);
-
-                    if (totalImages > 1) setupImageSlider();
-                    updateStatus("Study loaded");
+                    backgroundLoadMetadata(3);
+                } else {
+                    showLoadingError("No images found for this study");
                 }
             } catch (error) {
+                showLoadingError("Could not load the study. Please close this window and try again.");
                 updateStatus("Error loading study");
                 updateFooterStatus("Error loading");
             }
@@ -2718,6 +3140,8 @@ function drawCrossReferenceLines() {
                     if (cached.windowCenter) defaultViewport.voi.windowCenter = cached.windowCenter;
                     applyActivePresetToViewport(defaultViewport);
                     if (priorWindowState) applyWindowState(defaultViewport, priorWindowState);
+                    const cachedFit = priorZoomState ? null : calculateFitScale(element, cached, 0.9);
+                    if (cachedFit !== null) defaultViewport.scale = cachedFit;
                     cornerstone.displayImage(element, cached, defaultViewport);
                     loaded = true;
                     if (cached.data) currentDicomData = cached.data;
@@ -2726,7 +3150,7 @@ function drawCrossReferenceLines() {
                     element.addEventListener("cornerstoneimagerendered", onImageRendered);
                     if (priorZoomState) {
                         applyZoomState(element, priorZoomState);
-                    } else {
+                    } else if (cachedFit === null) {
                         fitImageToViewport();
                     }
                     prefetchImagesAround(currentImageIndex, 2);
@@ -2734,13 +3158,15 @@ function drawCrossReferenceLines() {
                     return cached;
                 }
 
-                const image = await cornerstone.loadImage(imageId, { priority: 5, requestType: 'interaction' });
+                const image = await loadImageFast(imageId, { priority: 5, requestType: 'interaction' });
                 
                 const defaultViewport = cornerstone.getDefaultViewportForImage(element, image);
                 if (image.windowWidth && image.windowWidth > 0) defaultViewport.voi.windowWidth = image.windowWidth;
                 if (image.windowCenter) defaultViewport.voi.windowCenter = image.windowCenter;
                 applyActivePresetToViewport(defaultViewport);
                 if (priorWindowState) applyWindowState(defaultViewport, priorWindowState);
+                const fitScale = priorZoomState ? null : calculateFitScale(element, image, 0.9);
+                if (fitScale !== null) defaultViewport.scale = fitScale;
                 cornerstone.displayImage(element, image, defaultViewport);
                 loaded = true;
                 
@@ -2753,7 +3179,7 @@ function drawCrossReferenceLines() {
                 element.addEventListener("cornerstoneimagerendered", onImageRendered);
                 if (priorZoomState) {
                     applyZoomState(element, priorZoomState);
-                } else {
+                } else if (fitScale === null) {
                     fitImageToViewport();
                 }
 
@@ -2803,6 +3229,9 @@ function drawCrossReferenceLines() {
 
         function updateSeriesList() {
             const container = document.getElementById("stackWrapper");
+            container.querySelectorAll(".thumbnail-wrapper > div").forEach(el => {
+                try { cornerstone.disable(el); } catch (e) {}
+            });
             container.innerHTML = "";
 
             const modality = (studyImages.length > 0 && studyImages[0].metadata && studyImages[0].metadata.modality)
@@ -2870,7 +3299,7 @@ function drawCrossReferenceLines() {
             card.dataset.seriesKey = seriesKey;
             
             const seriesData = seriesGroups[seriesKey];
-            const totalInSeries = seriesData ? seriesData.images.length : 1;
+            const totalInSeries = seriesTotal(seriesData);
             
             card.innerHTML = `
                 <div class="thumbnail-wrapper">
@@ -2884,6 +3313,12 @@ function drawCrossReferenceLines() {
             badge.className = "image-count-badge";
             badge.textContent = `1/${totalInSeries}`;
             card.appendChild(badge);
+
+            const progress = document.createElement("div");
+            progress.className = "series-progress";
+            progress.innerHTML = '<div class="series-progress-track"><div class="series-progress-fill"></div></div><span class="series-progress-count">0/' + totalInSeries + '</span>';
+            card.appendChild(progress);
+            paintSeriesProgress(card);
             
             card.addEventListener('dragstart', (e) => {
                 e.dataTransfer.effectAllowed = 'copy';
@@ -2937,6 +3372,22 @@ function drawCrossReferenceLines() {
         }
 
         function loadThumbnailImage(thumbnailWrapper, imageId) {
+            const start = () => thumbnailGate.then(() => startThumbnailImage(thumbnailWrapper, imageId));
+            if (!('IntersectionObserver' in window)) {
+                start();
+                return;
+            }
+            const observer = new IntersectionObserver((entries) => {
+                if (entries.some(e => e.isIntersecting)) {
+                    observer.disconnect();
+                    start();
+                }
+            }, { root: document.getElementById("stackWrapper"), rootMargin: "400px" });
+            observer.observe(thumbnailWrapper);
+        }
+
+        function startThumbnailImage(thumbnailWrapper, imageId) {
+            if (!thumbnailWrapper.isConnected) return;
             try {
                 const thumbnailElement = document.createElement("div");
                 thumbnailElement.style.cssText = "width:100%;height:100%;background:#000";
@@ -2950,6 +3401,7 @@ function drawCrossReferenceLines() {
                         const viewport = cornerstone.getDefaultViewportForImage(thumbnailElement, thumbnailImage);
                         cornerstone.displayImage(thumbnailElement, thumbnailImage, viewport);
                         setTimeout(() => {
+                            if (!thumbnailElement.isConnected) return;
                             cornerstone.resize(thumbnailElement, true);
                             cornerstone.fitToWindow(thumbnailElement);
                         }, 50);
@@ -2957,12 +3409,14 @@ function drawCrossReferenceLines() {
                     } catch (e) {}
                 }
 
-                cornerstone.loadImage(imageId)
+                enqueueThumbLoad(imageId)
                     .then((thumbnailImage) => {
+                        if (!thumbnailElement.isConnected) return;
                         const viewport = cornerstone.getDefaultViewportForImage(thumbnailElement, thumbnailImage);
                         cornerstone.displayImage(thumbnailElement, thumbnailImage, viewport);
                         try { imageCache.set(imageId, thumbnailImage); } catch (e) {}
                         setTimeout(() => {
+                            if (!thumbnailElement.isConnected) return;
                             cornerstone.resize(thumbnailElement, true);
                             cornerstone.fitToWindow(thumbnailElement);
                         }, 50);
@@ -2990,7 +3444,7 @@ function drawCrossReferenceLines() {
                         if (currentIndexInSeries !== -1) {
                             const badge = thumb.querySelector(".image-count-badge");
                             if (badge) {
-                                badge.textContent = `${currentIndexInSeries + 1}/${imagesInSeries.length}`;
+                                badge.textContent = `${currentIndexInSeries + 1}/${seriesTotal(seriesData)}`;
                             }
                         }
                     }
@@ -3581,7 +4035,7 @@ function drawCrossReferenceLines() {
 
             try {
                 const loaded = await Promise.all(studyImages.map(si => {
-                    return cornerstone.loadImage(si.imageId).then(img => ({ img, meta: si.metadata, id: si.imageId })).catch(e => null);
+                    return loadImageFast(si.imageId).then(img => ({ img, meta: si.metadata, id: si.imageId })).catch(e => null);
                 }));
 
                 const valid = loaded.filter(l => l && l.img && l.img.data);
@@ -3799,7 +4253,9 @@ function drawCrossReferenceLines() {
                 updateStatus('MPR failed');
             }
         }
+
+        bootViewer();
     </script>
-    <script src="./script/tracking.js"></script>
+    <script>document.write('<script src="./script/tracking.js?t=' + (window.__trkT || Date.now()) + '"><\/script>');</script>
 </body>
 </html>

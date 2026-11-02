@@ -900,6 +900,31 @@ async function updateCenter() {
 
   const allowedUsers = Array.from(document.querySelectorAll('#edit-center-user-list input[type="checkbox"]:checked')).map(cb => cb.value);
 
+  const newNames = centerNamesInput.split(',').map(n => n.trim()).filter(n => n);
+  const center = allCenters.find(c => c.id === parseInt(id));
+  const existingNames = center ? (center.center_names || []) : [];
+
+  const typedNames = new Set();
+  let hasDuplicate = false;
+  newNames.forEach(n => {
+    if (typedNames.has(n)) hasDuplicate = true;
+    typedNames.add(n);
+  });
+
+  const otherCentersNames = new Set();
+  allCenters.forEach(c => {
+    if (c.id !== parseInt(id)) (c.center_names || []).forEach(n => otherCentersNames.add(n.toLowerCase()));
+  });
+
+  const namesToAdd = [...typedNames].filter(n => !existingNames.includes(n));
+  const namesToRemove = existingNames.filter(n => !typedNames.has(n));
+
+  if (hasDuplicate || namesToAdd.some(n => otherCentersNames.has(n.toLowerCase()))) {
+    errEl.textContent = 'This center name already exists.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+
   const res = await api(`/api/centers/${id}/`, {
     method: 'PATCH',
     body: JSON.stringify({ institute_name, is_default: isEnabled, allowed_users: allowedUsers })
@@ -911,18 +936,31 @@ async function updateCenter() {
     return;
   }
 
-  if (centerNamesInput) {
-    const newNames = centerNamesInput.split(',').map(n => n.trim()).filter(n => n);
-    const center = allCenters.find(c => c.id === parseInt(id));
-    const existingNames = center ? (center.center_names || []) : [];
+  for (const name of namesToRemove) {
+    const delRes = await api('/api/delete-center-name/', {
+      method: 'DELETE',
+      body: JSON.stringify({ center: id, name })
+    });
+    if (!delRes.ok) {
+      errEl.textContent = `Failed to remove center name "${name}".`;
+      errEl.style.display = 'inline-flex';
+      loadCenters();
+      return;
+    }
+  }
 
-    for (const name of newNames) {
-      if (!existingNames.includes(name)) {
-        await api('/api/center-names/', {
-          method: 'POST',
-          body: JSON.stringify({ center: id, name })
-        });
-      }
+  for (const name of namesToAdd) {
+    const addRes = await api('/api/center-names/', {
+      method: 'POST',
+      body: JSON.stringify({ center: id, name })
+    });
+    if (!addRes.ok) {
+      let msg = 'Failed to add center name.';
+      try { const d = await addRes.json(); if (d.error) msg = d.error; } catch {}
+      errEl.textContent = msg;
+      errEl.style.display = 'inline-flex';
+      loadCenters();
+      return;
     }
   }
 
@@ -958,6 +996,17 @@ async function createCenter() {
   }
   
   const allowedUsers = Array.from(document.querySelectorAll('#new-center-user-list input[type="checkbox"]:checked')).map(cb => cb.value);
+
+  const typedNames = centerNamesInput.split(',').map(n => n.trim()).filter(n => n);
+  const typedLower = typedNames.map(n => n.toLowerCase());
+  const takenNames = new Set();
+  allCenters.forEach(c => (c.center_names || []).forEach(n => takenNames.add(n.toLowerCase())));
+
+  if (new Set(typedLower).size !== typedLower.length || typedLower.some(n => takenNames.has(n))) {
+    errEl.textContent = 'This center name already exists.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
   
   const payload = { institute_name, is_default: isEnabled, allowed_users: allowedUsers };
   
@@ -970,10 +1019,18 @@ async function createCenter() {
     if (centerNamesInput) {
       const centerNames = centerNamesInput.split(',').map(n => n.trim()).filter(n => n);
       for (const name of centerNames) {
-        await api('/api/center-names/', {
+        const nameRes = await api('/api/center-names/', {
           method: 'POST',
           body: JSON.stringify({ center: centerId, name })
         });
+        if (!nameRes.ok) {
+          let msg = 'Failed to add center name.';
+          try { const d = await nameRes.json(); if (d.error) msg = d.error; } catch {}
+          errEl.textContent = msg;
+          errEl.style.display = 'inline-flex';
+          loadCenters();
+          return;
+        }
       }
     }
     

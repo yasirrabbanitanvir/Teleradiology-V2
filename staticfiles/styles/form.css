@@ -245,3 +245,43 @@ button[type="submit"]:hover {
   background-color:    rgba(244, 67, 54, 0.2);
   color:               #D32F2F;
 }
+
+@media (min-width: 768px) and (max-width: 1280px) {
+  .study-list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .study-list table {
+    min-width: 1080px;
+  }
+
+  .study-list th {
+    padding: 8px 6px;
+  }
+
+  .study-list td {
+    padding: 8px 6px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 767px) {
+  body {
+    padding: 12px;
+  }
+
+  .form-container {
+    padding: 16px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  body {
+    padding: 24px;
+  }
+
+  .form-container {
+    padding: 20px;
+  }
+}

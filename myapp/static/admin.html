@@ -653,6 +653,89 @@ ul { list-style: none; }
   color: var(--text);
 }
 
+.rtf-link {
+  display: inline-block;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.rtf-link:hover {
+  color: var(--accent2);
+}
+
+#rtf-format-modal {
+  z-index: 210;
+}
+
+#rtf-format-modal .modal {
+  max-width: 520px;
+}
+
+.rtf-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  background: var(--bg2);
+}
+
+.rtf-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg3);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.rtf-head:hover {
+  background: var(--accent-glow);
+}
+
+.rtf-toggle {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--accent-glow);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  flex: none;
+}
+
+.rtf-body {
+  display: none;
+  padding: 16px 14px 4px;
+  border-top: 1px solid var(--border);
+}
+
+.rtf-body.open {
+  display: block;
+}
+
+.rtf-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.rtf-hint {
+  font-size: 12px;
+  color: var(--text3);
+  margin: -4px 0 12px;
+}
+
 .modal-body {
   padding: 24px;
 }
@@ -2540,10 +2623,79 @@ ul { list-style: none; }
           <div style="padding:10px;color:var(--text3);font-size:13px;">Loading users...</div>
         </div>
       </div>
+      <div class="input-group">
+        <a class="rtf-link" onclick="openRtfFormatModal()">Edit RTF Report Format</a>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('edit-center-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="updateCenter()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="rtf-format-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Edit RTF Report Format</div>
+      <button class="modal-close" onclick="closeModal('rtf-format-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="rtf-format-error"></div>
+      <input type="hidden" id="rtf-center-id" />
+      <div class="rtf-section">
+        <div class="rtf-head" onclick="toggleRtfSection('rtf-margins')">
+          <span class="rtf-toggle" id="rtf-margins-icon">+</span>
+          Click here To Set Margins
+        </div>
+        <div class="rtf-body" id="rtf-margins">
+          <div class="rtf-row">
+            <div class="input-group">
+              <label class="input-label">Top Margin (inch)</label>
+              <input type="number" class="input-text" id="rtf-top-margin" step="0.1" min="0" max="5" placeholder="1.8" />
+            </div>
+            <div class="input-group">
+              <label class="input-label">Bottom Margin (inch)</label>
+              <input type="number" class="input-text" id="rtf-bottom-margin" step="0.1" min="0" max="5" placeholder="0.4" />
+            </div>
+          </div>
+          <div class="rtf-hint">Leave empty to use the default margins.</div>
+        </div>
+      </div>
+      <div class="rtf-section">
+        <div class="rtf-head" onclick="toggleRtfSection('rtf-fonts')">
+          <span class="rtf-toggle" id="rtf-fonts-icon">+</span>
+          Click here To Set Fonts
+        </div>
+        <div class="rtf-body" id="rtf-fonts">
+          <div class="rtf-row">
+            <div class="input-group">
+              <label class="input-label">Font</label>
+              <select class="input-select" id="rtf-font-name">
+                <option value="">Default (Calibri)</option>
+                <option value="Calibri">Calibri</option>
+                <option value="Arial">Arial</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Tahoma">Tahoma</option>
+                <option value="Cambria">Cambria</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Courier New">Courier New</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label class="input-label">Font Size (pt)</label>
+              <input type="number" class="input-text" id="rtf-font-size" step="0.5" min="6" max="24" placeholder="Auto" />
+            </div>
+          </div>
+          <div class="rtf-hint">Leave empty to follow the doctor's formatting in the report editor.</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" style="margin-right:auto;" onclick="resetRtfFormat()">Reset to Default</button>
+      <button class="btn btn-secondary" onclick="closeModal('rtf-format-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRtfFormat()">Save</button>
     </div>
   </div>
 </div>

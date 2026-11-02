@@ -1,16 +1,82 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from django.db.models import Min
 from .models import Patient, DoctorUpload, Center, CenterName, UserProfile, DICOMImage, ReportTemplate
+
+def _hide_other_doctors(serializer, data):
+    request = serializer.context.get('request')
+    user = getattr(request, 'user', None)
+    if not user or not user.is_authenticated:
+        return data
+
+    cache = serializer.context.setdefault('_doctor_view_cache', {})
+    if user.id not in cache:
+        profile = UserProfile.objects.select_related('role').filter(user=user).first()
+        if profile and profile.role and profile.role.name == 'Doctor':
+            cache[user.id] = profile.full_name or user.username
+        else:
+            cache[user.id] = None
+
+    own_name = cache[user.id]
+    if own_name is None:
+        return data
+
+    names = [n.strip() for n in (data.get('assigned_doctors') or '').split(',') if n.strip()]
+    mine = [own_name] if own_name in names else []
+    data['assigned_doctors'] = ', '.join(mine)
+    if 'assigned_doctors_list' in data:
+        data['assigned_doctors_list'] = mine
+    return data
+
+def _study_received_at(serializer, obj):
+    uid = obj.study_instance_uid
+    if not uid:
+        return obj.created_at
+    received_map = serializer.context.get('study_received_map')
+    if received_map is not None and uid in received_map:
+        return received_map[uid]
+    cache = serializer.context.setdefault('_study_received_cache', {})
+    if uid not in cache:
+        cache[uid] = (
+            DICOMImage.objects.filter(study_instance_uid=uid)
+            .order_by()
+            .aggregate(first=Min('created_at'))['first']
+        ) or obj.created_at
+    return cache[uid]
 
 class CenterSerializer(serializers.ModelSerializer):
     center_names = serializers.SerializerMethodField()
     
     class Meta:
         model = Center
-        fields = ['id', 'institute_name', 'center_names', 'is_default', 'user', 'allowed_users']
+        fields = ['id', 'institute_name', 'center_names', 'is_default', 'user', 'allowed_users', 'report_format']
     
     def get_center_names(self, obj):
         return [cn.name for cn in obj.center_names.all()]
+
+    def validate_report_format(self, value):
+        if not value:
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Invalid report format.")
+        cleaned = {}
+        for key, low, high in (('top_margin', 0, 5), ('bottom_margin', 0, 5), ('font_size', 6, 24)):
+            raw = value.get(key)
+            if raw in (None, ''):
+                continue
+            try:
+                number = float(raw)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(f"{key} must be a number.")
+            if number < low or number > high:
+                raise serializers.ValidationError(f"{key} must be between {low} and {high}.")
+            cleaned[key] = number
+        font_name = str(value.get('font_name') or '').strip()
+        if font_name:
+            if len(font_name) > 60:
+                raise serializers.ValidationError("font_name is too long.")
+            cleaned['font_name'] = font_name
+        return cleaned
 
 class UserProfileSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source='role.name', read_only=True)
@@ -80,10 +146,17 @@ class DICOMImageSerializer(serializers.ModelSerializer):
     assigned_doctors_list = serializers.SerializerMethodField()
     age = serializers.SerializerMethodField()
     institute_name = serializers.SerializerMethodField()
+    received_at = serializers.SerializerMethodField()
     
     class Meta:
         model = DICOMImage
         fields = '__all__' 
+
+    def get_received_at(self, obj):
+        return _study_received_at(self, obj)
+
+    def to_representation(self, instance):
+        return _hide_other_doctors(self, super().to_representation(instance))
 
     def get_file_size_mb(self, obj):
         return obj.file_size_mb
@@ -132,6 +205,7 @@ class DICOMImageListSerializer(serializers.ModelSerializer):
     age = serializers.SerializerMethodField()
     formatted_study_date = serializers.SerializerMethodField()
     institute_name = serializers.SerializerMethodField()
+    received_at = serializers.SerializerMethodField()
     
     class Meta:
         model = DICOMImage
@@ -140,8 +214,14 @@ class DICOMImageListSerializer(serializers.ModelSerializer):
             'study_description', 'series_description', 'modality', 'file_path',
             'file_size_mb', 'assigned_doctors', 'assigned_doctors_list',
             'status', 'reported_by', 'is_emergency', 'age',
-            'formatted_study_date', 'created_at', 'referring_physician', 'patient_history', 'referral_file'
+            'formatted_study_date', 'created_at', 'received_at', 'referring_physician', 'patient_history', 'referral_file'
         ]
+
+    def get_received_at(self, obj):
+        return _study_received_at(self, obj)
+
+    def to_representation(self, instance):
+        return _hide_other_doctors(self, super().to_representation(instance))
 
     def get_file_size_mb(self, obj):
         return obj.file_size_mb

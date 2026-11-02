@@ -20,9 +20,10 @@ from django.views.decorators.http import require_http_methods
 from django.http import FileResponse, Http404, JsonResponse, HttpResponse
 from django.shortcuts import render
 from django.conf import settings
+from django.utils import timezone as dj_timezone
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
-from django.db.models import Q, Count, Sum, Max
+from django.db.models import Q, Count, Sum, Max, Min
 from django.core.cache import cache
 from django_filters import rest_framework as filters
 from pathlib import Path
@@ -44,6 +45,14 @@ from pydicom.encaps import encapsulate
 import traceback
 import tempfile
 from django.core.signals import request_finished
+import hashlib
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
+from django.utils.http import http_date
+from django.utils.cache import get_conditional_response
+from django.core import signing
+from urllib.parse import quote as url_quote, urlparse
 from .models import (
     Patient,
     DoctorUpload,
@@ -51,6 +60,7 @@ from .models import (
     Center,
     CenterName,
     DICOMImage,
+    ReportHistory,
     ReportTemplate,
     UserSession,
 )
@@ -87,17 +97,155 @@ def _read_history(dicom_id):
         pass
     return []
 
-def _write_history(dicom_id, entries):
+def _history_created_at(value):
     try:
-        with open(_get_history_path(dicom_id), 'w', encoding='utf-8') as f:
-            json.dump(entries, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.warning(f"Could not write report history for {dicom_id}: {e}")
+        parsed = datetime.strptime(str(value or '').strip(), '%d-%m-%Y %H:%M:%S')
+    except Exception:
+        return dj_timezone.now()
+    if settings.USE_TZ and dj_timezone.is_naive(parsed):
+        return dj_timezone.make_aware(parsed)
+    return parsed
 
-def _append_to_history(dicom_id, entry):
-    entries = _read_history(dicom_id)
-    entries.insert(0, entry)  
-    _write_history(dicom_id, entries)
+
+def _repair_legacy_history(dicom, history):
+    if not history:
+        return history
+    stored = [e.get('report_content') or '' for e in history]
+    for idx, entry in enumerate(history):
+        if entry.get('content_ok'):
+            continue
+        if idx == 0:
+            fixed = dicom.report_content or ''
+        elif history[idx - 1].get('content_ok'):
+            fixed = ''
+        else:
+            fixed = stored[idx - 1]
+        entry['report_content'] = fixed
+        entry['content_ok'] = True
+    return history
+
+
+def _ensure_history_imported(dicom):
+    if ReportHistory.objects.filter(dicom_image=dicom).exists():
+        return
+    legacy = _repair_legacy_history(dicom, _read_history(dicom.id))
+    if legacy:
+        for entry in reversed(legacy):
+            ReportHistory.objects.create(
+                dicom_image=dicom,
+                reported_by=entry.get('reported_by') or '',
+                status=entry.get('status') or '',
+                report_content=entry.get('report_content') or '',
+                report_file=_media_relative_name(entry.get('report_file')),
+                created_at=_history_created_at(entry.get('created_at')),
+            )
+        try:
+            path = _get_history_path(dicom.id)
+            os.replace(path, path + '.imported')
+        except Exception:
+            pass
+    elif dicom.report_content and dicom.report_content.strip():
+        ReportHistory.objects.create(
+            dicom_image=dicom,
+            reported_by=dicom.reported_by or '',
+            status=dicom.status or '',
+            report_content=dicom.report_content,
+            report_file=dicom.report_file.name if dicom.report_file else None,
+            created_at=dicom.updated_at or dj_timezone.now(),
+        )
+
+
+def _serialize_history(entry, request):
+    url = None
+    if entry.report_file:
+        try:
+            url = request.build_absolute_uri(entry.report_file.url)
+        except Exception:
+            url = None
+    created = entry.created_at
+    if created and settings.USE_TZ and dj_timezone.is_aware(created):
+        created = dj_timezone.localtime(created)
+    return {
+        'id': entry.id,
+        'dicom_id': entry.dicom_image_id,
+        'reported_by': entry.reported_by or '',
+        'status': entry.status or '',
+        'report_file': url,
+        'report_content': entry.report_content or '',
+        'created_at': created.strftime('%d-%m-%Y %H:%M:%S') if created else '',
+    }
+
+
+def _history_list(dicom, request):
+    _ensure_history_imported(dicom)
+    return [_serialize_history(e, request) for e in ReportHistory.objects.filter(dicom_image=dicom)]
+
+
+def _record_report_history(dicom, reported_by, report_status, report_content):
+    file_name = dicom.report_file.name if dicom.report_file else None
+    top = ReportHistory.objects.filter(dicom_image=dicom).first()
+    if top:
+        top_file = top.report_file.name if top.report_file else None
+        top_content = top.report_content or ''
+        if (
+            top_file == file_name
+            and top.reported_by == reported_by
+            and (not top_content.strip() or top_content == report_content)
+        ):
+            if report_content:
+                top.report_content = report_content
+            top.status = report_status
+            top.save()
+            return
+    ReportHistory.objects.create(
+        dicom_image=dicom,
+        reported_by=reported_by,
+        status=report_status,
+        report_content=report_content or '',
+        report_file=file_name,
+    )
+
+
+def _format_study_date(value):
+    value = str(value or '')
+    if len(value) >= 8 and value[:8].isdigit():
+        return f"{value[6:8]}-{value[4:6]}-{value[:4]}"
+    return value
+
+
+def _build_study_received_map(images):
+    uids = {i.study_instance_uid for i in images if i.study_instance_uid}
+    if not uids:
+        return {}
+    rows = (
+        DICOMImage.objects.filter(study_instance_uid__in=uids)
+        .order_by()
+        .values("study_instance_uid")
+        .annotate(first_received=Min("created_at"))
+    )
+    return {r["study_instance_uid"]: r["first_received"] for r in rows}
+
+
+def _center_name_filter(center_name):
+    target = center_name.strip()
+    center_ids = set(CenterName.objects.filter(name__iexact=target).values_list('center_id', flat=True))
+    center_ids |= set(Center.objects.filter(institute_name__iexact=target).values_list('id', flat=True))
+    names = {target}
+    if center_ids:
+        institutes = [
+            i for i in Center.objects.filter(id__in=center_ids).values_list('institute_name', flat=True) if i
+        ]
+        names.update(CenterName.objects.filter(center_id__in=center_ids).values_list('name', flat=True))
+        if institutes:
+            sibling = Q()
+            for institute in institutes:
+                sibling |= Q(center__institute_name__iexact=institute)
+            names.update(CenterName.objects.filter(sibling).values_list('name', flat=True))
+        names.update(institutes)
+    query = Q()
+    for name in names:
+        query |= Q(center_name__iexact=name)
+    return query
 
 
 def _build_center_name_to_institute_map():
@@ -144,45 +292,224 @@ def decompress_dicom(ds):
         raise
 
 
-def serve_dicom(request, filename):
-    file_path = os.path.join(settings.MEDIA_ROOT, filename)
-    if not os.path.exists(file_path):
-        raise Http404("DICOM file not found")
+COMPRESSED_TRANSFER_SYNTAXES = frozenset(
+    [
+        "1.2.840.10008.1.2.4.50",
+        "1.2.840.10008.1.2.4.51",
+        "1.2.840.10008.1.2.4.57",
+        "1.2.840.10008.1.2.4.70",
+        "1.2.840.10008.1.2.4.80",
+        "1.2.840.10008.1.2.4.81",
+        "1.2.840.10008.1.2.4.90",
+        "1.2.840.10008.1.2.4.91",
+        "1.2.840.10008.1.2.5",
+    ]
+)
+
+_decompress_locks = {}
+_decompress_locks_guard = threading.Lock()
+_warm_pool = ThreadPoolExecutor(
+    max_workers=int(getattr(settings, "DICOM_WARM_WORKERS", 2)),
+    thread_name_prefix="dicom-warm",
+)
+
+
+def _resolve_media_file(relative_path):
+    media_root = os.path.realpath(settings.MEDIA_ROOT)
+    full_path = os.path.realpath(os.path.join(media_root, str(relative_path).lstrip("/")))
+    if not os.path.normcase(full_path).startswith(os.path.normcase(media_root + os.sep)) or not os.path.isfile(full_path):
+        return None
+    return full_path
+
+
+def _decompressed_cache_root():
+    root = os.path.realpath(
+        getattr(settings, "DICOM_CACHE_DIR", None)
+        or os.path.join(settings.MEDIA_ROOT, "_decompressed_cache")
+    )
+    os.makedirs(root, exist_ok=True)
+    return root
+
+
+def _decompressed_cache_path(full_path, mtime_ns, size):
+    key = hashlib.sha1(f"{full_path}|{mtime_ns}|{size}".encode("utf-8")).hexdigest()
+    return os.path.join(_decompressed_cache_root(), key[:2], key + ".dcm")
+
+
+@lru_cache(maxsize=50000)
+def _is_compressed(full_path, mtime_ns, size):
     try:
-        ds = pydicom.dcmread(file_path, force=True)
-        was_decompressed = decompress_dicom(ds)
-        if was_decompressed:
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".dcm")
-            ds.save_as(temp_file.name, write_like_original=False)
-            temp_file.close()
-            response = FileResponse(
-                open(temp_file.name, "rb"), content_type="application/dicom"
-            )
+        header = pydicom.dcmread(
+            full_path,
+            stop_before_pixels=True,
+            force=True,
+            specific_tags=["SOPInstanceUID"],
+        )
+        syntax = getattr(getattr(header, "file_meta", None), "TransferSyntaxUID", None)
+        return str(syntax) in COMPRESSED_TRANSFER_SYNTAXES if syntax else False
+    except Exception:
+        return False
 
-            def cleanup_temp_file(sender, **kwargs):
-                try:
-                    os.unlink(temp_file.name)
-                except:
-                    pass
 
-            request_finished.connect(cleanup_temp_file, weak=False)
-        else:
-            response = FileResponse(
-                open(file_path, "rb"), content_type="application/dicom"
-            )
-        response["Access-Control-Allow-Origin"] = "*"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Max-Age"] = "1000"
-        response["Access-Control-Allow-Headers"] = "X-Requested-With, Content-Type"
-        return response
+def _ensure_decompressed(full_path, mtime_ns, size):
+    target = _decompressed_cache_path(full_path, mtime_ns, size)
+    if os.path.isfile(target):
+        return target
+    with _decompress_locks_guard:
+        lock = _decompress_locks.setdefault(target, threading.Lock())
+    tmp_path = f"{target}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        with lock:
+            if os.path.isfile(target):
+                return target
+            ds = pydicom.dcmread(full_path, force=True)
+            decompress_dicom(ds)
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            ds.save_as(tmp_path, write_like_original=False)
+            os.replace(tmp_path, target)
+            return target
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+        with _decompress_locks_guard:
+            _decompress_locks.pop(target, None)
+
+
+def _warm_one(relative_path):
+    try:
+        full_path = _resolve_media_file(relative_path)
+        if not full_path:
+            return
+        stat = os.stat(full_path)
+        if _is_compressed(full_path, stat.st_mtime_ns, stat.st_size):
+            _ensure_decompressed(full_path, stat.st_mtime_ns, stat.st_size)
     except Exception as e:
-        logger.error(f"Error serving DICOM file: {str(e)}")
-        response = FileResponse(open(file_path, "rb"), content_type="application/dicom")
-        response["Access-Control-Allow-Origin"] = "*"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Max-Age"] = "1000"
-        response["Access-Control-Allow-Headers"] = "X-Requested-With, Content-Type"
-        return response
+        logger.warning(f"DICOM cache warm failed for {relative_path}: {e}")
+
+
+def warm_decompressed_cache(relative_paths):
+    for relative_path in relative_paths:
+        if relative_path:
+            _warm_pool.submit(_warm_one, relative_path)
+
+
+from django.utils.crypto import constant_time_compare
+
+
+DICOM_URL_SALT = "dicom-file-access"
+
+
+def sign_dicom_path(file_path):
+    return signing.dumps(str(file_path).strip("/"), salt=DICOM_URL_SALT)
+
+
+STUDY_QR_SALT = "study-qr-access"
+
+
+def sign_study_uid(study_uid):
+    return signing.Signer(salt=STUDY_QR_SALT).signature(str(study_uid))
+
+
+def _valid_study_cookie(request, filename):
+    raw = request.COOKIES.get("dicom_study_sig", "")
+    study_uid, _, signature = raw.rpartition(":")
+    if not study_uid or not signature:
+        return False
+    if not constant_time_compare(sign_study_uid(study_uid), signature):
+        return False
+    name = str(filename).strip("/")
+    return DICOMImage.objects.filter(
+        study_instance_uid=study_uid, file_path__in=[name, "/" + name]
+    ).exists()
+
+
+def _valid_dicom_signature(signature, filename):
+    try:
+        max_age = int(getattr(settings, "DICOM_URL_MAX_AGE", 43200))
+        return signing.loads(signature, salt=DICOM_URL_SALT, max_age=max_age) == str(filename).strip("/")
+    except signing.BadSignature:
+        return False
+
+
+def _valid_api_token(key):
+    cache_key = "dicom_token_" + hashlib.sha1(key.encode("utf-8")).hexdigest()
+    allowed = cache.get(cache_key)
+    if allowed is None:
+        allowed = Token.objects.filter(key=key, user__is_active=True).exists()
+        cache.set(cache_key, allowed, 60)
+    return allowed
+
+
+def _dicom_request_allowed(request, filename):
+    if not getattr(settings, "DICOM_REQUIRE_AUTH", True):
+        return True
+    user = getattr(request, "user", None)
+    if user is not None and user.is_authenticated:
+        return True
+    parts = request.META.get("HTTP_AUTHORIZATION", "").split()
+    if len(parts) == 2 and parts[0].lower() == "token" and _valid_api_token(parts[1]):
+        return True
+    signature = request.GET.get("sig", "")
+    if signature and _valid_dicom_signature(signature, filename):
+        return True
+    return _valid_study_cookie(request, filename)
+
+
+def _dicom_cors(response):
+    response["Access-Control-Allow-Origin"] = "*"
+    response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response["Access-Control-Max-Age"] = "1000"
+    response["Access-Control-Allow-Headers"] = "X-Requested-With, Content-Type, Authorization, If-None-Match"
+    return response
+
+
+def serve_dicom(request, filename):
+    if request.method == "OPTIONS":
+        return _dicom_cors(HttpResponse(status=204))
+
+    if not _dicom_request_allowed(request, filename):
+        return _dicom_cors(HttpResponse("Authentication required", status=401))
+
+    full_path = _resolve_media_file(filename)
+    if not full_path:
+        raise Http404("DICOM file not found")
+
+    stat = os.stat(full_path)
+    etag = '"%x-%x"' % (stat.st_mtime_ns, stat.st_size)
+    not_modified = get_conditional_response(
+        request, etag=etag, last_modified=int(stat.st_mtime)
+    )
+    if not_modified is not None:
+        not_modified["Cache-Control"] = "private, max-age=3600"
+        return _dicom_cors(not_modified)
+
+    serve_path = full_path
+    if _is_compressed(full_path, stat.st_mtime_ns, stat.st_size):
+        try:
+            serve_path = _ensure_decompressed(full_path, stat.st_mtime_ns, stat.st_size)
+        except Exception as e:
+            logger.error(f"Error decompressing DICOM file: {str(e)}")
+            serve_path = full_path
+
+    accel_prefix = getattr(settings, "DICOM_ACCEL_PREFIX", "")
+    try:
+        relative = os.path.relpath(serve_path, os.path.realpath(settings.MEDIA_ROOT))
+    except ValueError:
+        relative = ".."
+    if accel_prefix and not relative.startswith(".."):
+        response = HttpResponse(content_type="application/dicom")
+        response["X-Accel-Redirect"] = (
+            accel_prefix.rstrip("/") + "/" + url_quote(relative.replace(os.sep, "/"))
+        )
+    else:
+        response = FileResponse(open(serve_path, "rb"), content_type="application/dicom")
+    response["ETag"] = etag
+    response["Last-Modified"] = http_date(stat.st_mtime)
+    response["Cache-Control"] = "private, max-age=3600"
+    return _dicom_cors(response)
 
 
 class RoleBasedPermission(BasePermission):
@@ -967,6 +1294,7 @@ def receive_dicom_data(request):
                 is_emergency=request.POST.get("is_emergency", "false").lower() == "true",
             )
             logger.info(f"Successfully saved DICOM image to database: ID={dicom_image.id}")
+            warm_decompressed_cache([file_path])
         except Exception as e:
             logger.error(f"Database error: {str(e)}")
             traceback.print_exc()
@@ -1078,7 +1406,7 @@ class DICOMImageViewSet(viewsets.ModelViewSet):
 
         center_name = params.get("center_name")
         if center_name:
-            queryset = queryset.filter(center_name=center_name)
+            queryset = queryset.filter(_center_name_filter(center_name))
 
         patient_name = params.get("patient_name")
         if patient_name:
@@ -1152,9 +1480,11 @@ class DICOMImageViewSet(viewsets.ModelViewSet):
             "-created_at"
         )
 
+        page_rows = list(page_queryset)
         context = self.get_serializer_context()
         context["institute_name_map"] = _build_center_name_to_institute_map()
-        serializer = self.get_serializer(page_queryset, many=True, context=context)
+        context["study_received_map"] = _build_study_received_map(page_rows)
+        serializer = self.get_serializer(page_rows, many=True, context=context)
         return Response(
             {
                 "results": serializer.data,
@@ -1301,6 +1631,7 @@ class DICOMImageViewSet(viewsets.ModelViewSet):
     def update_status(self, request, pk=None):
         try:
             image = self.get_object()
+            _ensure_history_imported(image)
             new_status = request.data.get("status")
             reported_by = request.data.get("reported_by", "")
             report_content = request.data.get("report_content", "")
@@ -1340,6 +1671,11 @@ class DICOMImageViewSet(viewsets.ModelViewSet):
             if report_content:
                 image.report_content = report_content
             image.save()
+            if report_content:
+                try:
+                    _record_report_history(image, reported_by, new_status, report_content)
+                except Exception as hist_err:
+                    logger.warning(f"Could not save report history for {image.id}: {hist_err}")
             related_images = DICOMImage.objects.filter(
                 study_instance_uid=image.study_instance_uid
             ).exclude(id=image.id)
@@ -1355,7 +1691,7 @@ class DICOMImageViewSet(viewsets.ModelViewSet):
                 {
                     "success": True,
                     "message": "Updated",
-                    "image": DICOMImageSerializer(image).data,
+                    "image": DICOMImageSerializer(image, context={"request": request}).data,
                     "updated_images": updated_count + 1,
                     "reported_by": reported_by,
                     "study_instance_uid": image.study_instance_uid or "",
@@ -1429,10 +1765,11 @@ class DICOMImageViewSet(viewsets.ModelViewSet):
         total_count = images.count()
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
-        page_images = images[start_idx:end_idx]
+        page_images = list(images[start_idx:end_idx])
 
         context = self.get_serializer_context()
         context['institute_name_map'] = _build_center_name_to_institute_map()
+        context['study_received_map'] = _build_study_received_map(page_images)
         serializer = self.get_serializer(page_images, many=True, context=context)
         
         return Response({
@@ -1700,33 +2037,110 @@ def get_study_detail(request, study_id):
 
 def get_study_images(request, study_uid):
     try:
-        images = DICOMImage.objects.filter(study_instance_uid=study_uid).order_by(
-            "series_number", "instance_number"
+        rows = (
+            DICOMImage.objects.filter(study_instance_uid=study_uid)
+            .order_by("series_number", "instance_number")
+            .values(
+                "id",
+                "center_name",
+                "sop_instance_uid",
+                "instance_number",
+                "series_description",
+                "file_path",
+                "file_size",
+                "status",
+                "assigned_doctors",
+                "patient_name",
+                "patient_id",
+                "study_date",
+                "modality",
+                "series_number",
+                "series_instance_uid",
+            )
         )
         image_list = []
-        for image in images:
-            image_list.append(
-                {
-                    "id": image.id,
-                    "center_name": image.center_name,
-                    "sop_instance_uid": image.sop_instance_uid,
-                    "instance_number": image.instance_number,
-                    "series_description": image.series_description,
-                    "file_path": image.file_path,
-                    "file_size": image.file_size,
-                    "status": image.status,
-                    "assigned_doctors": image.assigned_doctors_list,
-                    "patient_name": image.patient_name,
-                    "patient_id": image.patient_id,
-                    "study_date": image.study_date,
-                    "modality": image.modality,
-                    "series_number": image.series_number,
-                    "series_instance_uid": image.series_instance_uid,
-                }
-            )
+        for row in rows:
+            doctors = row.pop("assigned_doctors", "") or ""
+            row["assigned_doctors"] = [d.strip() for d in doctors.split(",") if d.strip()]
+            image_list.append(row)
+        warm_decompressed_cache([row["file_path"] for row in image_list])
         return JsonResponse({"success": True, "images": image_list})
     except Exception as e:
         logger.error(f"Error getting study images: {str(e)}")
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+
+def get_study_series_preview(request, study_uid):
+    from urllib.parse import unquote
+
+    try:
+        rows = list(
+            DICOMImage.objects.filter(study_instance_uid=study_uid)
+            .order_by("series_number", "instance_number")
+            .values(
+                "id",
+                "center_name",
+                "sop_instance_uid",
+                "instance_number",
+                "series_description",
+                "file_path",
+                "file_size",
+                "status",
+                "assigned_doctors",
+                "patient_name",
+                "patient_id",
+                "study_date",
+                "modality",
+                "series_number",
+                "series_instance_uid",
+            )
+        )
+
+        wanted_raw = request.GET.get("series", "")
+        if wanted_raw:
+            wanted = [unquote(x.strip()) for x in wanted_raw.split(",") if x.strip()]
+
+            def series_token(row):
+                if row["series_instance_uid"]:
+                    return row["series_instance_uid"]
+                number = "null" if row["series_number"] is None else row["series_number"]
+                desc = "null" if row["series_description"] is None else row["series_description"]
+                return f"{number}_{desc}"
+
+            picked = [r for r in rows if series_token(r) in wanted]
+            if picked:
+                rows = picked
+
+        def instance_value(value):
+            try:
+                return int(str(value).strip())
+            except (TypeError, ValueError):
+                return 0
+
+        groups = {}
+        order = []
+        for row in rows:
+            key = f"{row['series_number'] or 'Unknown'}_{row['series_description'] or 'Series'}"
+            group = groups.get(key)
+            if group is None:
+                groups[key] = {"count": 1, "first": row}
+                order.append(key)
+            else:
+                group["count"] += 1
+                if instance_value(row["instance_number"]) < instance_value(group["first"]["instance_number"]):
+                    group["first"] = row
+
+        series = []
+        for key in order:
+            item = dict(groups[key]["first"])
+            doctors = item.pop("assigned_doctors", "") or ""
+            item["assigned_doctors"] = [d.strip() for d in doctors.split(",") if d.strip()]
+            item["series_count"] = groups[key]["count"]
+            series.append(item)
+
+        return JsonResponse({"success": True, "series": series, "total_images": len(rows)})
+    except Exception as e:
+        logger.error(f"Error getting study series preview: {str(e)}")
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 
@@ -2098,6 +2512,8 @@ class DICOMImageListView(generics.ListAPIView):
 
         context = self.get_serializer_context()
         context['institute_name_map'] = _build_center_name_to_institute_map()
+        page_records = list(page_records)
+        context['study_received_map'] = _build_study_received_map(page_records)
         serializer = self.get_serializer(page_records, many=True, context=context)
         next_url = None
         if end < total:
@@ -2298,36 +2714,9 @@ def upload_dicom_report(request, dicom_id):
     
     try:
         dicom = DICOMImage.objects.get(id=dicom_id)
+        _ensure_history_imported(dicom)
         if "file" not in request.FILES:
             return Response({"success": False, "error": "No file provided"}, status=400)
-
-        # ── Rescue orphaned old report BEFORE overwriting reported_by ─────────
-        # This runs first, so dicom.reported_by is still the OLD doctor's name.
-        # We only rescue if there is no history file yet (first save with new code).
-        try:
-            if dicom.report_content and dicom.report_content.strip() and dicom.reported_by:
-                existing = _read_history(dicom_id)
-                if not existing:
-                    old_file_url = None
-                    if dicom.report_file:
-                        try:
-                            old_file_url = request.build_absolute_uri(dicom.report_file.url)
-                        except Exception:
-                            pass
-                    dt_str = ''
-                    if dicom.updated_at:
-                        dt_str = dicom.updated_at.strftime('%d-%m-%Y %H:%M:%S')
-                    _append_to_history(dicom_id, {
-                        'reported_by': dicom.reported_by,
-                        'report_content': dicom.report_content,
-                        'status': dicom.status or 'Reported',
-                        'report_file': old_file_url,
-                        'created_at': dt_str,
-                        'dicom_id': dicom_id,
-                    })
-        except Exception as rescue_err:
-            logger.warning(f"Could not rescue old report for {dicom_id}: {rescue_err}")
-        # ─────────────────────────────────────────────────────────────────────
 
         file = request.FILES["file"]
         clean_filename = file.name.split("/")[-1].split("\\")[-1]
@@ -2342,27 +2731,16 @@ def upload_dicom_report(request, dicom_id):
             )
         except:
             doctor_name = request.user.username
+        submitted_content = request.data.get('report_content', '') or ''
         dicom.status = "Reported"
         dicom.reported_by = doctor_name
+        if submitted_content:
+            dicom.report_content = submitted_content
         dicom.save()
         saved_report_path = dicom.report_file.name
 
         try:
-            report_file_url = None
-            if dicom.report_file:
-                try:
-                    report_file_url = request.build_absolute_uri(dicom.report_file.url)
-                except Exception:
-                    pass
-            from datetime import datetime
-            _append_to_history(dicom_id, {
-                'reported_by': doctor_name,
-                'report_content': dicom.report_content or '',
-                'status': 'Reported',
-                'report_file': report_file_url,
-                'created_at': datetime.now().strftime('%d-%m-%Y %H:%M:%S'),
-                'dicom_id': dicom_id,
-            })
+            _record_report_history(dicom, doctor_name, 'Reported', submitted_content)
         except Exception as hist_err:
             logger.warning(f"Could not save report history for {dicom_id}: {hist_err}")
 
@@ -2392,6 +2770,7 @@ def update_dicom_status(request, dicom_id):
         )
     try:
         dicom = DICOMImage.objects.get(id=dicom_id)
+        _ensure_history_imported(dicom)
         new_status = request.data.get("status")
         reported_by = request.data.get("reported_by", "")
         report_content = request.data.get("report_content", "")
@@ -2424,27 +2803,11 @@ def update_dicom_status(request, dicom_id):
             dicom.report_content = report_content
         dicom.save()
 
-        # ── Append new entry to file-based history (no migration needed) ──────
         if report_content:
             try:
-                report_file_url = None
-                if dicom.report_file:
-                    try:
-                        report_file_url = request.build_absolute_uri(dicom.report_file.url)
-                    except Exception:
-                        pass
-                from datetime import datetime
-                _append_to_history(dicom_id, {
-                    'reported_by': reported_by,
-                    'report_content': report_content,
-                    'status': new_status,
-                    'report_file': report_file_url,
-                    'created_at': datetime.now().strftime('%d-%m-%Y %H:%M:%S'),
-                    'dicom_id': dicom_id,
-                })
+                _record_report_history(dicom, reported_by, new_status, report_content)
             except Exception as hist_err:
                 logger.warning(f"Could not save report history for {dicom_id}: {hist_err}")
-        # ──────────────────────────────────────────────────────────────────────
 
         related_images = DICOMImage.objects.filter(
             study_instance_uid=dicom.study_instance_uid
@@ -2487,33 +2850,129 @@ def get_report_history(request, dicom_id):
     try:
         dicom = DICOMImage.objects.get(id=dicom_id)
 
-        # Read from file-based history (no database table needed)
-        result = _read_history(dicom_id)
+        if request.query_params.get("scope") == "patient" and dicom.patient_id:
+            images = list(
+                DICOMImage.objects.filter(
+                    patient_id=dicom.patient_id, center_name=dicom.center_name
+                ).order_by("id")
+            )
+            with_rows = set(
+                ReportHistory.objects.filter(dicom_image__in=images)
+                .values_list("dicom_image_id", flat=True)
+            )
+            for img in images:
+                if img.id not in with_rows:
+                    _ensure_history_imported(img)
+            entries = (
+                ReportHistory.objects.filter(dicom_image__in=images)
+                .select_related("dicom_image")
+                .order_by("-created_at", "-id")
+            )
+            collected = []
+            seen = set()
+            for entry in entries:
+                item = _serialize_history(entry, request)
+                key = (item['report_file'] or '', item['created_at'], item['reported_by'])
+                if key in seen:
+                    continue
+                seen.add(key)
+                item['study_description'] = entry.dicom_image.study_description or ''
+                item['exam_date'] = _format_study_date(entry.dicom_image.study_date)
+                collected.append(item)
+            return Response({"success": True, "history": collected, "count": len(collected)})
 
-        # Fallback: if no history file yet, return the single report on DICOMImage
-        if not result and dicom.report_content and dicom.report_content.strip():
-            report_file_url = None
-            if dicom.report_file:
-                try:
-                    report_file_url = request.build_absolute_uri(dicom.report_file.url)
-                except Exception:
-                    pass
-            dt_str = ''
-            if dicom.updated_at:
-                dt_str = dicom.updated_at.strftime('%d-%m-%Y %H:%M:%S')
-            result = [{
-                'reported_by': dicom.reported_by or '',
-                'status': dicom.status or '',
-                'report_file': report_file_url,
-                'report_content': dicom.report_content,
-                'created_at': dt_str,
-                'dicom_id': dicom.id,
-            }]
-
+        result = _history_list(dicom, request)
         return Response({"success": True, "history": result, "count": len(result)})
     except DICOMImage.DoesNotExist:
         return Response({"success": False, "error": "DICOM not found"}, status=404)
     except Exception as e:
+        return Response({"success": False, "error": str(e)}, status=500)
+
+
+def _user_report_names(user):
+    names = set()
+    if user.username:
+        names.add(user.username.strip())
+    profile = UserProfile.objects.filter(user=user).first()
+    if profile and profile.full_name:
+        names.add(profile.full_name.strip())
+    return {n for n in names if n}
+
+
+def _media_relative_name(url):
+    if not url:
+        return None
+    path = urlparse(str(url)).path
+    media_url = settings.MEDIA_URL or '/media/'
+    if not media_url.startswith('/'):
+        media_url = urlparse(media_url).path
+    if path.startswith(media_url):
+        path = path[len(media_url):]
+    return path.lstrip('/') or None
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def delete_report_history(request):
+    try:
+        entry_id = request.data.get("id")
+        if not entry_id:
+            return Response({"success": False, "error": "id required"}, status=400)
+
+        entry = ReportHistory.objects.select_related("dicom_image").get(id=entry_id)
+        owner = (entry.reported_by or '').strip()
+        if not owner or owner not in _user_report_names(request.user):
+            return Response(
+                {"success": False, "error": "You can only delete your own report"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        dicom = entry.dicom_image
+        newer = ReportHistory.objects.filter(dicom_image=dicom).filter(
+            Q(created_at__gt=entry.created_at) | Q(created_at=entry.created_at, id__gt=entry.id)
+        )
+        was_latest = not newer.exists()
+        removed_name = entry.report_file.name if entry.report_file else None
+        entry.delete()
+
+        if was_latest:
+            latest = ReportHistory.objects.filter(dicom_image=dicom).first()
+            if dicom.study_instance_uid:
+                related = DICOMImage.objects.filter(study_instance_uid=dicom.study_instance_uid)
+            else:
+                related = DICOMImage.objects.filter(id=dicom.id)
+            for img in related:
+                if latest:
+                    img.status = latest.status or img.status
+                    img.reported_by = latest.reported_by or ''
+                    img.report_file = latest.report_file.name if latest.report_file else None
+                    if img.id == dicom.id:
+                        img.report_content = latest.report_content or ''
+                else:
+                    img.status = 'Unreported' if img.assigned_doctors else 'Not Assigned'
+                    img.reported_by = ''
+                    img.report_file = None
+                    if img.id == dicom.id:
+                        img.report_content = ''
+                img.save()
+
+        if removed_name:
+            still_used = (
+                ReportHistory.objects.filter(report_file=removed_name).exists()
+                or DICOMImage.objects.filter(report_file=removed_name).exists()
+            )
+            if not still_used:
+                try:
+                    default_storage.delete(removed_name)
+                except Exception as file_err:
+                    logger.warning(f"Could not delete report file {removed_name}: {file_err}")
+
+        remaining = ReportHistory.objects.filter(dicom_image=dicom).count()
+        return Response({"success": True, "message": "Report deleted", "remaining": remaining})
+    except ReportHistory.DoesNotExist:
+        return Response({"success": False, "error": "Report not found"}, status=404)
+    except Exception as e:
+        logger.error(f"Delete report error: {str(e)}")
         return Response({"success": False, "error": str(e)}, status=500)
 
 
@@ -2766,9 +3225,14 @@ def get_institute_studies(request):
             "-created_at"
         )
 
+        page_rows = list(page_queryset)
         serializer = DICOMImageSerializer(
-            page_queryset, many=True,
-            context={'institute_name_map': _build_center_name_to_institute_map()}
+            page_rows, many=True,
+            context={
+                'request': request,
+                'institute_name_map': _build_center_name_to_institute_map(),
+                'study_received_map': _build_study_received_map(page_rows),
+            }
         )
         return Response(
             {
@@ -3265,7 +3729,7 @@ def get_doctor_accessible_images(request):
         if status_filter:
             images = images.filter(status=status_filter)
         
-        serializer = DICOMImageSerializer(images, many=True)
+        serializer = DICOMImageSerializer(images, many=True, context={"request": request})
         
         return Response({
             "success": True,
@@ -3384,6 +3848,24 @@ try:
     QRCODE_AVAILABLE = True
 except ImportError:
     QRCODE_AVAILABLE = False
+
+DEFAULT_REPORT_TOP_MARGIN = 1.8
+DEFAULT_REPORT_BOTTOM_MARGIN = 0.4
+
+def get_center_report_format(dicom_id):
+    try:
+        image = DICOMImage.objects.filter(pk=int(dicom_id)).first()
+        if not image or not image.center_name:
+            return {}
+        center_name_obj = CenterName.objects.select_related('center').filter(name=image.center_name).first()
+        center = center_name_obj.center if center_name_obj else None
+        if not center:
+            center = Center.objects.filter(center_names__name=image.center_name).first()
+        fmt = getattr(center, 'report_format', None) if center else None
+        return fmt if isinstance(fmt, dict) else {}
+    except Exception as e:
+        logger.error(f"Error loading center report format: {str(e)}")
+        return {}
     
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication])
@@ -3416,6 +3898,26 @@ def generate_report_docx(request):
         doctor_info = data.get('doctor_info', {})
         patient_id = data.get('patient_id', 'Unknown')
         viewer_link = data.get('viewer_link', '')
+        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+        try:
+            link_study_uid = DICOMImage.objects.filter(pk=int(patient_id)).values_list('study_instance_uid', flat=True).first() or ''
+        except (TypeError, ValueError):
+            link_study_uid = ''
+        viewer_link = str(viewer_link or '').strip()
+        signed_link = ''
+        if viewer_link:
+            parsed_link = urlparse(viewer_link)
+            link_query = parse_qs(parsed_link.query)
+            provided_uid = (link_query.get('study') or [''])[0]
+            if provided_uid:
+                link_query['qs'] = [sign_study_uid(provided_uid)]
+                signed_link = urlunparse(parsed_link._replace(query=urlencode(link_query, doseq=True)))
+        if not signed_link and link_study_uid:
+            signed_link = request.build_absolute_uri(
+                f"/static/viewer.html?study={link_study_uid}&qs={sign_study_uid(link_study_uid)}"
+            )
+        if signed_link:
+            viewer_link = signed_link
         
         if not report_html or not report_html.strip():
             logger.error("DOCX Generation: No report content provided")
@@ -3427,16 +3929,30 @@ def generate_report_docx(request):
         
         logger.info(f"Generating DOCX for patient ID: {patient_id}")
         
+        report_format = get_center_report_format(patient_id)
+
+        def format_number(key, default):
+            try:
+                value = report_format.get(key)
+                return float(value) if value not in (None, '') else default
+            except (TypeError, ValueError):
+                return default
+
+        top_margin_in = format_number('top_margin', DEFAULT_REPORT_TOP_MARGIN)
+        bottom_margin_in = format_number('bottom_margin', DEFAULT_REPORT_BOTTOM_MARGIN)
+        custom_font_size = format_number('font_size', None)
+        report_font_name = str(report_format.get('font_name') or '').strip() or 'Calibri'
+        
         doc = Document()
         
         section = doc.sections[0]
         section.page_height = Inches(11.69)
         section.page_width = Inches(8.27)
         section.top_margin = Inches(0.4)
-        section.bottom_margin = Inches(0.4)
+        section.bottom_margin = Inches(bottom_margin_in)
         section.left_margin = Inches(0.5)
         section.right_margin = Inches(0.5)
-        section.header_distance = Inches(1.8)
+        section.header_distance = Inches(top_margin_in)
         
         header = section.header
         title_para = header.paragraphs[0]
@@ -3620,7 +4136,7 @@ def generate_report_docx(request):
             template_heading_run = template_heading.add_run(template_name)
             template_heading_run.bold = True
             template_heading_run.font.size = Pt(13)
-            template_heading_run.font.name = 'Calibri'
+            template_heading_run.font.name = report_font_name
             template_heading_run.underline = True
             template_heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
             template_heading.paragraph_format.space_after = Pt(4)
@@ -3724,7 +4240,8 @@ def generate_report_docx(request):
             reserved += 0.35
         if viewer_link and viewer_link.strip():
             reserved += 0.35
-        available = 11.69 - 0.4 - reserved
+        reserved += top_margin_in - DEFAULT_REPORT_TOP_MARGIN
+        available = 11.69 - bottom_margin_in - reserved
 
         def estimate_height(base_pt):
             ratio = base_pt / 12.0
@@ -3741,10 +4258,13 @@ def generate_report_docx(request):
             return total
 
         base_pt = 8
-        for candidate in (12, 11.5, 11, 10.5, 10, 9.5, 9, 8.5, 8):
-            if estimate_height(candidate) <= available:
-                base_pt = candidate
-                break
+        if custom_font_size:
+            base_pt = custom_font_size
+        else:
+            for candidate in (12, 11.5, 11, 10.5, 10, 9.5, 9, 8.5, 8):
+                if estimate_height(candidate) <= available:
+                    base_pt = candidate
+                    break
         ratio = base_pt / 12.0
 
         for kind, runs, alignment in prepared:
@@ -3768,7 +4288,7 @@ def generate_report_docx(request):
                 if is_underline:
                     run.underline = True
                 run.font.size = Pt(round((size or 12) * ratio * 2) / 2)
-                run.font.name = 'Calibri'
+                run.font.name = report_font_name
 
         doc.add_paragraph()
 
@@ -3790,7 +4310,7 @@ def generate_report_docx(request):
                 run = para.add_run(text)
                 run.bold = bold
                 run.font.size = Pt(font_size)
-                run.font.name = 'Calibri'
+                run.font.name = report_font_name
             return para
 
         signature_url = doctor_info.get('signature', '')
@@ -4045,6 +4565,22 @@ def check_active_viewers(request):
     
     try:
         ActiveViewer.cleanup_stale_viewers()
+
+        if request.GET.get('detailed'):
+            from django.utils import timezone as dj_timezone
+            from datetime import timedelta
+            cutoff_time = dj_timezone.now() - timedelta(minutes=30)
+            viewer_rows = ActiveViewer.objects.filter(
+                study_uid=study_uid,
+                last_active__gte=cutoff_time
+            ).order_by('opened_at')
+            viewers = [{'user_id': row.user_id, 'name': row.user_name} for row in viewer_rows]
+            return Response({
+                'success': True,
+                'viewers': viewers,
+                'active_viewers': [v['name'] for v in viewers],
+                'count': len(viewers)
+            })
         
         active_viewers = list(ActiveViewer.get_active_viewers(study_uid))
         
@@ -4081,9 +4617,30 @@ def kick_all_viewers(request):
         current_user_profile = UserProfile.objects.filter(user=request.user).first()
         current_user_name = current_user_profile.full_name if current_user_profile and current_user_profile.full_name else request.user.username
         
-        kicked_count = ActiveViewer.objects.filter(
-            study_uid=study_uid
-        ).exclude(user=request.user).delete()[0]
+        target_user_id = request.data.get('user_id')
+        include_self = bool(request.data.get('include_self'))
+
+        if target_user_id is not None or include_self:
+            profile = UserProfile.objects.filter(user=request.user).select_related('role').first()
+            role_name = profile.role.name if profile and profile.role else ''
+            normalized_role = role_name.replace(' ', '').replace('_', '').replace('-', '').lower()
+            if not (
+                request.user.is_superuser
+                or (profile and normalized_role not in ('', 'doctor', 'center'))
+                or check_user_permission(request.user, 'assign_doctors')
+            ):
+                return Response({
+                    'success': False,
+                    'error': 'Permission denied'
+                }, status=403)
+
+        viewers_qs = ActiveViewer.objects.filter(study_uid=study_uid)
+        if target_user_id is not None:
+            viewers_qs = viewers_qs.filter(user_id=target_user_id)
+        elif not include_self:
+            viewers_qs = viewers_qs.exclude(user=request.user)
+
+        kicked_count = viewers_qs.delete()[0]
         
         return Response({
             'success': True,
@@ -4115,10 +4672,12 @@ def am_i_active(request):
             user=request.user
         ).first()
         
-        return Response({
+        resp = Response({
             'success': True,
             'is_active': viewer is not None
         })
+        resp['Cache-Control'] = 'no-store'
+        return resp
     except Exception as e:
         logger.error(f"Error checking viewer status: {str(e)}")
         return Response({
@@ -4165,7 +4724,7 @@ def get_study_reports(request):
         seen_files = set()
 
         for img in images:
-            history = _read_history(img.id)
+            history = _history_list(img, request)
 
             if history:
                 for entry in history:
@@ -4351,7 +4910,10 @@ def create_center_name(request):
             return Response({'error': 'Center not found'}, status=404)
         
         name = name.strip()
-        if CenterName.objects.filter(name__iexact=name).exists():
+        if (
+            CenterName.objects.filter(name__iexact=name).exclude(center=center).exists()
+            or CenterName.objects.filter(center=center, name=name).exists()
+        ):
             return Response({'error': 'This center name already exists.'}, status=400)
 
         center_name = CenterName.objects.create(
@@ -4454,6 +5016,32 @@ def list_active_sessions(request):
         return Response({'sessions': sessions})
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def online_doctors(request):
+    try:
+        from datetime import timedelta
+        from django.utils import timezone as dj_timezone
+
+        cutoff = dj_timezone.now() - timedelta(minutes=2)
+        sessions = UserSession.objects.filter(
+            last_activity__gte=cutoff,
+            user__is_active=True,
+            user__userprofile__role__name='Doctor',
+        ).select_related('user', 'user__userprofile')
+        doctors = []
+        for session in sessions:
+            profile = getattr(session.user, 'userprofile', None)
+            name = (profile.full_name if profile and profile.full_name else '') or session.user.username
+            doctors.append({'id': session.user_id, 'name': name})
+        doctors.sort(key=lambda d: d['name'].lower())
+        return Response({'success': True, 'count': len(doctors), 'doctors': doctors})
+    except Exception as e:
+        logger.error(f"Error fetching online doctors: {str(e)}")
+        return Response({'success': False, 'error': str(e)}, status=500)
 
 
 @api_view(['POST'])

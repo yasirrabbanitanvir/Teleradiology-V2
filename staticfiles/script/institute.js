@@ -244,6 +244,58 @@ async function getInstituteInfo() {
   }
 }
 
+const WAIT_GIF_WINDOW_MS = 25000;
+const WAIT_GIF_POLL_MS = 4000;
+let serverClockOffset = 0;
+let receivingStudies = new Map();
+let receivingPollTimer = null;
+
+function syncServerClock(res) {
+  const header = res && res.headers ? res.headers.get('Date') : null;
+  const serverNow = header ? new Date(header).getTime() : NaN;
+  if (!isNaN(serverNow)) serverClockOffset = serverNow - Date.now();
+}
+
+function detectReceivingStudies(rows) {
+  const latest = {};
+  rows.forEach(r => {
+    const uid = r.studyUID;
+    const t = new Date(r.createdAt).getTime();
+    if (!uid || isNaN(t)) return;
+    if (!latest[uid] || t > latest[uid]) latest[uid] = t;
+  });
+  const serverNow = Date.now() + serverClockOffset;
+  receivingStudies = new Map();
+  Object.keys(latest).forEach(uid => {
+    if (serverNow - latest[uid] < WAIT_GIF_WINDOW_MS) {
+      receivingStudies.set(uid, latest[uid] + WAIT_GIF_WINDOW_MS - serverClockOffset);
+    }
+  });
+}
+
+function waitGifHtml(studyUID) {
+  const until = receivingStudies.get(studyUID);
+  if (!until) return '';
+  return `<img class="study-wait-gif" src="images/wait_hover.gif" alt="" title="Receiving new study..." data-until="${until}" width="17" height="19" style="margin-left:4px;vertical-align:middle;">`;
+}
+
+function scheduleReceivingPoll(refetch) {
+  clearTimeout(receivingPollTimer);
+  receivingPollTimer = null;
+  if (!document.querySelector('.study-wait-gif')) return;
+  receivingPollTimer = setTimeout(() => {
+    if (document.querySelector('.row-checkbox:checked, .series-detail-row')) {
+      const now = Date.now();
+      document.querySelectorAll('.study-wait-gif').forEach(img => {
+        if (now > Number(img.dataset.until)) img.remove();
+      });
+      scheduleReceivingPoll(refetch);
+      return;
+    }
+    refetch();
+  }, WAIT_GIF_POLL_MS);
+}
+
 async function fetchInstituteStudies(page = 1, maintainPage = false) {
   try {
     if (!instituteName) {
@@ -287,6 +339,8 @@ async function fetchInstituteStudies(page = 1, maintainPage = false) {
     });
     
     if (!res.ok) throw new Error('Failed to fetch institute studies');
+
+    syncServerClock(res);
     
     const responseData = await res.json();
     
@@ -354,6 +408,7 @@ async function fetchInstituteStudies(page = 1, maintainPage = false) {
         center: dicom.center_name || 'Default',
         institute_name: dicom.institute_name || instituteName || 'Unknown',
         scan_datetime: scanDateTime,
+        receive_datetime: formatReceiveDateTime(dicom.received_at || dicom.created_at) || scanDateTime,
         status: dicom.status || 'Not Assigned',
         locked: dicom.is_emergency || false,
         dicom_file_path: dicom.file_path,
@@ -361,6 +416,9 @@ async function fetchInstituteStudies(page = 1, maintainPage = false) {
         assigned_doctors: dicom.assigned_doctors || '',
         studyUID: dicom.study_instance_uid || dicom.study_uid || dicom.StudyInstanceUID || '',
         referring_physician: dicom.referring_physician || '',
+        patient_history: dicom.patient_history || '',
+        referral_file: dicom.referral_file || '',
+        createdAt: dicom.created_at || '',
         report_file: reportFile,
         report_url: reportUrl,
         images: dicom.images || dicom.image_urls || [],
@@ -373,6 +431,8 @@ async function fetchInstituteStudies(page = 1, maintainPage = false) {
         }]
       };
     });
+
+    detectReceivingStudies(allPatients);
 
     const groupedAll = {};
     allPatients.forEach(study => {
@@ -406,6 +466,7 @@ async function fetchInstituteStudies(page = 1, maintainPage = false) {
 
     loadPatients(filteredPatients);
     createPaginationControls();
+    scheduleReceivingPoll(() => fetchInstituteStudies(currentPage, true));
     
   } catch (err) {
     alert('Error fetching institute studies: ' + err.message);
@@ -550,6 +611,94 @@ async function removeSingleDoctor(imageId, doctorName) {
   }
 }
 
+const ZIP_ICON_SVG = '<svg width="26" height="26" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg"><rect width="26" height="26" fill="#f4f4f4"/><path d="M10 3h6v7h4l-7 7-7-7h4z" fill="#111"/><path d="M3 19h20v4H3z" fill="#111"/><rect x="17" y="20" width="4" height="1.5" fill="#f4f4f4"/></svg>';
+const REPORT_PENDING_SVG = '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" fill="#d3d3d3"/><circle cx="12" cy="12" r="7" fill="#c00000"/><circle cx="10" cy="9.5" r="2.4" fill="#ff7a7a" opacity="0.85"/></svg>';
+const HISTORY_YES_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="hyg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a6ff6a"/><stop offset="1" stop-color="#6fcf4c"/></linearGradient></defs><rect x="1.5" y="2.5" width="13" height="11" fill="url(#hyg)" stroke="#0a6a0a" stroke-width="1.4"/><rect x="3" y="9" width="10" height="3" fill="#5fbf4a"/><rect x="3" y="9" width="10" height="1" fill="#3f9f3a"/><rect x="4.5" y="5" width="7" height="1" fill="#c8ff9f"/></svg>';
+const HISTORY_NO_SVG = '<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="hng" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d8e9fb"/><stop offset="1" stop-color="#7ea9dc"/></linearGradient></defs><path d="M2.5 1.5h8l3 3v10h-11z" fill="url(#hng)" stroke="#6c93c8" stroke-width="1"/><path d="M10.5 1.5v3h3" fill="#eef5fd" stroke="#6c93c8" stroke-width="1"/><path d="M4.5 6.5h5M4.5 8.5h4" stroke="#ffffff" stroke-width="1"/><path d="M8 14.5l1.5-3 3.5-3 1.5 1.5-3 3.5z" fill="#4a4f5a"/><path d="M12.8 8.5l1.5 1.5" stroke="#9aa0ab" stroke-width="1.2"/></svg>';
+
+function historyIconHtml(hasHistory) {
+  return hasHistory ? HISTORY_YES_SVG : HISTORY_NO_SVG;
+}
+
+const REPORT_DONE_SVG = '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" fill="#d3d3d3"/><polygon points="8,3 16,3 21,8 21,16 16,21 8,21 3,16 3,8" fill="#2e9e2e" stroke="#1d6f1d" stroke-width="1"/><circle cx="12" cy="12" r="6" fill="#bfe8bf"/><path d="M8.8 12.2l2.2 2.3 4.4-4.6" fill="none" stroke="#2e9e2e" stroke-width="2"/></svg>';
+
+async function downloadStudyZip(studyUid, btn) {
+  if (!studyUid || studyUid === 'undefined') {
+    alert('No scan available for download');
+    return;
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.4';
+  }
+  try {
+    const res = await fetch(`${baseUrl}/api/study-zip/?study_uid=${encodeURIComponent(studyUid)}`, {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    if (!res.ok) {
+      let message = 'Download failed';
+      try {
+        const err = await res.json();
+        message = err.error || message;
+      } catch (e) {}
+      throw new Error(message);
+    }
+    const blob = await res.blob();
+    let filename = `${studyUid}.zip`;
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    if (match) filename = match[1];
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    alert('Error downloading scan: ' + error.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
+  }
+}
+
+async function clickForReport(reportUrl, studyUid, status) {
+  if (status !== 'Reported') {
+    alert('Report is not available yet');
+    return;
+  }
+  if (studyUid && studyUid !== 'undefined') {
+    try {
+      const res = await fetch(`${baseUrl}/api/study-reports/?study_uid=${encodeURIComponent(studyUid)}`, {
+        headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.reports && data.reports.length > 0) {
+          if (data.reports.length === 1) {
+            const url = data.reports[0].report_file || reportUrl;
+            if (url) window.open(url, '_blank');
+          } else {
+            openCombinedReportModal(data.reports);
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  if (reportUrl) {
+    window.open(reportUrl, '_blank');
+  } else {
+    alert('No report available');
+  }
+}
+
 function loadPatients(data) {
   const studyTableBody = document.getElementById('study-table-body');
   const tableHead = document.querySelector('.study-list table thead tr');
@@ -558,7 +707,7 @@ function loadPatients(data) {
     return;
   }
   
-  if (userPermissions.can_assign_doctors) {
+  {
     if (!tableHead.querySelector('th:first-child input[type="checkbox"]')) {
       const checkboxTh = document.createElement('th');
       checkboxTh.innerHTML = '<input type="checkbox" id="select-all" />';
@@ -573,11 +722,6 @@ function loadPatients(data) {
           });
         });
       }
-    }
-  } else {
-    const firstTh = tableHead.querySelector('th:first-child');
-    if (firstTh && firstTh.querySelector('input[type="checkbox"]')) {
-      firstTh.remove();
     }
   }
   
@@ -600,30 +744,27 @@ function loadPatients(data) {
 
     let rowHTML = '';
     
-    if (userPermissions.can_assign_doctors) {
-      rowHTML += `<td><input type="checkbox" class="row-checkbox" data-patient-pk="${p.id}" /></td>`;
-    }
+    rowHTML += `<td><input type="checkbox" class="row-checkbox" data-patient-pk="${p.id}" data-study-uid="${studyUID}" /></td>`;
     
     rowHTML += `
       <td>
         <button class="action-btn view-btn" data-dicom-url="${dicomUrl}" data-study-uid="${studyUID}" data-patient-id="${p.id}"><img src="images/view.png" alt="View" width="32" height="32"></button>
       </td>
-      <td>
-        ${hasReport ? `<button class="action-btn preview-btn" data-report-url="${p.report_url}" data-study-uid="${p.studyUID}">Download</button>` : `<span style="color: #999;">No Report</span>`}
-      </td>
-      <td><button class="action-btn" onclick="openHistory('${p.patient_id}')">📚</button></td>
-      <td>${p.name}</td>
+      <td><button class="action-btn" title="${((p.patient_history || '').trim() !== '' || p.referral_file) ? 'History uploaded' : 'No history'}" onclick="openHistory('${p.patient_id}')">${historyIconHtml((p.patient_history || '').trim() !== '' || !!p.referral_file)}</button></td>
+      <td>${p.name}${studyUID ? `<span class="series-toggle" title="Show series" data-study-uid="${studyUID}" data-body-part="${(p.body_part || '').replace(/"/g, '&quot;')}">+</span>` : ''}${waitGifHtml(studyUID)}</td>
       <td>${p.patient_id}</td>
       <td>${p.age}</td>
       <td>${p.sex}</td>
       <td>${p.body_part}</td>
       <td>${p.modality}</td>
-      <td>${p.center}</td>
-      <td>${p.scan_datetime}</td>
+      <td>${p.receive_datetime || p.scan_datetime}</td>
       <td class="refd-by-cell" data-id="${p.id}" data-value="${(p.referring_physician || '').replace(/"/g, '&quot;')}"><span class="refd-by-text" style="cursor:pointer;" onclick="startEditRefBy(this)">${p.referring_physician || '<em style=\'color:#bbb\'>—</em>'}</span></td>
+      <td style="text-align:center;">${studyUID ? `<button class="action-btn zip-btn" title="Download Scan in ZIP Format" style="padding:0;background:none;border:none;cursor:pointer;" onclick="downloadStudyZip('${studyUID}', this)">${ZIP_ICON_SVG}</button>` : ''}</td>
       <td>
         <span class="status-badge status-${status.toLowerCase().replace(' ', '-')}">${status}</span>
       </td>
+      <td style="text-align:center;"><button class="action-btn report-click-btn" title="Click for Report" style="padding:0;background:none;border:none;cursor:pointer;" onclick="clickForReport('${p.report_url || ''}', '${studyUID}', '${status}')">${status === 'Reported' ? REPORT_DONE_SVG : REPORT_PENDING_SVG}</button></td>
+      <td style="text-align:center;">${hasReport ? `<a href="#" class="preview-btn" style="color:#0000ee;text-decoration:underline;" data-report-url="${p.report_url}" data-study-uid="${p.studyUID}">Download</a>` : ''}</td>
       <td>${doctorsList}</td>
     `;
     
@@ -635,7 +776,8 @@ function loadPatients(data) {
   if (studyList) studyList.style.display = 'block';
   
   document.querySelectorAll('.preview-btn').forEach(btn => {
-    btn.addEventListener('click', async function() {
+    btn.addEventListener('click', async function(e) {
+      e.preventDefault();
       const studyUid = this.dataset.studyUid;
       const reportUrl = this.dataset.reportUrl;
       if (studyUid) {
@@ -758,6 +900,73 @@ function goToPage(page) {
   fetchInstituteStudies(page, true);
 }
 
+function buildViewerWarning(names) {
+  const list = names.map((name, i) => `${i + 1}. ${name}`).join('\n');
+  return `Following users are currently viewing the study:\n\n${list}\n\nDo you really wish to load this study?`;
+}
+
+function confirmViewerWarning(win, names) {
+  const message = buildViewerWarning(names);
+  try {
+    if (win && !win.closed) return win.confirm(message);
+  } catch (e) {}
+  return confirm(message);
+}
+
+async function loadSelectedStudies() {
+  const checked = document.querySelectorAll('.row-checkbox:checked');
+  if (!checked.length) {
+    alert('Please select at least one study');
+    return;
+  }
+
+  if (!userPermissions.can_view_images) {
+    alert('You do not have permission to view images');
+    return;
+  }
+
+  const uids = [];
+  checked.forEach(cb => {
+    const uid = cb.dataset.studyUid;
+    if (uid && uid !== 'undefined' && !uids.includes(uid)) {
+      uids.push(uid);
+    }
+  });
+
+  if (!uids.length) {
+    alert('No DICOM study available for the selected rows');
+    return;
+  }
+
+  const screenW = screen.availWidth || window.screen.width;
+  const screenH = screen.availHeight || window.screen.height;
+  const features = `toolbar=no,menubar=no,location=no,resizable=yes,scrollbars=yes,status=no,width=${screenW},height=${screenH},left=0,top=0`;
+
+  const checkHeaders = { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' };
+  const opened = uids.map(uid => {
+    const win = window.open(`./viewer.html?study=${uid}`, '_blank', features);
+    const req = win
+      ? fetch(`${baseUrl}/api/viewer/check/?study_uid=${encodeURIComponent(uid)}`, { headers: checkHeaders })
+          .then(r => (r.ok ? r.json() : null))
+          .catch(() => null)
+      : null;
+    return { win, req };
+  });
+  const blocked = opened.filter(o => !o.win).length;
+
+  for (const o of opened) {
+    if (!o.req) continue;
+    const data = await o.req;
+    if (data && data.success && data.active_viewers && data.active_viewers.length > 0) {
+      if (!confirmViewerWarning(o.win, data.active_viewers) && o.win && !o.win.closed) o.win.close();
+    }
+  }
+
+  if (blocked) {
+    alert('Some windows were blocked by the browser. Please allow popups for this site and try again.');
+  }
+}
+
 async function openViewer(fileUrl, studyUID, patientId) {
   if (!fileUrl && !studyUID) {
     alert("No DICOM file available");
@@ -768,9 +977,18 @@ async function openViewer(fileUrl, studyUID, patientId) {
     alert('You do not have permission to view images');
     return;
   }
+
+  const hasStudy = studyUID && studyUID !== '' && studyUID !== 'undefined';
+  const screenW = screen.availWidth || window.screen.width;
+  const screenH = screen.availHeight || window.screen.height;
+  const fullWindowFeatures = `toolbar=no,menubar=no,location=no,resizable=yes,scrollbars=yes,status=no,width=${screenW},height=${screenH},left=0,top=0`;
+  let viewerWindow = null;
   
   try {
-    if (studyUID && studyUID !== '' && studyUID !== 'undefined') {
+    if (hasStudy) {
+      const viewerUrl = `./viewer.html?study=${studyUID}`;
+      viewerWindow = window.open(viewerUrl, "_blank", fullWindowFeatures);
+
       const viewersResponse = await fetch(`${baseUrl}/api/viewer/check/?study_uid=${studyUID}`, {
         method: 'GET',
         headers: {
@@ -782,23 +1000,16 @@ async function openViewer(fileUrl, studyUID, patientId) {
       if (viewersResponse.ok) {
         const viewersData = await viewersResponse.json();
         if (viewersData.success && viewersData.active_viewers && viewersData.active_viewers.length > 0) {
-          const viewerNames = viewersData.active_viewers.join(', ');
-          const userConfirmed = confirm(`Warning!\n\nFollowing users are currently viewing the study:\n${viewerNames}\n\nDo you really wish to load this study?`);
+          const userConfirmed = confirmViewerWarning(viewerWindow, viewersData.active_viewers);
           
           if (!userConfirmed) {
+            if (viewerWindow && !viewerWindow.closed) viewerWindow.close();
             return;
           }
         }
       }
-    }
-    
-    const screenW = screen.availWidth || window.screen.width;
-    const screenH = screen.availHeight || window.screen.height;
-    const fullWindowFeatures = `toolbar=no,menubar=no,location=no,resizable=yes,scrollbars=yes,status=no,width=${screenW},height=${screenH},left=0,top=0`;
-    
-    if (studyUID && studyUID !== '' && studyUID !== 'undefined') {
-      const viewerUrl = `./viewer.html?study=${studyUID}`;
-      window.open(viewerUrl, "_blank", fullWindowFeatures);
+
+      if (!viewerWindow) window.open(viewerUrl, "_blank", fullWindowFeatures);
       return;
     }
     
@@ -821,6 +1032,7 @@ async function openViewer(fileUrl, studyUID, patientId) {
     }
     
   } catch (error) {
+    if (viewerWindow && !viewerWindow.closed) viewerWindow.close();
     console.error('Error opening DICOM viewer:', error);
     alert("Error opening DICOM viewer. Please check the file path.");
   }
@@ -893,7 +1105,29 @@ async function updateReferredBy(imageId, value) {
   }
 }
 
+function isSearchPanelEmpty() {
+  const nameQ = document.getElementById('patient-name')?.value.trim() || '';
+  const idQ = document.getElementById('patient-id')?.value.trim() || '';
+  const statusQ = document.getElementById('status')?.value || 'All';
+  const centerQ = document.getElementById('center-filter')?.value || 'All';
+  const emergency = document.getElementById('emergency')?.checked || false;
+  const startDate = document.getElementById('scan-start-date')?.value || '';
+  const endDate = document.getElementById('scan-end-date')?.value || '';
+  const allModalities = Array.from(document.querySelectorAll('.modality-checkbox')).every(cb => cb.checked);
+  return !nameQ && !idQ && statusQ === 'All' && centerQ === 'All' && !emergency && !startDate && !endDate && allModalities;
+}
+
+function isSearchButtonClick() {
+  const ev = window.event;
+  return !!(ev && ev.type === 'click' && ev.isTrusted);
+}
+
 function searchStudies() {
+  if (isSearchButtonClick() && isSearchPanelEmpty()) {
+    sessionStorage.removeItem('instituteCurrentPage');
+    window.location.reload();
+    return;
+  }
   fetchInstituteStudies(1, false);
 }
 
@@ -975,7 +1209,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     centersInInstitute = instituteResult.centers;
 
     document.getElementById('institute-display-name').textContent = instituteName;
-    document.getElementById('center-count-display').textContent = `${instituteResult.centerCount} Centers`;
 
     populateCenterFilter();
     updateUIBasedOnPermissions();
@@ -1042,4 +1275,13 @@ function openCombinedReportModal(reports) {
   modal.innerHTML = `<div style="background:#fff;border-radius:8px;padding:30px;min-width:360px;max-width:500px;box-shadow:0 4px 20px rgba(0,0,0,0.3);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><strong style="font-size:17px;">Reports (${reports.length})</strong><button onclick="document.getElementById('combined-report-modal').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;">✕</button></div>${linksHtml}</div>`;
   modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
+}
+
+
+function formatReceiveDateTime(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }

@@ -153,8 +153,8 @@
   <div class="institute-header">
     <div class="institute-info">
       <h1 id="institute-display-name">Loading...</h1>
-      <p id="center-count-display">Loading centers...</p>
     </div>
+    <div class="live-clock" id="live-clock"></div>
   </div>
   
   <section class="search-panel">
@@ -228,7 +228,6 @@
       <thead>
         <tr>
           <th>DICOM Viewer</th>
-          <th>Report</th>
           <th>History</th>
           <th>Patient Name</th>
           <th>Patient ID</th>
@@ -238,10 +237,11 @@
           <th>Modality</th>
           <th>Receive Date/Time</th>
           <th>Refd By</th>
-          <th></th>
           <th>Status</th>
           <th></th>
-          <th>Assigned To</th>
+          <th>Report</th>
+          <th></th>
+          <th>Reported By</th>
         </tr>
       </thead>
       <tbody id="study-table-body"></tbody>
@@ -256,8 +256,9 @@
     </div>
   </footer>
 
-  <script src="./script/seriesPanel.js?v=4"></script>
+  <script src="./script/seriesPanel.js?v=5"></script>
   <script src="./script/institute.js"></script>
+  <script src="./script/extraViewers.js"></script>
 </body>
 </html>
 

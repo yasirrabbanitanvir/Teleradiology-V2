@@ -43,13 +43,13 @@ nav ul li a:hover {
 
 /* Search Panel */
 .search-panel {
-  background: linear-gradient(90deg, #E0F2F1 0%, #FFFFFF 100%);
+  background: lightblue;
   padding: 16px 20px;
   display: flex;
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-  border-bottom: 1px solid #80CBC4;
+  /* border-bottom: 1px solid #80CBC4; */
 }
 .search-inputs {
   display: flex;
@@ -73,6 +73,7 @@ nav ul li a:hover {
   font-weight: bold;
   border-radius: 4px;
   cursor: pointer;
+  /* text-align: center; */
   transition: background 0.3s ease;
 }
 .search-panel button:hover {
@@ -80,49 +81,166 @@ nav ul li a:hover {
 }
 
 /* Assign Panel */
-.assign-panel {
-  background: #FFFFFF;
-  padding: 16px 20px 0 20px;
+.load-bar-flex {
   display: flex;
-  gap: 12px;
   align-items: center;
-  flex-wrap: wrap;
-  /* border-bottom: 1px solid #80CBC4; */
-  margin-bottom: 12px;
-  width: 425px;
-  max-width: 425px;
 }
 
-.assign-panel select,
-.assign-panel input {
-  padding: 6px 10px;
-  border: 1px solid #80CBC4;
-  background: #E0F2F1;
-  color: #004D40;
-  border-radius: 4px;
-  flex: 1 1 200px;
+#assign-panel {
+  flex: 1;
+  display: block !important;
+  max-width: none;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  text-align: center;
+  font-size: 12px;
 }
-.assign-panel button {
-  background: #4FBA5B;
-  color: #FFFFFF;
-  border: none;
-  padding: 8px 16px;
+
+#assign-panel .assign-search-label {
+  display: inline-block;
+  margin: 0 6px 0 0;
+  font-size: 14px;
   font-weight: bold;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.3s ease, transform 0.2s ease;
+  color: #222;
+  vertical-align: middle;
 }
-.assign-panel button:hover {
-  background: #006D85;
-  transform: translateY(-2px);
+
+#assign-panel #assign-doctor-search {
+  display: inline-block;
+  width: 120px;
+  height: 26px;
+  margin: 0 50px 0 0;
+  padding: 0 6px;
+  font-size: 13px;
+  line-height: 24px;
+  color: #004D40;
+  border: 1px solid #aaa;
+  border-radius: 0;
+  background: #fff;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+#assign-panel .assign-dd {
+  display: inline-block;
+  position: relative;
+  vertical-align: middle;
+}
+
+#assign-panel .assign-dd-toggle {
+  display: block;
+  width: 170px;
+  height: 26px;
+  margin: 0;
+  padding: 0 24px 0 6px;
+  font-size: 13px;
+  font-weight: normal;
+  font-family: Arial, sans-serif;
+  text-align: left;
+  color: #000;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23000' stroke-width='1.4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  border: 1px solid #767676;
+  border-radius: 3px;
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: default;
+  line-height: 24px;
+}
+
+#assign-panel .assign-dd-list {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  width: 260px;
+  background: #fff;
+  border: 1px solid #666;
+  text-align: left;
+}
+
+#assign-panel .assign-dd.open .assign-dd-list {
+  display: block;
+}
+
+#assign-panel .assign-dd-placeholder {
+  padding: 2px 6px;
+  font-size: 13px;
+  font-family: Arial, sans-serif;
+  line-height: 18px;
+  color: #000;
+  background: #fff;
+  cursor: default;
+  text-align: left;
+}
+
+#assign-panel .assign-dd-placeholder.active {
+  background: #1e6fd9;
+  color: #fff;
+}
+
+#assign-panel .assign-dd-list select {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  font-size: 13px;
+  font-family: Arial, sans-serif;
+  color: #000;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+#assign-panel .assign-dd-list select option {
+  padding: 2px 6px;
+  line-height: 18px;
+}
+
+#assign-panel #assign-btn {
+  margin: 0 0 0 14px;
+  padding: 0 14px;
+  height: 26px;
+  line-height: 24px;
+  font-size: 13.33px;
+  font-weight: bold;
+  font-family: Arial, sans-serif;
+  color: #000;
+  background: #f5deb3;
+  border: 1px solid #999;
+  border-radius: 0;
+  cursor: pointer;
+  vertical-align: middle;
 }
 
 /* Studies Table */
+.study-list {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.study-list > div:first-child {
+  position: sticky;
+  left: 0;
+}
+
 .study-list table {
   width: 100%;
   border-collapse: collapse;
   background: #FFFFFF;
   margin-top: 12px;
+  min-width: 1080px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.05);
 }
 .study-list th {
@@ -131,6 +249,7 @@ nav ul li a:hover {
   padding: 10px;
   font-size: 12px;
   text-transform: uppercase;
+  border: 1px solid #000000;
   border-bottom: 1px solid #E0F2F1;
 }
 .study-list td {
@@ -139,7 +258,10 @@ nav ul li a:hover {
   padding: 12px 10px;
   border-bottom: 1px solid #E0F2F1;
   text-align: center;
+  border: 1px solid #000000;
+  background-color: #ece3d0;
 }
+
 .study-list tr:hover td {
   background: #E0F2F1;
 }
@@ -149,19 +271,20 @@ nav ul li a:hover {
 
 /* Buttons */
 .action-btn {
-  background: linear-gradient(90deg, #26A69A 0%, #004D40 100%);
-  color: #FFFFFF;
-  font-weight: bold;
-  padding: 5px 10px;
-  border-radius: 4px;
-  font-size: 14px;
+  /* background: linear-gradient(90deg, #26A69A 0%, #004D40 100%); */
+  /* color: #FFFFFF; */
+  /* font-weight: bold; */
+  /* padding: 5px 10px; */
+  /* border-radius: 4px; */
+  /* font-size: 14px;
   border: none;
-  cursor: pointer;
-  transition: background 0.3s ease;
+  cursor: pointer; */
+  /* transition: background 0.3s ease; */
 }
-.action-btn:hover {
+
+/* .action-btn:hover {
   background: linear-gradient(90deg, #004D40 0%, #26A69A 100%);
-}
+} */
 
 .view-btn {
   background: white;
@@ -296,4 +419,169 @@ nav ul li a:hover {
   .footer-content::after {
     display: none;
   }
+}
+
+@media (min-width: 768px) and (max-width: 1280px) {
+  header {
+    padding: 10px 16px;
+  }
+
+  nav ul {
+    gap: 14px;
+  }
+
+  .search-panel {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  .modality-filter {
+    margin-left: 0;
+  }
+
+  .study-list th {
+    padding: 8px 6px;
+    font-size: 11px;
+  }
+
+  .study-list td {
+    padding: 8px 6px;
+    font-size: 13px;
+  }
+
+  .footer-left {
+    padding-left: 24px;
+  }
+
+  .footer-right {
+    padding-right: 24px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .search-inputs {
+    width: 100%;
+  }
+
+  .search-inputs input[type="text"],
+  .search-inputs input[type="date"],
+  .search-inputs select {
+    flex: 1 1 150px;
+    min-width: 0;
+  }
+
+  .center-filter-container {
+    flex: 1 1 100%;
+  }
+
+  .center-filter-container select {
+    width: 100%;
+  }
+}
+
+/* Live Clock */
+.user-selection,
+.doctor-selection,
+.institute-header {
+  position: relative;
+  min-height: 52px;
+  padding: 4px 0;
+  box-sizing: border-box;
+}
+
+.live-clock {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 4px 24px;
+  line-height: 40px;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 28px;
+  font-weight: bold;
+  letter-spacing: 3px;
+  color: #1a1a1a;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Center Search */
+.search-inputs #center {
+  display: none;
+}
+
+.center-search {
+  position: relative;
+  display: inline-block;
+}
+
+.center-search input {
+  width: 190px;
+}
+
+.center-search-list {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  min-width: 190px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #FFFFFF;
+  border: 1px solid #80CBC4;
+  border-top: 0;
+  box-sizing: border-box;
+  z-index: 1000;
+  font-size: 14px;
+  color: #004D40;
+  text-align: left;
+}
+
+.center-search-list.open {
+  display: block;
+}
+
+.center-search-item {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.center-search-item:hover {
+  background: #E0F2F1;
+}
+
+.center-search-empty {
+  padding: 6px 10px;
+  color: #888888;
+}
+
+.institute-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 18px 0 20px;
+}
+
+.institute-header .institute-info {
+  margin-bottom: 4px;
+}
+
+.institute-header #institute-display-name {
+  margin: 0;
+  color: #000;
+  text-align: center;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.institute-header .live-clock {
+  position: static;
+  transform: none;
+  padding: 0;
 }

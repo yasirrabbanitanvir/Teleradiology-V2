@@ -226,6 +226,33 @@ async function getGroupsFromDB() {
   }
 }
 
+const WAIT_GIF_WINDOW_MS = 25000;
+let serverClockOffset = 0;
+let receivingStudies = new Set();
+
+function syncServerClock(res) {
+  const header = res && res.headers ? res.headers.get('Date') : null;
+  const serverNow = header ? new Date(header).getTime() : NaN;
+  if (!isNaN(serverNow)) serverClockOffset = serverNow - Date.now();
+}
+
+function detectReceivingStudies(rows) {
+  const latest = {};
+  rows.forEach(r => {
+    const uid = r.studyUID;
+    const t = new Date(r.createdAt).getTime();
+    if (!uid || isNaN(t)) return;
+    if (!latest[uid] || t > latest[uid]) latest[uid] = t;
+  });
+  const serverNow = Date.now() + serverClockOffset;
+  receivingStudies = new Set(Object.keys(latest).filter(uid => serverNow - latest[uid] < WAIT_GIF_WINDOW_MS));
+}
+
+function waitGifHtml(studyUID) {
+  if (!receivingStudies.has(studyUID)) return '';
+  return `<img class="study-wait-gif" src="images/wait_hover.gif" alt="" title="Receiving new study..." width="17" height="19" style="margin-left:4px;vertical-align:middle;">`;
+}
+
 async function fetchAssignedStudies(doctorName, page = 1, maintainPage = false) {
   try {
     const res = await fetch(`${baseUrl}/api/dicom-images/by_doctor/?doctor_name=${encodeURIComponent(doctorName)}&page=${page}`, {
@@ -233,6 +260,8 @@ async function fetchAssignedStudies(doctorName, page = 1, maintainPage = false) 
     });
     
     if (!res.ok) throw new Error('Failed to fetch assigned studies');
+
+    syncServerClock(res);
     
     const responseData = await res.json();
     
@@ -300,6 +329,7 @@ async function fetchAssignedStudies(doctorName, page = 1, maintainPage = false) 
           center: dicom.center_name || 'Default',
           institute_name: displayInstitute,
           scan_datetime: scanDateTime,
+          receive_datetime: formatReceiveDateTime(dicom.received_at || dicom.created_at) || scanDateTime,
           status: dicom.status || 'Unreported',
           locked: dicom.is_emergency || false,
           dicom_file_path: dicom.file_path,
@@ -315,6 +345,7 @@ async function fetchAssignedStudies(doctorName, page = 1, maintainPage = false) 
           referring_physician: dicom.referring_physician || '',
           patient_history: dicom.patient_history || '',
           referral_file: dicom.referral_file || '',
+          createdAt: dicom.created_at || '',
           uploads: [{
             id: dicom.id,
             status: dicom.status || 'Unreported',
@@ -324,6 +355,8 @@ async function fetchAssignedStudies(doctorName, page = 1, maintainPage = false) 
         };
       });
       
+      detectReceivingStudies(processedImages);
+
       const statusRank = { 'Reported': 4, 'Reviewed': 3, 'Draft': 2, 'Unreported': 1, 'Not Assigned': 0 };
       const patientMap = {};
       processedImages.forEach(img => {
@@ -361,46 +394,46 @@ async function fetchAssignedStudies(doctorName, page = 1, maintainPage = false) 
 function populateCenterDropdown() {
   const centerSelect = document.getElementById('center');
   if (!centerSelect) return;
-  
-  const currentValue = centerSelect.value;
-  
-  const allOption = centerSelect.querySelector('option[value="ALL"]');
-  centerSelect.innerHTML = '';
-  
-  if (allOption) {
-    centerSelect.appendChild(allOption);
-  } else {
-    const newAllOption = document.createElement('option');
-    newAllOption.value = 'ALL';
-    newAllOption.textContent = 'All Centers';
-    centerSelect.appendChild(newAllOption);
-  }
-  
+
   const instituteMap = new Map();
-  
+
   allPatients.forEach(p => {
     const institute = p.institute_name;
     const center = p.center;
-    
+
     if (institute && !instituteMap.has(institute)) {
       instituteMap.set(institute, new Set());
     }
-    
+
     if (institute && center) {
       instituteMap.get(institute).add(center);
     }
   });
 
-  const sortedInstitutes = Array.from(instituteMap.keys()).sort();
-  
-  sortedInstitutes.forEach(institute => {
+  const wanted = [['ALL', 'All Centers']];
+  Array.from(instituteMap.keys()).sort().forEach(institute => {
+    wanted.push([Array.from(instituteMap.get(institute))[0], institute]);
+  });
+
+  const allOption = centerSelect.querySelector('option[value="ALL"]');
+  if (allOption) wanted[0][1] = allOption.textContent;
+
+  const current = Array.from(centerSelect.options).map(o => [o.value, o.textContent]);
+  const unchanged = current.length === wanted.length &&
+    current.every((o, i) => o[0] === wanted[i][0] && o[1] === wanted[i][1]);
+  if (unchanged) return;
+
+  const currentValue = centerSelect.value;
+  centerSelect.innerHTML = '';
+
+  wanted.forEach(([value, label]) => {
     const option = document.createElement('option');
-    option.value = Array.from(instituteMap.get(institute))[0];
-    option.textContent = institute;
+    option.value = value;
+    option.textContent = label;
     centerSelect.appendChild(option);
   });
-  
-  if (currentValue && Array.from(centerSelect.options).some(opt => opt.value === currentValue)) {
+
+  if (currentValue && wanted.some(o => o[0] === currentValue)) {
     centerSelect.value = currentValue;
   } else {
     centerSelect.value = 'ALL';
@@ -414,7 +447,37 @@ document.getElementById('modality-all')?.addEventListener('change', (event) => {
   });
 });
 
+function isSearchPanelEmpty() {
+  const nameQ = document.getElementById('patient-name').value.trim();
+  const idQ = document.getElementById('patient-id').value.trim();
+  const statusQ = document.getElementById('status').value;
+  const centerQ = document.getElementById('center').value;
+  const emergency = document.getElementById('emergency').checked;
+  const startDate = document.getElementById('scan-start-date').value;
+  const endDate = document.getElementById('scan-end-date').value;
+  const allModalities = Array.from(document.querySelectorAll('.modality-checkbox')).every(cb => cb.checked);
+  return !nameQ && !idQ && statusQ === 'All' && centerQ === 'ALL' && !emergency && !startDate && !endDate && allModalities;
+}
+
+function isSearchButtonClick() {
+  const ev = window.event;
+  return !!(ev && ev.type === 'click' && ev.isTrusted);
+}
+
 function searchPatients(maintainPage = false) {
+  if (!maintainPage && isSearchButtonClick() && isSearchPanelEmpty()) {
+    sessionStorage.removeItem('doctorCurrentPage');
+    sessionStorage.removeItem('doctorStatusFilter');
+    sessionStorage.removeItem('doctorNameFilter');
+    sessionStorage.removeItem('doctorIdFilter');
+    sessionStorage.removeItem('doctorStartDate');
+    sessionStorage.removeItem('doctorEndDate');
+    sessionStorage.removeItem('doctorCenterFilter');
+    sessionStorage.removeItem('doctorEmergency');
+    window.location.reload();
+    return;
+  }
+
   const nameQ = document.getElementById('patient-name').value.toLowerCase();
   const idQ = document.getElementById('patient-id').value.toLowerCase();
   const statusQ = document.getElementById('status').value;
@@ -644,12 +707,18 @@ function loadPatients(data) {
     tableHead.appendChild(assignedTh);
   }
   
-  patientTableBody.innerHTML = '';
-  
+  const existingRows = new Map();
+  Array.from(patientTableBody.children).forEach(row => {
+    if (row.dataset.rowKey) {
+      existingRows.set(row.dataset.rowKey, row);
+    } else if (!row.classList.contains('series-detail-row')) {
+      row.remove();
+    }
+  });
+
+  const orderedNodes = [];
+
   data.forEach((p, index) => {
-    const tr = document.createElement('tr');
-    if (p.locked) tr.classList.add('emergency-case');
-    
     const status = p.status;
     const timestamp = new Date().getTime();
     const dicomUrl = p.uploads[0]?.dicom_file ? `${p.uploads[0].dicom_file}?t=${timestamp}` : '';
@@ -668,14 +737,14 @@ function loadPatients(data) {
         <button class="action-btn view-btn" data-dicom-url="${dicomUrl}" data-study-uid="${studyUID}" data-patient-id="${p.id}"><img src="images/view.png" alt="View" width="32" height="32"></button>
       </td>
       <td><button class="action-btn" title="${((p.patient_history || '').trim() !== '' || p.referral_file) ? 'History uploaded' : 'No history'}" onclick="openHistory('${p.patient_id}')">${historyIconHtml((p.patient_history || '').trim() !== '' || !!p.referral_file)}</button></td>
-      <td>${p.name}${studyUID ? `<span class="series-toggle" title="Show series" data-study-uid="${studyUID}" data-body-part="${(p.body_part || '').replace(/"/g, '&quot;')}">+</span>` : ''}</td>
+      <td>${p.name}${studyUID ? `<span class="series-toggle" title="Show series" data-study-uid="${studyUID}" data-body-part="${(p.body_part || '').replace(/"/g, '&quot;')}">+</span>` : ''}${waitGifHtml(studyUID)}</td>
       <td>${p.patient_id}</td>
       <td>${p.age}</td>
       <td>${p.sex}</td>
       <td>${p.body_part}</td>
       <td>${p.modality}</td>
       <td>${p.institute_name}</td>
-      <td>${p.scan_datetime}</td>
+      <td>${p.receive_datetime || p.scan_datetime}</td>
       <td class="refd-by-cell" data-id="${p.id}" data-value="${(p.referring_physician || '').replace(/"/g, '&quot;')}"><span class="refd-by-text" style="cursor:pointer;" onclick="startEditRefBy(this)">${p.referring_physician || '<em style=\'color:#bbb\'>—</em>'}</span></td>
       <td>
         <select class="status-select" data-id="${p.id}" data-upload-id="${p.uploads[0]?.id || ''}" disabled style="background-color: ${status === 'Reported' ? '#d4edda' : status === 'Reviewed' ? '#fff3cd' : status === 'Draft' ? '#d1ecf1' : '#f8d7da'}; cursor: not-allowed;">
@@ -689,10 +758,48 @@ function loadPatients(data) {
       <td>${doctorsList}</td>
     `;
     
+    const key = String(p.id);
+    const signature = rowHTML.replace(/\?t=\d+/g, '') + (p.locked ? '|emergency' : '');
+    const previous = existingRows.get(key);
+
+    if (previous && previous.dataset.rowSig === signature) {
+      orderedNodes.push(previous);
+      const detail = previous.nextElementSibling;
+      if (detail && detail.classList.contains('series-detail-row')) {
+        orderedNodes.push(detail);
+      }
+      return;
+    }
+
+    const tr = document.createElement('tr');
+    if (p.locked) tr.classList.add('emergency-case');
+    tr.dataset.rowKey = key;
+    tr.dataset.rowSig = signature;
     tr.innerHTML = rowHTML;
-    patientTableBody.appendChild(tr);
+
+    if (previous) {
+      const oldBox = previous.querySelector('.row-checkbox');
+      const newBox = tr.querySelector('.row-checkbox');
+      if (oldBox && newBox && oldBox.checked) newBox.checked = true;
+    }
+
+    bindRowActions(tr);
+    orderedNodes.push(tr);
   });
-  
+
+  const keepSet = new Set(orderedNodes);
+  let ref = patientTableBody.firstChild;
+  orderedNodes.forEach(node => {
+    if (node === ref) {
+      ref = ref.nextSibling;
+    } else {
+      patientTableBody.insertBefore(node, ref);
+    }
+  });
+  Array.from(patientTableBody.children).forEach(row => {
+    if (!keepSet.has(row)) row.remove();
+  });
+
   if (data.length === 0) {
     patientListDiv.style.display = 'block';
     const table = patientListDiv.querySelector('table');
@@ -700,37 +807,386 @@ function loadPatients(data) {
   } else {
     patientListDiv.style.display = 'block';
   }
+}
 
-  document.querySelectorAll('.preview-btn').forEach(btn => {
-    btn.addEventListener('click', async function(e) {
-      e.preventDefault();
-      const studyUid = this.dataset.studyUid;
-      const reportUrl = this.dataset.reportUrl;
-      if (studyUid) {
-        try {
-          const res = await fetch(`${baseUrl}/api/study-reports/?study_uid=${encodeURIComponent(studyUid)}`, {
-            headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success && data.reports && data.reports.length > 0) {
-              if (data.reports.length === 1 && data.reports[0].report_file) {
-                window.open(data.reports[0].report_file, '_blank');
-              } else if (data.reports.length === 1) {
-                if (reportUrl) window.open(reportUrl, '_blank');
-              } else {
-                openCombinedReportModal(data.reports);
-              }
-              return;
-            }
-          }
-        } catch(e) { console.error(e); }
+const REPORT_BAR_CSS = "body{padding-top:56px;font-family:'Segoe UI',Arial,sans-serif;}.report-bar{position:fixed;top:0;left:0;right:0;height:52px;z-index:1000;box-sizing:border-box;background:#0062C2;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 24px;box-shadow:0 1px 3px rgba(0,0,0,0.25);font-family:'Segoe UI',Arial,sans-serif;}.report-bar .title{font-size:16px;font-weight:600;letter-spacing:0.3px;}.report-bar .actions{display:flex;gap:10px;}.report-bar button{display:inline-flex;align-items:center;gap:7px;padding:8px 18px;border:none;border-radius:3px;font:600 14px 'Segoe UI',Arial,sans-serif;cursor:pointer;}.report-bar .btn-print{background:#4FBA5B;color:#fff;}.report-bar .btn-print:hover{background:#43a64e;}.report-bar .btn-download{background:#fff;color:#0062C2;}.report-bar .btn-download:hover{background:#e8f1fb;}.report-bar svg{width:16px;height:16px;fill:currentColor;}";
+const REPORT_PRINT_ICON = '<svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>';
+const REPORT_DOWNLOAD_ICON = '<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
+
+function buildReportBar(d, win, onDownload) {
+  const bar = d.createElement('div');
+  bar.className = 'report-bar';
+  const title = d.createElement('div');
+  title.className = 'title';
+  title.textContent = 'Report';
+  const actions = d.createElement('div');
+  actions.className = 'actions';
+  const printBtn = d.createElement('button');
+  printBtn.className = 'btn-print';
+  printBtn.innerHTML = `${REPORT_PRINT_ICON}<span>Print</span>`;
+  printBtn.onclick = () => win.print();
+  actions.appendChild(printBtn);
+  if (onDownload) {
+    const downloadBtn = d.createElement('button');
+    downloadBtn.className = 'btn-download';
+    downloadBtn.innerHTML = `${REPORT_DOWNLOAD_ICON}<span>Download</span>`;
+    downloadBtn.onclick = onDownload;
+    actions.appendChild(downloadBtn);
+  }
+  bar.appendChild(title);
+  bar.appendChild(actions);
+  d.body.appendChild(bar);
+}
+
+function cleanReportHtml(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html || '';
+  tpl.content.querySelectorAll('script,iframe,object,embed').forEach(el => el.remove());
+  tpl.content.querySelectorAll('*').forEach(el => {
+    Array.from(el.attributes).forEach(attr => {
+      if (/^on/i.test(attr.name)) el.removeAttribute(attr.name);
+    });
+  });
+  const box = document.createElement('div');
+  box.appendChild(tpl.content);
+  return box.innerHTML;
+}
+
+function escapeReportText(value) {
+  return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function openReportPopup() {
+  const w = Math.min(900, screen.availWidth || 900);
+  const h = Math.min(950, screen.availHeight || 950);
+  const left = Math.max(0, Math.round(((screen.availWidth || w) - w) / 2));
+  const top = Math.max(0, Math.round(((screen.availHeight || h) - h) / 2));
+  const features = `popup=yes,toolbar=no,menubar=no,location=no,status=no,resizable=yes,scrollbars=yes,width=${w},height=${h},left=${left},top=${top}`;
+  const win = window.open('', `reportView_${Date.now()}`, features);
+  if (win) {
+    try {
+      win.document.open();
+      win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title></head><body style="font-family:Arial,sans-serif;padding:20px;">Loading report...</body></html>');
+      win.document.close();
+    } catch (e) {}
+  }
+  return win;
+}
+
+function renderReportPopup(win, reports) {
+  const items = reports.filter(r => r.report_content && String(r.report_content).trim() !== '');
+  if (!items.length) return false;
+  const sections = items.map((r, i) => {
+    const metaParts = [];
+    if (r.reported_by) metaParts.push(`Reported by: ${escapeReportText(r.reported_by)}`);
+    if (r.created_at) metaParts.push(escapeReportText(r.created_at));
+    const meta = items.length > 1 || metaParts.length
+      ? `<div class="meta">${items.length > 1 ? `<strong>Report ${i + 1}</strong> ` : ''}${metaParts.join(' | ')}</div>`
+      : '';
+    return `<div class="report">${meta}<div class="body">${cleanReportHtml(r.report_content)}</div></div>`;
+  }).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><style>
+    body{font-family:Calibri,Arial,sans-serif;background:#e9ecef;margin:0;padding:20px;color:#000;}
+    .report{background:#fff;max-width:794px;margin:0 auto 20px;padding:40px 50px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:14px;line-height:1.5;}
+    .meta{border-bottom:1px solid #ccc;padding-bottom:8px;margin-bottom:16px;font-size:13px;color:#444;}
+    .body img{max-width:100%;}
+    .body table{border-collapse:collapse;max-width:100%;}
+    .body td,.body th{border:1px solid #999;padding:4px 6px;}
+    .ql-align-center{text-align:center;}.ql-align-right{text-align:right;}.ql-align-justify{text-align:justify;}
+    .ql-indent-1{padding-left:3em;}.ql-indent-2{padding-left:6em;}.ql-indent-3{padding-left:9em;}
+    @media print{body{background:#fff;padding:0 !important;}.report{box-shadow:none;margin:0;max-width:none;}.report-bar{display:none !important;}}
+    ${REPORT_BAR_CSS}
+  </style></head><body>${sections}</body></html>`;
+  try {
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    const fileUrl = (items.find(r => r.report_file) || {}).report_file;
+    buildReportBar(win.document, win, fileUrl ? () => {
+      const a = win.document.createElement('a');
+      a.href = fileUrl;
+      a.download = decodeURIComponent(fileUrl.split('?')[0].split('/').pop() || 'report.docx');
+      win.document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } : null);
+    win.focus();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function loadReportLib(urls) {
+  return urls.reduce((chain, url) => chain.then(ok => {
+    if (ok) return true;
+    return new Promise(resolve => {
+      const s = document.createElement('script');
+      s.src = url;
+      s.onload = () => resolve(true);
+      s.onerror = () => { s.remove(); resolve(false); };
+      document.head.appendChild(s);
+    });
+  }), Promise.resolve(false));
+}
+
+async function ensureDocxPreview() {
+  if (!window.JSZip) {
+    await loadReportLib(['./script/jszip.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js']);
+  }
+  if (!window.docx || !window.docx.renderAsync) {
+    await loadReportLib(['./script/docx-preview.min.js', 'https://cdn.jsdelivr.net/npm/docx-preview@0.4.1/dist/docx-preview.min.js']);
+  }
+  return !!(window.JSZip && window.docx && window.docx.renderAsync);
+}
+
+async function prepareReportDocx(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const frames = [];
+  const docFile = zip.file('word/document.xml');
+  if (!docFile) return { data: buffer, frames };
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(await docFile.async('string'), 'application/xml');
+  const relMap = {};
+  const relsFile = zip.file('word/_rels/document.xml.rels');
+  if (relsFile) {
+    const rels = parser.parseFromString(await relsFile.async('string'), 'application/xml');
+    Array.from(rels.getElementsByTagName('Relationship')).forEach(r => {
+      relMap[r.getAttribute('Id')] = r.getAttribute('Target');
+    });
+  }
+  const framed = Array.from(doc.getElementsByTagName('w:framePr'));
+  for (const fp of framed) {
+    const para = fp.parentNode && fp.parentNode.parentNode;
+    if (!para || para.nodeName !== 'w:p' || !para.parentNode) continue;
+    const x = parseInt(fp.getAttribute('w:x'), 10) || 0;
+    const y = parseInt(fp.getAttribute('w:y'), 10) || 0;
+    let frame = frames.find(f => f.x === x && f.y === y);
+    if (!frame) {
+      frame = { x, y, image: '', imageWidthPt: 0, text: '' };
+      frames.push(frame);
+    }
+    const blip = para.getElementsByTagName('a:blip')[0];
+    if (blip) {
+      const target = relMap[blip.getAttribute('r:embed')];
+      const imgFile = target ? zip.file('word/' + target.replace(/^\/?(word\/)?/, '')) : null;
+      if (imgFile) {
+        const ext = (target.split('.').pop() || 'png').toLowerCase();
+        const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : `image/${ext}`;
+        frame.image = `data:${mime};base64,${await imgFile.async('base64')}`;
+        const extent = para.getElementsByTagName('wp:extent')[0];
+        if (extent) frame.imageWidthPt = (parseInt(extent.getAttribute('cx'), 10) || 0) / 12700;
       }
-      if (reportUrl) window.open(reportUrl, '_blank');
+    }
+    const text = Array.from(para.getElementsByTagName('w:t')).map(t => t.textContent).join('');
+    if (text) frame.text = text;
+    para.parentNode.removeChild(para);
+  }
+  if (!frames.length) return { data: buffer, frames };
+  zip.file('word/document.xml', new XMLSerializer().serializeToString(doc));
+  return { data: await zip.generateAsync({ type: 'arraybuffer' }), frames };
+}
+
+async function renderDocxPopup(win, reports) {
+  const files = reports.map(r => r.report_file).filter(f => f && /\.docx(\?|$)/i.test(f));
+  if (!files.length) return false;
+  try {
+    if (!(await ensureDocxPreview())) return false;
+    const prepared = await Promise.all(files.map(async f => {
+      const res = await fetch(f);
+      if (!res.ok) throw new Error('docx unavailable');
+      const original = await res.arrayBuffer();
+      const result = await prepareReportDocx(original.slice(0));
+      return Object.assign(result, { original, name: decodeURIComponent(f.split('?')[0].split('/').pop() || 'report.docx') });
+    }));
+    if (win.closed) return true;
+    const d = win.document;
+    d.open();
+    d.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><style>html,body{margin:0;background:#e9ecef;}.docx-wrapper{background:#e9ecef !important;padding:20px 0 !important;}${REPORT_BAR_CSS}@page{size:A4;margin:0;}@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}html,body{background:#fff !important;margin:0 !important;}.report-bar{display:none !important;}body{padding-top:0 !important;}.docx-wrapper{background:#fff !important;padding:0 !important;display:block !important;}.docx-wrapper > section.docx{box-shadow:none !important;margin:0 auto !important;min-height:0 !important;break-after:page;page-break-after:always;}.docx-wrapper > section.docx:last-child{break-after:auto;page-break-after:auto;}}</style></head><body></body></html>`);
+    d.close();
+    const first = prepared[0];
+    buildReportBar(d, win, () => {
+      const a = d.createElement('a');
+      a.href = URL.createObjectURL(new Blob([first.original], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
+      a.download = first.name;
+      d.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    });
+    for (const item of prepared) {
+      const holder = d.createElement('div');
+      d.body.appendChild(holder);
+      await docx.renderAsync(item.data, holder, holder, {
+        className: 'docx',
+        inWrapper: true,
+        ignoreWidth: false,
+        ignoreHeight: false,
+        breakPages: true,
+        renderHeaders: true,
+        renderFooters: true
+      });
+      const page = holder.querySelector('section');
+      if (page) {
+        page.style.position = 'relative';
+        item.frames.forEach(frame => {
+          const box = d.createElement('div');
+          box.style.cssText = `position:absolute;left:${frame.x / 20}pt;top:${frame.y / 20}pt;z-index:5;`;
+          if (frame.image) {
+            const img = d.createElement('img');
+            img.src = frame.image;
+            img.style.cssText = `display:block;width:${frame.imageWidthPt || 64.8}pt;height:auto;`;
+            box.appendChild(img);
+          }
+          if (frame.text) {
+            const label = d.createElement('div');
+            label.textContent = frame.text;
+            label.style.cssText = 'font:8pt Calibri,Arial,sans-serif;color:#0066cc;white-space:nowrap;margin-top:2pt;';
+            box.appendChild(label);
+          }
+          page.appendChild(box);
+        });
+      }
+    }
+    win.focus();
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
+}
+
+function pickLatestReport(reports) {
+  const stamp = r => {
+    const m = String(r.created_at || '').match(/^(\d{2})-(\d{2})-(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!m) return Infinity;
+    return new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0)).getTime();
+  };
+  let best = null;
+  let bestStamp = -Infinity;
+  reports.forEach(r => {
+    const t = stamp(r);
+    if (best === null || t >= bestStamp) {
+      best = r;
+      bestStamp = t;
+    }
+  });
+  return best;
+}
+
+async function showReportPopup(report, fallbackUrl) {
+  const win = openReportPopup();
+  if (win && await renderDocxPopup(win, [report])) {
+    return;
+  }
+  if (win && renderReportPopup(win, [report])) {
+    return;
+  }
+  const fileUrl = report.report_file || fallbackUrl;
+  if (win) {
+    if (fileUrl) {
+      win.location.href = fileUrl;
+    } else {
+      win.close();
+      alert('No report available');
+    }
+    return;
+  }
+  if (fileUrl) {
+    window.open(fileUrl, '_blank');
+  } else {
+    alert('No report available');
+  }
+}
+
+function openReportChooser(reports, onPick) {
+  const existing = document.getElementById('combined-report-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'combined-report-modal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  const linksHtml = reports.map((r, i) => {
+    let label = `Report ${i+1}`;
+    if (r.reported_by) label += ` - ${r.reported_by}`;
+    if (r.created_at) label += ` (${r.created_at})`;
+    return `<div style="margin:8px 0;"><a href="#" class="report-chooser-link" data-index="${i}" style="color:#0066cc;font-size:15px;text-decoration:none;padding:8px 12px;background:#f0f7ff;border:1px solid #cce;border-radius:4px;display:inline-block;">📄 ${label}</a></div>`;
+  }).join('');
+  modal.innerHTML = `<div style="background:#fff;border-radius:8px;padding:30px;min-width:360px;max-width:500px;box-shadow:0 4px 20px rgba(0,0,0,0.3);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><strong style="font-size:17px;">Reports (${reports.length})</strong><button type="button" class="report-chooser-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;">✕</button></div>${linksHtml}</div>`;
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+  modal.querySelector('.report-chooser-close').addEventListener('click', function() { modal.remove(); });
+  modal.querySelectorAll('.report-chooser-link').forEach(link => {
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      const picked = reports[Number(this.dataset.index)];
+      modal.remove();
+      onPick(picked);
+    });
+  });
+  document.body.appendChild(modal);
+}
+
+async function openReport(reportUrl, studyUid) {
+  const win = openReportPopup();
+  let reports = [];
+  let allReports = [];
+  if (studyUid && studyUid !== 'undefined' && studyUid !== '') {
+    try {
+      const res = await fetch(`${baseUrl}/api/study-reports/?study_uid=${encodeURIComponent(studyUid)}`, {
+        headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.reports && data.reports.length > 0) {
+          if (data.reports.length > 1) {
+            allReports = data.reports;
+          } else {
+            reports = [pickLatestReport(data.reports)];
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  if (allReports.length > 1) {
+    if (win) win.close();
+    openReportChooser(allReports, picked => showReportPopup(picked, reportUrl));
+    return;
+  }
+  if (win && reports.length && await renderDocxPopup(win, reports)) {
+    return;
+  }
+  if (win && reports.length && renderReportPopup(win, reports)) {
+    return;
+  }
+  const fileUrl = (reports.find(r => r.report_file) || {}).report_file || reportUrl;
+  if (win) {
+    if (fileUrl) {
+      win.location.href = fileUrl;
+    } else {
+      win.close();
+      alert('No report available');
+    }
+    return;
+  }
+  if (reports.length > 1) {
+    openCombinedReportModal(reports);
+  } else if (fileUrl) {
+    window.open(fileUrl, '_blank');
+  } else {
+    alert('No report available');
+  }
+}
+
+function bindRowActions(tr) {
+  tr.querySelectorAll('.preview-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      openReport(this.dataset.reportUrl || '', this.dataset.studyUid || '');
     });
   });
   
-  document.querySelectorAll('.view-btn').forEach(btn => {
+  tr.querySelectorAll('.view-btn').forEach(btn => {
     btn.addEventListener('click', function() {
       const dicomUrl = this.dataset.dicomUrl;
       const studyUID = this.dataset.studyUid;
@@ -766,6 +1222,12 @@ function createPaginationControls() {
   
   paginationContainer.style.display = 'block';
   hideNoReportsMessage();
+
+  const paginationSig = `${currentPage}|${totalPages}|${totalCount}`;
+  if (paginationContainer.dataset.sig === paginationSig && paginationContainer.children.length) {
+    return;
+  }
+  paginationContainer.dataset.sig = paginationSig;
   
   paginationContainer.innerHTML = `
     <div class="pagination-wrapper">
@@ -835,7 +1297,20 @@ function goToPage(page) {
   createPaginationControls();
 }
 
-function loadSelectedStudies() {
+function buildViewerWarning(names) {
+  const list = names.map((name, i) => `${i + 1}. ${name}`).join('\n');
+  return `Following users are currently viewing the study:\n\n${list}\n\nDo you really wish to load this study?`;
+}
+
+function confirmViewerWarning(win, names) {
+  const message = buildViewerWarning(names);
+  try {
+    if (win && !win.closed) return win.confirm(message);
+  } catch (e) {}
+  return confirm(message);
+}
+
+async function loadSelectedStudies() {
   const checked = document.querySelectorAll('.row-checkbox:checked');
   if (!checked.length) {
     alert('Please select at least one study');
@@ -864,13 +1339,27 @@ function loadSelectedStudies() {
   const screenH = screen.availHeight || window.screen.height;
   const features = `toolbar=no,menubar=no,location=no,resizable=yes,scrollbars=yes,status=no,width=${screenW},height=${screenH},left=0,top=0`;
 
-  let blocked = 0;
-  uids.forEach(uid => {
-    const w = window.open(`./viewer.html?study=${uid}`, '_blank', features);
-    if (!w) blocked++;
+  const checkHeaders = { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' };
+  const opened = uids.map(uid => {
+    const win = window.open(`./viewer.html?study=${uid}`, '_blank', features);
+    const req = win
+      ? fetch(`${baseUrl}/api/viewer/check/?study_uid=${encodeURIComponent(uid)}`, { headers: checkHeaders })
+          .then(r => (r.ok ? r.json() : null))
+          .catch(() => null)
+      : null;
+    return { win, req };
   });
+  const blocked = opened.filter(o => !o.win).length;
 
   startAutoRefresh();
+
+  for (const o of opened) {
+    if (!o.req) continue;
+    const data = await o.req;
+    if (data && data.success && data.active_viewers && data.active_viewers.length > 0) {
+      if (!confirmViewerWarning(o.win, data.active_viewers) && o.win && !o.win.closed) o.win.close();
+    }
+  }
 
   if (blocked) {
     alert('Some windows were blocked by the browser. Please allow popups for this site and try again.');
@@ -887,9 +1376,22 @@ async function openViewer(fileUrl, studyUID, patientId) {
     alert('You do not have permission to view images');
     return;
   }
+
+  const hasStudy = studyUID && studyUID !== '' && studyUID !== 'undefined';
+  const screenW = screen.availWidth || window.screen.width;
+  const screenH = screen.availHeight || window.screen.height;
+  const fullWindowFeatures = `toolbar=no,menubar=no,location=no,resizable=yes,scrollbars=yes,status=no,width=${screenW},height=${screenH},left=0,top=0`;
+  let viewerWindow = null;
   
   try {
-    if (studyUID && studyUID !== '' && studyUID !== 'undefined') {
+    if (patientId) {
+      sessionStorage.setItem('currentPatientId', patientId);
+    }
+
+    if (hasStudy) {
+      const viewerUrl = `./viewer.html?study=${studyUID}`;
+      viewerWindow = window.open(viewerUrl, "_blank", fullWindowFeatures);
+
       const viewersResponse = await fetch(`${baseUrl}/api/viewer/check/?study_uid=${studyUID}`, {
         method: 'GET',
         headers: {
@@ -901,27 +1403,16 @@ async function openViewer(fileUrl, studyUID, patientId) {
       if (viewersResponse.ok) {
         const viewersData = await viewersResponse.json();
         if (viewersData.success && viewersData.active_viewers && viewersData.active_viewers.length > 0) {
-          const viewerNames = viewersData.active_viewers.join(', ');
-          const userConfirmed = confirm(`Warning!\n\nFollowing users are currently viewing the study:\n${viewerNames}\n\nDo you really wish to load this study?`);
+          const userConfirmed = confirmViewerWarning(viewerWindow, viewersData.active_viewers);
           
           if (!userConfirmed) {
+            if (viewerWindow && !viewerWindow.closed) viewerWindow.close();
             return;
           }
         }
       }
-    }
-    
-    const screenW = screen.availWidth || window.screen.width;
-    const screenH = screen.availHeight || window.screen.height;
-    const fullWindowFeatures = `toolbar=no,menubar=no,location=no,resizable=yes,scrollbars=yes,status=no,width=${screenW},height=${screenH},left=0,top=0`;
-    
-    if (patientId) {
-      sessionStorage.setItem('currentPatientId', patientId);
-    }
-    
-    if (studyUID && studyUID !== '' && studyUID !== 'undefined') {
-      const viewerUrl = `./viewer.html?study=${studyUID}`;
-      window.open(viewerUrl, "_blank", fullWindowFeatures);
+
+      if (!viewerWindow) window.open(viewerUrl, "_blank", fullWindowFeatures);
       startAutoRefresh();
       return;
     }
@@ -946,6 +1437,7 @@ async function openViewer(fileUrl, studyUID, patientId) {
     }
     
   } catch (error) {
+    if (viewerWindow && !viewerWindow.closed) viewerWindow.close();
     console.error('Error opening DICOM viewer:', error);
     alert("Error opening DICOM viewer. Please check the file path.");
   }
@@ -1224,4 +1716,13 @@ function openCombinedReportModal(reports) {
   });
   
   document.body.appendChild(modal);
+}
+
+
+function formatReceiveDateTime(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }

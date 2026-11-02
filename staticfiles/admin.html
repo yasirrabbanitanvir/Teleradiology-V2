@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=1280" />
 <title>Telerad PACS Admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -1544,6 +1545,26 @@ ul { list-style: none; }
   font-family: var(--font);
 }
 
+
+@media (min-width: 768px) and (max-width: 1280px) {
+  .main {
+    min-width: 0;
+  }
+
+  .content {
+    padding: 18px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  :root {
+    --sidebar-w: 200px;
+  }
+
+  .content {
+    padding: 14px;
+  }
+}
 </style>
 </head>
 <body>

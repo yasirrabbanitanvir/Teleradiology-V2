@@ -51,11 +51,7 @@
     .saved-reports-table tbody tr {
       background: #f5e6c8;
       border-bottom: 1px solid #d4b87a;
-      cursor: pointer;
       transition: background 0.15s;
-    }
-    .saved-reports-table tbody tr:hover {
-      background: #eddcb4;
     }
     .saved-reports-table tbody td {
       padding: 7px 14px;
@@ -66,6 +62,81 @@
     }
     .saved-reports-table tbody td:last-child {
       border-right: none;
+    }
+    .saved-reports-table tbody tr.active {
+      background: #cfe8cf;
+    }
+    .report-viewer {
+      display: none;
+      width: 100%;
+      max-width: 1600px;
+      margin: 0 auto;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .report-viewer.visible {
+      display: block;
+    }
+    .report-viewer-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 10px 28px;
+      background: #f4f6fb;
+      border-bottom: 1px solid #d9deea;
+    }
+    .report-viewer-meta {
+      font-size: 14px;
+      color: #222;
+    }
+    .report-viewer-meta strong {
+      margin-right: 6px;
+    }
+    .report-viewer-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .report-viewer-actions button {
+      padding: 6px 14px;
+      font-size: 14px;
+      border: 1px solid #2c3e7a;
+      border-radius: 3px;
+      background: white;
+      color: #2c3e7a;
+      cursor: pointer;
+    }
+    .report-viewer-actions button.primary {
+      background: #2c3e7a;
+      color: white;
+    }
+    .report-viewer-body {
+      padding: 14px 28px 28px;
+    }
+    .report-viewer-body .ql-container {
+      border: 1px solid #ddd !important;
+      margin-top: 10px;
+    }
+    .report-viewer-body .ql-editor {
+      min-height: 300px;
+      cursor: default;
+    }
+    .report-viewer-doctor {
+      margin-top: 18px;
+      font-size: 15px;
+      font-weight: bold;
+      color: #000000;
+    }
+    .saved-reports-table tbody td.view-report-cell {
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .saved-reports-table tbody td.view-report-cell:hover {
+      background: #cfe0fa;
+    }
+    .saved-reports-table tbody tr.active td.view-report-cell:hover {
+      background: #b9dcb9;
     }
     .report-file-link {
       color: #0066cc;
@@ -222,22 +293,22 @@
       display: flex;
       justify-content: center;
       align-items: flex-start;
-      padding: 20px;
+      padding: 8px;
       overflow: auto;
     }
     .page-wrapper {
       background: white;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      width: 320mm;
-      min-height: 297mm;
-      transform-origin: top center;
+      width: 100%;
+      max-width: 1600px;
+      margin: 0 auto;
     }
     .page-content {
-      padding: 0.4in 0.7in;
+      padding: 14px 28px 24px;
     }
     .header-title {
       text-align: center;
-      font-size: 18.5px;
+      font-size: 15px;
       font-weight: bold;
       margin-bottom: 8px;
       color: #000000;
@@ -250,7 +321,7 @@
       border: 2px solid #000000;
       border-collapse: collapse;
       margin: 10px 0;
-      font-size: 18.5px;
+      font-size: 15px;
       line-height: 1.3;
     }
     .patient-table tr {
@@ -261,28 +332,28 @@
       color: #000000;
       border: 1px solid #000000;
       vertical-align: middle;
-      font-size: 18.5px;
+      font-size: 15px;
       line-height: 1.3;
     }
     .patient-table strong {
-      font-size: 18.5px;
+      font-size: 15px;
     }
     .label-col {
       font-weight: 700;
       width: 120px;
       color: #000000;
-      font-size: 18.5px;
+      font-size: 15px;
     }
     .colon-col {
       font-weight: 700;
       width: 25px;
       text-align: center;
       color: #000000;
-      font-size: 18.5px;
+      font-size: 15px;
     }
     .value-col {
       color: #000000;
-      font-size: 18.5px;
+      font-size: 15px;
     }
 
     #editor {
@@ -300,10 +371,10 @@
     .ql-container {
       border: 1px solid #ddd !important;
       font-family: 'Calibri', Arial, sans-serif;
-      font-size: 18.5px;
+      font-size: 14px;
     }
     .ql-editor {
-      font-size: 18.5px;
+      font-size: 14px;
       line-height: 1.6;
       font-family: 'Calibri', Arial, sans-serif;
       padding: 16px;
@@ -318,32 +389,32 @@
     }
     .ql-editor p,
     .ql-editor li {
-      font-size: 18.5px !important;
+      font-size: 14px !important;
     }
     .ql-snow .ql-picker.ql-size {
       width: 62px;
     }
     .ql-snow .ql-picker.ql-size .ql-picker-label::before,
     .ql-snow .ql-picker.ql-size .ql-picker-item::before {
-      content: '12pt';
+      content: '14px';
     }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="12.3px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="12.3px"]::before { content: '8pt'; }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="13.9px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="13.9px"]::before { content: '9pt'; }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="15.4px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="15.4px"]::before { content: '10pt'; }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="17px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="17px"]::before { content: '11pt'; }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="21.6px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="21.6px"]::before { content: '14pt'; }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="24.7px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="24.7px"]::before { content: '16pt'; }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="27.8px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="27.8px"]::before { content: '18pt'; }
+    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="11px"]::before,
+    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="11px"]::before { content: '11px'; }
+    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="12px"]::before,
+    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="12px"]::before { content: '12px'; }
+    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="13px"]::before,
+    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="13px"]::before { content: '13px'; }
+    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="16px"]::before,
+    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="16px"]::before { content: '16px'; }
+    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="18px"]::before,
+    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="18px"]::before { content: '18px'; }
+    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="20px"]::before,
+    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="20px"]::before { content: '20px'; }
+    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="24px"]::before,
+    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="24px"]::before { content: '24px'; }
     .ql-editor ul,
     .ql-editor ol {
-      font-size: 18.5px !important;
+      font-size: 14px !important;
     }
     .doctor-signature {
       margin-top: 25px;
@@ -359,13 +430,13 @@
     }
     .signature-line {
       margin: 1px 0;
-      font-size: 18px;
+      font-size: 15px;
       line-height: 1.2;
       color: #000000;
     }
     .doctor-name {
       font-weight: bold;
-      font-size: 18px;
+      font-size: 15px;
       margin-bottom: 1px;
       color: #000000;
     }
@@ -381,7 +452,7 @@
       body { background: white; }
       .top-bar, .sidebar { display: none; }
       .content-area { padding: 0; }
-      .page-wrapper { box-shadow: none; transform: none !important; }
+      .page-wrapper { box-shadow: none; transform: none !important; margin: 0 !important; }
       .ql-toolbar { display: none; }
     }
   
@@ -412,7 +483,7 @@
       }
 
       .content-area {
-        padding: 12px;
+        padding: 6px 4px;
         overflow-x: hidden;
       }
     }
@@ -426,6 +497,132 @@
       .saved-reports-table tbody td {
         padding: 6px 8px;
       }
+    }
+
+    .top-bar {
+      padding: 6px 12px !important;
+      flex-shrink: 0;
+    }
+    .patient-info {
+      flex-wrap: wrap;
+      gap: 2px 20px;
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+    }
+    .controls-row {
+      flex-wrap: nowrap;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+    .template-controls {
+      flex: 1 1 auto;
+      min-width: 0;
+      flex-wrap: nowrap;
+      gap: 8px;
+    }
+    .template-controls label,
+    .right-controls label {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    .controls-row select {
+      min-width: 0;
+      padding: 4px 8px;
+    }
+    #navBodyPart {
+      flex: 0 1 170px;
+      width: auto;
+      min-width: 90px;
+    }
+    #navTemplateSearch {
+      flex: 0 1 160px;
+      min-width: 70px;
+      padding: 4px 8px !important;
+    }
+    #navTemplate {
+      flex: 1 1 200px;
+      width: auto;
+      min-width: 100px;
+      max-width: 100%;
+      text-overflow: ellipsis;
+    }
+    .right-controls {
+      margin-left: auto;
+      flex: 0 0 auto;
+      flex-wrap: nowrap;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    #statusSelect {
+      flex: 0 0 auto;
+    }
+    .submit-btn {
+      flex: 0 0 auto;
+      padding: 6px 16px;
+      white-space: nowrap;
+    }
+    .status-msg {
+      flex: 0 1 auto;
+      padding: 4px 10px;
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .saved-reports-bar {
+      border-bottom-width: 1px;
+      max-height: 104px;
+      overflow-y: auto;
+    }
+    .saved-reports-table thead th {
+      padding: 3px 10px;
+      position: sticky;
+      top: 0;
+    }
+    .saved-reports-table tbody td {
+      padding: 2px 10px;
+    }
+    .content-area {
+      padding: 0 !important;
+    }
+    .page-content {
+      padding: 4px 12px 8px;
+    }
+    .header-title {
+      margin-bottom: 3px;
+      padding-bottom: 2px;
+    }
+    .patient-table {
+      margin: 4px 0;
+    }
+    .patient-table td {
+      padding: 2px 8px;
+      line-height: 1.2;
+    }
+    #editor {
+      margin-bottom: 4px;
+    }
+    .ql-toolbar {
+      padding: 3px 8px !important;
+    }
+    .doctor-signature {
+      margin-top: 8px;
+    }
+    .sig-img {
+      margin-bottom: 2px;
+    }
+    .report-viewer-bar {
+      padding: 4px 12px;
+    }
+    .report-viewer-actions button {
+      padding: 3px 12px;
+    }
+    .report-viewer-body {
+      padding: 6px 12px 10px;
+    }
+    .report-viewer-body .ql-container {
+      margin-top: 4px;
     }
   </style>
 </head>
@@ -487,6 +684,15 @@
       </select>
     </div>
     <div class="content-area">
+      <div class="report-viewer" id="reportViewer">
+        <div class="report-viewer-bar">
+          <div class="report-viewer-meta" id="reportViewerMeta"></div>
+          <div class="report-viewer-actions">
+            <button type="button" class="primary" id="reportViewerBack">Back to Editor</button>
+          </div>
+        </div>
+        <div class="report-viewer-body" id="reportViewerBody"></div>
+      </div>
       <div class="page-wrapper" id="pageWrapper">
         <div class="page-content">
           <div class="header-title">DEPARTMENT OF RADIOLOGY AND IMAGING</div>
@@ -566,47 +772,223 @@
       renderSavedReports();
     }
 
+    let activeReportIdx = -1;
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function sanitizeReportHtml(html) {
+      const doc = new DOMParser().parseFromString(html || '', 'text/html');
+      doc.querySelectorAll('script, iframe, object, embed, link, meta, style, form').forEach(function(n) { n.remove(); });
+      doc.body.querySelectorAll('*').forEach(function(el) {
+        Array.from(el.attributes).forEach(function(a) {
+          const n = a.name.toLowerCase();
+          if (n.startsWith('on') || ((n === 'href' || n === 'src') && /^\s*javascript:/i.test(a.value))) {
+            el.removeAttribute(a.name);
+          }
+        });
+      });
+      return doc.body.innerHTML;
+    }
+
+    function myReportNames() {
+      const names = [];
+      if (doctorInfo) {
+        [doctorInfo.full_name, doctorInfo.doctor_name, doctorInfo.username].forEach(function(n) {
+          if (n && String(n).trim()) names.push(String(n).trim());
+        });
+      }
+      return names;
+    }
+
+    function isOwnReport(r) {
+      const names = myReportNames();
+      if (!names.length) return true;
+      return names.indexOf(String(r.reported_by || '').trim()) !== -1;
+    }
+
     function renderSavedReports() {
       const bar = document.getElementById('savedReportsBar');
       const tbody = document.getElementById('savedReportsBody');
       if (!savedReports.length) {
         bar.classList.remove('visible');
+        tbody.innerHTML = '';
+        closeReportViewer();
         return;
       }
       bar.classList.add('visible');
       tbody.innerHTML = '';
       savedReports.forEach(function(r, idx) {
         const tr = document.createElement('tr');
-        const doctorName = r.reported_by || (doctorInfo && doctorInfo.full_name) || '-';
-        const reportTime = r.updated_at || getNow();
-        const status = r.status || '-';
+        if (idx === activeReportIdx) tr.classList.add('active');
+        const doctorName = escapeHtml(r.reported_by || (doctorInfo && doctorInfo.full_name) || '-');
+        const reportTime = escapeHtml(r.updated_at || getNow());
+        const status = escapeHtml(r.status || '-');
         const reportFileUrl = r.report_file || '';
-        const dicomId = r.dicom_id || currentPatientId || '';
+        const dicomId = escapeHtml(r.dicom_id || currentPatientId || '');
         let viewReportHtml = '-';
-        if (reportFileUrl) {
-          viewReportHtml = `<a class="report-file-link" href="${reportFileUrl}" target="_blank" onclick="event.stopPropagation()"><span class="word-icon">W</span>${dicomId}</a>`;
+        if (reportFileUrl || r.report_content) {
+          viewReportHtml = `<a class="report-file-link" href="#"><span class="word-icon">W</span>${dicomId}</a>`;
         } else {
           viewReportHtml = `<span style="color:#999;">${dicomId}</span>`;
         }
+        const deleteHtml = (r.id && isOwnReport(r))
+          ? `<button class="delete-report-btn" title="Delete my report" onclick="event.stopPropagation();deleteSavedReport(${idx})">&#10005;</button>`
+          : '<span style="color:#bbb;">-</span>';
         tr.innerHTML = `
           <td>${doctorName}</td>
           <td>${reportTime}</td>
-          <td>${viewReportHtml}</td>
+          <td class="view-report-cell">${viewReportHtml}</td>
           <td>${status}</td>
-          <td><button class="delete-report-btn" title="Remove from list" onclick="event.stopPropagation();removeReportFromList(${idx})">&#10005;</button></td>
+          <td>${deleteHtml}</td>
         `;
-        if (r.report_content) {
-          tr.addEventListener('click', function() {
-            loadReportContentInEditor(r.report_content);
+        const viewCell = tr.querySelector('.view-report-cell');
+        if (viewCell && (reportFileUrl || r.report_content)) {
+          viewCell.addEventListener('click', function(e) {
+            e.preventDefault();
+            openReportViewer(idx);
           });
         }
         tbody.appendChild(tr);
       });
     }
 
-    function removeReportFromList(idx) {
-      savedReports.splice(idx, 1);
-      renderSavedReports();
+    function resolveReportContent(r) {
+      if (r.report_content && r.report_content.trim()) return r.report_content;
+      if (r.report_file) {
+        const twin = savedReports.find(function(o) {
+          return o !== r && o.report_file === r.report_file && o.report_content && o.report_content.trim();
+        });
+        if (twin) return twin.report_content;
+      }
+      return '';
+    }
+
+    function openReportViewer(idx) {
+      const r = savedReports[idx];
+      if (!r) return;
+      activeReportIdx = idx;
+      const table = document.querySelector('.patient-table').cloneNode(true);
+      const timeCell = table.querySelector('#tReportDateTime');
+      if (timeCell) timeCell.textContent = r.updated_at || '-';
+      const examCell = table.querySelector('#tExamDate');
+      if (examCell && r.exam_date) examCell.textContent = r.exam_date;
+      table.querySelectorAll('[id]').forEach(function(el) { el.removeAttribute('id'); });
+      const meta = document.getElementById('reportViewerMeta');
+      meta.innerHTML = `<strong>${escapeHtml(r.reported_by || '-')}</strong>${escapeHtml(r.updated_at || '')}${r.status ? ' &middot; ' + escapeHtml(r.status) : ''}${r.study_description ? ' &middot; ' + escapeHtml(r.study_description) : ''}`;
+      const body = document.getElementById('reportViewerBody');
+      body.innerHTML = '';
+      const title = document.createElement('div');
+      title.className = 'header-title';
+      title.textContent = 'DEPARTMENT OF RADIOLOGY AND IMAGING';
+      body.appendChild(title);
+      body.appendChild(table);
+      const container = document.createElement('div');
+      container.className = 'ql-container ql-snow';
+      const content = document.createElement('div');
+      content.className = 'ql-editor';
+      const reportHtml = resolveReportContent(r);
+      content.innerHTML = reportHtml
+        ? sanitizeReportHtml(reportHtml)
+        : '<p style="color:#777;">No report text was saved for this entry.</p>';
+      container.appendChild(content);
+      body.appendChild(container);
+      if (r.reported_by) {
+        const doc = document.createElement('div');
+        doc.className = 'report-viewer-doctor';
+        doc.textContent = r.reported_by;
+        body.appendChild(doc);
+      }
+      document.getElementById('pageWrapper').style.display = 'none';
+      document.getElementById('reportViewer').classList.add('visible');
+      document.querySelector('.content-area').scrollTop = 0;
+      renderActiveRow();
+    }
+
+    function renderActiveRow() {
+      const rows = document.querySelectorAll('#savedReportsBody tr');
+      rows.forEach(function(tr, i) {
+        tr.classList.toggle('active', i === activeReportIdx);
+      });
+    }
+
+    function closeReportViewer() {
+      activeReportIdx = -1;
+      const viewer = document.getElementById('reportViewer');
+      if (viewer) viewer.classList.remove('visible');
+      const wrapper = document.getElementById('pageWrapper');
+      if (wrapper) wrapper.style.display = '';
+      renderActiveRow();
+    }
+
+    async function deleteSavedReport(idx) {
+      const r = savedReports[idx];
+      if (!r) return;
+      if (!r.id || !isOwnReport(r)) {
+        showMsg('You can only delete your own report', 'error');
+        return;
+      }
+      if (!confirm('Delete this report permanently? This cannot be undone.')) return;
+      try {
+        const res = await fetch(`${baseUrl}/api/delete-report-history/`, {
+          method: 'POST',
+          headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: r.id })
+        });
+        const data = await res.json().catch(function() { return {}; });
+        if (!res.ok || !data.success) {
+          showMsg(data.error || 'Could not delete report', 'error');
+          return;
+        }
+        const wasActive = idx === activeReportIdx;
+        savedReports.splice(idx, 1);
+        if (wasActive) {
+          closeReportViewer();
+        } else if (activeReportIdx > idx) {
+          activeReportIdx -= 1;
+        }
+        renderSavedReports();
+        showMsg('Report deleted', 'success');
+      } catch (e) {
+        console.error('Delete report failed:', e);
+        showMsg('Could not delete report', 'error');
+      }
+    }
+
+    async function refreshSavedReports() {
+      if (!currentPatientId) return;
+      try {
+        const res = await fetch(`${baseUrl}/api/dicom-images/${currentPatientId}/report-history/?scope=patient`, {
+          headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.success || !data.history) return;
+        savedReports = data.history.map(function(entry) {
+          return {
+            id: entry.id || null,
+            reported_by: entry.reported_by || '',
+            updated_at: entry.created_at || '',
+            created_at: entry.created_at || '',
+            status: entry.status || '',
+            report_file: entry.report_file || '',
+            report_content: entry.report_content || '',
+            dicom_id: entry.dicom_id || currentPatientId,
+            exam_date: entry.exam_date || '',
+            study_description: entry.study_description || ''
+          };
+        });
+        activeReportIdx = -1;
+        closeReportViewer();
+        renderSavedReports();
+      } catch (e) {
+        console.error('Could not refresh report list:', e);
+      }
     }
 
     function loadReportContentInEditor(content) {
@@ -627,12 +1009,8 @@
     function scalePaper() {
       const paper = document.getElementById('pageWrapper');
       const viewArea = document.querySelector('.content-area');
-      const availHeight = viewArea.clientHeight - 40;
-      const availWidth = viewArea.clientWidth - 40;
-      const paperHeight = 297 * 3.7795275591;
-      const paperWidth = 320 * 3.7795275591;
-      const scale = Math.min(availHeight / paperHeight, availWidth / paperWidth, 0.95);
-      paper.style.transform = `scale(${scale})`;
+      paper.style.transform = 'none';
+      paper.style.marginBottom = '';
     }
     
     window.addEventListener('resize', () => {
@@ -643,6 +1021,7 @@
     window.addEventListener('load', () => {
       checkScreenSize();
       scalePaper();
+      document.getElementById('reportViewerBack').addEventListener('click', closeReportViewer);
     });
     
     async function checkAccess() {
@@ -702,13 +1081,13 @@
     
     function initQuill() {
       const SizeStyle = Quill.import('attributors/style/size');
-      SizeStyle.whitelist = ['12.3px', '13.9px', '15.4px', '17px', '21.6px', '24.7px', '27.8px'];
+      SizeStyle.whitelist = ['11px', '12px', '13px', '16px', '18px', '20px', '24px', '12.3px', '13.9px', '15.4px', '17px', '21.6px', '24.7px', '27.8px'];
       Quill.register(SizeStyle, true);
       quill = new Quill('#editor', {
         theme: 'snow',
         modules: {
           toolbar: [
-            [{ 'size': ['12.3px', '13.9px', '15.4px', '17px', false, '21.6px', '24.7px', '27.8px'] }],
+            [{ 'size': ['11px', '12px', '13px', false, '16px', '18px', '20px', '24px'] }],
             ['bold', 'italic', 'underline'],
             [{ 'list': 'ordered'}, { 'list': 'bullet' }],
             [{ 'align': '' }, { 'align': 'center' }, { 'align': 'right' }, { 'align': 'justify' }],
@@ -928,23 +1307,44 @@
     let currentViewerLink = "";
     let dataReceived = false;
 
-    async function resolveStudyModality(data) {
-      if (data && data.modality && data.modality.toString().trim()) {
-        return data.modality;
-      }
-      if (!currentPatientId) return '';
+    async function fetchStudyRecord() {
+      if (!currentPatientId) return null;
       try {
         const res = await fetch(`${baseUrl}/api/dicom-images/${currentPatientId}/`, {
           headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
         });
         if (res.ok) {
-          const d = await res.json();
-          return d.modality || '';
+          return await res.json();
         }
       } catch (e) {
-        console.error('Could not resolve modality:', e);
+        console.error('Could not load study record:', e);
       }
-      return '';
+      return null;
+    }
+
+    function isBlank(value) {
+      return value === undefined || value === null || value.toString().trim() === '';
+    }
+
+    async function completeFromRecord(data) {
+      const needsRecord = isBlank(data.modality) || isBlank(data.patientGender) ||
+        isBlank(data.referringPhysician) || isBlank(data.patientName) || isBlank(data.patientId) ||
+        isBlank(data.examDate) || isBlank(data.patientAge) || parseInt(data.patientAge) === 0;
+      if (!needsRecord) return;
+      const record = await fetchStudyRecord();
+      if (!record) return;
+      if (isBlank(data.modality)) data.modality = record.modality || '';
+      if (isBlank(data.patientName)) data.patientName = record.patient_name || '';
+      if (isBlank(data.patientId)) data.patientId = record.patient_id || '';
+      if (isBlank(data.patientGender)) data.patientGender = record.patient_sex || '';
+      if (isBlank(data.referringPhysician)) data.referringPhysician = record.referring_physician || '';
+      if ((isBlank(data.patientAge) || parseInt(data.patientAge) === 0) && record.age) {
+        data.patientAge = String(record.age);
+      }
+      if (isBlank(data.examDate) && record.study_date && String(record.study_date).length >= 8) {
+        const sd = String(record.study_date);
+        data.examDate = `${sd.substring(4, 6)}/${sd.substring(6, 8)}/${sd.substring(0, 4)}`;
+      }
     }
 
     async function handleData(data) {
@@ -960,8 +1360,9 @@
         currentViewerLink = data.viewer_link;
       }
       updatePatientInfo(data);
-      const resolvedModality = await resolveStudyModality(data);
-      applyStudyModalityFilter(resolvedModality);
+      await completeFromRecord(data);
+      updatePatientInfo(data);
+      applyStudyModalityFilter(data.modality || '');
       await loadExistingReport();
     }
 
@@ -969,7 +1370,7 @@
       if (!currentPatientId) return;
       let historyLoaded = false;
       try {
-        const res = await fetch(`${baseUrl}/api/dicom-images/${currentPatientId}/report-history/`, {
+        const res = await fetch(`${baseUrl}/api/dicom-images/${currentPatientId}/report-history/?scope=patient`, {
           headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
         });
         if (res.ok) {
@@ -979,17 +1380,23 @@
             savedReports = [];
             data.history.forEach(function(entry) {
               savedReports.push({
+                id: entry.id || null,
                 reported_by: entry.reported_by || '',
                 updated_at: entry.created_at || '',
+                created_at: entry.created_at || '',
                 status: entry.status || '',
                 report_file: entry.report_file || '',
                 report_content: entry.report_content || '',
-                dicom_id: entry.dicom_id || currentPatientId
+                dicom_id: entry.dicom_id || currentPatientId,
+                exam_date: entry.exam_date || '',
+                study_description: entry.study_description || ''
               });
             });
             renderSavedReports();
-            const latest = data.history[0];
-            if (latest.report_content && latest.report_content.trim()) {
+            const latest = data.history.find(function(e) {
+              return e.report_content && e.report_content.trim();
+            });
+            if (latest) {
               const applyContent = () => {
                 if (quill) {
                   quill.root.innerHTML = latest.report_content;
@@ -1019,6 +1426,7 @@
               savedReports = [{
                 reported_by: reportData.reported_by || '',
                 updated_at: reportData.updated_at || '',
+                created_at: reportData.updated_at || '',
                 status: reportData.status || '',
                 report_file: reportData.report_file || '',
                 report_content: reportData.report_content,
@@ -1213,7 +1621,13 @@
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            patient_data: patientData,
+            patient_data: Object.assign({}, patientData, {
+              patientName: document.getElementById('tName').textContent,
+              patientId: document.getElementById('tId').textContent,
+              patientAge: document.getElementById('hPatientAge').textContent,
+              patientGender: document.getElementById('hPatientSex').textContent,
+              referringPhysician: document.getElementById('tDoctor').textContent
+            }),
             report_content: reportHTML,
             doctor_info: doctorInfo,
             patient_id: currentPatientId,
@@ -1233,6 +1647,7 @@
         
         const fd = new FormData();
         fd.append('file', docxBlob, filename);
+        fd.append('report_content', reportHTML);
         
         console.log('Uploading report to:', `${baseUrl}/api/dicom-images/${currentPatientId}/upload_report/`);
         const upRes = await fetch(`${baseUrl}/api/dicom-images/${currentPatientId}/upload_report/`, {
@@ -1296,6 +1711,7 @@
         } catch (e) {}
 
         addReportToList(savedReportEntry);
+        refreshSavedReports();
         btn.disabled = false;
         reportSubmitting = false;
         

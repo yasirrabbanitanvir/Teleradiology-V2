@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+<meta name="viewport" content="width=1280" />
   <title>Doctor Portal</title>
   <link rel="stylesheet" href="./styles/styles.css" />
   <style>
@@ -160,6 +161,7 @@
       <select id="doctor-name" style="display: none;">
         <option value="">Loading...</option>
       </select>
+      <div class="live-clock" id="live-clock"></div>
     </div>
 
     <section class="search-panel">
@@ -179,6 +181,10 @@
         <select id="center">
           <option value="ALL">All Centers</option>
         </select>
+        <div class="center-search">
+          <input type="text" id="center-search-input" placeholder="All Centers" autocomplete="off" />
+          <div class="center-search-list" id="center-search-list"></div>
+        </div>
         <label>
           <input type="checkbox" id="emergency" />
           Show only Emergency Cases
@@ -208,17 +214,24 @@
           <label><input type="checkbox" class="modality-checkbox" value="MG" checked /> MG</label>
         </div>
       </div>
-      <button onclick="searchPatients()">Search</button>
+      <div class="search-actions">
+        <button onclick="searchPatients()">Search</button>
+      </div>
     </section>
     
     <section class="assign-panel" id="assign-panel" style="display:none;">
-      <select id="assign-doctors" multiple>
+      <label class="assign-search-label" for="assign-doctor-search">Search Doctor/Group:</label>
+    <input type="text" id="assign-doctor-search" placeholder="Search" autocomplete="off" />
+    <select id="assign-doctors" multiple>
         <option disabled>Loading doctors...</option>
       </select>
       <button id="assign-btn">Assign</button>
     </section>
     
     <section class="study-list" id="patient-list" style="display:none;">
+      <div style="padding:6px 8px;background:#4cb85c;">
+      <button id="load-studies-btn" onclick="loadSelectedStudies()" style="background:#f5deb3;color:#000;font-weight:bold;border:1px solid #999;padding:3px 10px;cursor:pointer;">Load Studies</button>
+    </div>
       <table>
         <thead>
           <tr>
@@ -230,9 +243,8 @@
             <th>Sex</th>
             <th>Body Part</th>
             <th>Modality</th>
-            <th>Center</th>
             <th>Institute</th>
-            <th>Scan Date/Time</th>
+            <th>Receive Date/Time</th>
             <th>Refd By</th>
             <th>Status</th>
             <th>Upload Report</th>
@@ -247,10 +259,12 @@
   <footer class="footer">
     <div class="footer-content">
       <div class="footer-left">© 2026 Telesoft. All rights reserved.</div>
-      <div class="footer-right">Developed by Yasir | 01752822254</div>
+      <div class="footer-right">Developed by Telesoft | +8801979797234-9</div>
     </div>
   </footer>
 
+  <script src="./script/seriesPanel.js?v=5"></script>
   <script src="./script/doctor.js"></script>
+  <script src="./script/extraViewers.js"></script>
 </body>
 </html>

@@ -885,6 +885,86 @@ function openEditCenterModal(id) {
   openModal('edit-center-modal');
 }
 
+function openRtfFormatModal() {
+  const id = parseInt(document.getElementById('edit-center-id').value);
+  const center = allCenters.find(c => c.id === id);
+  document.getElementById('rtf-center-id').value = id;
+  document.getElementById('rtf-format-error').style.display = 'none';
+  fillRtfFormat((center && center.report_format) || {});
+  openModal('rtf-format-modal');
+}
+
+function toggleRtfSection(id) {
+  const body = document.getElementById(id);
+  const open = body.classList.toggle('open');
+  document.getElementById(id + '-icon').textContent = open ? '−' : '+';
+}
+
+function fillRtfFormat(fmt) {
+  const val = v => (v === undefined || v === null) ? '' : v;
+  document.getElementById('rtf-top-margin').value = val(fmt.top_margin);
+  document.getElementById('rtf-bottom-margin').value = val(fmt.bottom_margin);
+  document.getElementById('rtf-font-name').value = val(fmt.font_name);
+  document.getElementById('rtf-font-size').value = val(fmt.font_size);
+  ['rtf-margins', 'rtf-fonts'].forEach(id => {
+    document.getElementById(id).classList.remove('open');
+    document.getElementById(id + '-icon').textContent = '+';
+  });
+}
+
+function resetRtfFormat() {
+  fillRtfFormat({});
+}
+
+function collectRtfFormat() {
+  const fmt = {};
+  const top = document.getElementById('rtf-top-margin').value.trim();
+  const bottom = document.getElementById('rtf-bottom-margin').value.trim();
+  const fontName = document.getElementById('rtf-font-name').value;
+  const fontSize = document.getElementById('rtf-font-size').value.trim();
+  if (top !== '') fmt.top_margin = parseFloat(top);
+  if (bottom !== '') fmt.bottom_margin = parseFloat(bottom);
+  if (fontName) fmt.font_name = fontName;
+  if (fontSize !== '') fmt.font_size = parseFloat(fontSize);
+  return fmt;
+}
+
+async function saveRtfFormat() {
+  const id = parseInt(document.getElementById('rtf-center-id').value);
+  const errEl = document.getElementById('rtf-format-error');
+  const fmt = collectRtfFormat();
+
+  for (const key of ['top_margin', 'bottom_margin']) {
+    if (fmt[key] !== undefined && (isNaN(fmt[key]) || fmt[key] < 0 || fmt[key] > 5)) {
+      errEl.textContent = 'Margins must be between 0 and 5 inches.';
+      errEl.style.display = 'inline-flex';
+      return;
+    }
+  }
+  if (fmt.font_size !== undefined && (isNaN(fmt.font_size) || fmt.font_size < 6 || fmt.font_size > 24)) {
+    errEl.textContent = 'Font size must be between 6 and 24.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+
+  const res = await api(`/api/centers/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ report_format: fmt })
+  });
+
+  if (!res.ok) {
+    errEl.textContent = 'Failed to save report format.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+
+  const idx = allCenters.findIndex(c => c.id === id);
+  if (idx !== -1) allCenters[idx].report_format = fmt;
+
+  toast('Report format saved successfully!', 'success');
+  closeModal('rtf-format-modal');
+}
+
 async function updateCenter() {
   const id = document.getElementById('edit-center-id').value;
   const institute_name = document.getElementById('edit-institute-name').value.trim();
@@ -903,14 +983,12 @@ async function updateCenter() {
   const newNames = centerNamesInput.split(',').map(n => n.trim()).filter(n => n);
   const center = allCenters.find(c => c.id === parseInt(id));
   const existingNames = center ? (center.center_names || []) : [];
-  const existingLower = existingNames.map(n => n.toLowerCase());
 
-  const typedLower = new Set();
+  const typedNames = new Set();
   let hasDuplicate = false;
   newNames.forEach(n => {
-    const key = n.toLowerCase();
-    if (typedLower.has(key)) hasDuplicate = true;
-    typedLower.add(key);
+    if (typedNames.has(n)) hasDuplicate = true;
+    typedNames.add(n);
   });
 
   const otherCentersNames = new Set();
@@ -918,8 +996,8 @@ async function updateCenter() {
     if (c.id !== parseInt(id)) (c.center_names || []).forEach(n => otherCentersNames.add(n.toLowerCase()));
   });
 
-  const namesToAdd = newNames.filter(n => !existingLower.includes(n.toLowerCase()));
-  const namesToRemove = existingNames.filter(n => !typedLower.has(n.toLowerCase()));
+  const namesToAdd = [...typedNames].filter(n => !existingNames.includes(n));
+  const namesToRemove = existingNames.filter(n => !typedNames.has(n));
 
   if (hasDuplicate || namesToAdd.some(n => otherCentersNames.has(n.toLowerCase()))) {
     errEl.textContent = 'This center name already exists.';

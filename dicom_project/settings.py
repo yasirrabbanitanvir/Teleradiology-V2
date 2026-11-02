@@ -7,8 +7,6 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-g5n0(vw&*g2)%=
 
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
 
-DEBUG = True
-
 # ALLOWED_HOSTS = ["27.147.180.174", "203.83.165.78", "127.0.0.1", "telesoftbangladesh.net", "www.telesoftbangladesh.net"]
 
 ALLOWED_HOSTS = ['*']
@@ -61,14 +59,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dicom_project.wsgi.application'
 
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
-
 # DATABASES = {
 
 #     'default': {
@@ -87,16 +77,16 @@ DATABASES = {
 # }
 
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': 'TELESOFT',
-#         'USER': 'YASIR',
-#         'PASSWORD': '123',
-#         'HOST': 'localhost',
-#         'PORT': '5432',
-#     }
-# }
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'TELESOFT',
+        'USER': 'YASIR',
+        'PASSWORD': '123',
+        'HOST': 'localhost',
+        'PORT': '5432',
+    }
+}
 
 
 AUTH_PASSWORD_VALIDATORS = []
@@ -111,6 +101,9 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+DICOM_ACCEL_PREFIX = "/protected-media/"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
