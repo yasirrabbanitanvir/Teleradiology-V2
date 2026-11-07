@@ -1649,6 +1649,165 @@ ul { list-style: none; }
   }
 }
 </style>
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+  <style>
+    .rte {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+      margin: 0;
+    }
+    .rte-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+      row-gap: 3px;
+      background: #f0f0f0;
+      padding: 3px 0;
+      min-height: 31px;
+    }
+    .rte-bar select {
+      height: 25px;
+      padding: 0 4px;
+      font: 13px Tahoma, Arial, sans-serif;
+      color: #333333;
+      background: #f7f7f7;
+      border: 1px solid #9a9a9a;
+      border-radius: 0;
+      flex: 0 0 auto;
+    }
+    #rteZoom {
+      width: 66px;
+    }
+    #rteFont {
+      width: 174px;
+      margin-left: 1px;
+    }
+    #rteSize {
+      width: 70px;
+      margin-left: 1px;
+    }
+    #editorToolbar.ql-toolbar.ql-snow {
+      display: flex;
+      align-items: center;
+      margin-left: 11px;
+      padding: 0;
+      border: none;
+      background: none;
+      font-family: Tahoma, Arial, sans-serif;
+    }
+    #editorToolbar.ql-toolbar.ql-snow:after {
+      display: none;
+    }
+    #editorToolbar .rte-grp {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      margin-right: 11px;
+    }
+    #editorToolbar .rte-grp.tight {
+      gap: 0;
+    }
+    #editorToolbar.ql-toolbar.ql-snow button {
+      float: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 25px;
+      height: 25px;
+      padding: 0;
+      color: #000000;
+      background: linear-gradient(#fdfdfd, #e2e2e2);
+      border: 1px solid #a0a0a0;
+      border-radius: 1px;
+      cursor: pointer;
+    }
+    #editorToolbar.ql-toolbar.ql-snow button:hover {
+      background: linear-gradient(#ffffff, #eeeeee);
+      color: #000000;
+    }
+    #editorToolbar.ql-toolbar.ql-snow button.ql-active {
+      background: #cfcfcf;
+      box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.35);
+      color: #000000;
+    }
+    #editorToolbar.ql-toolbar.ql-snow button svg {
+      float: none;
+      width: 16px;
+      height: 14px;
+    }
+    #editorToolbar .gl {
+      font: bold 14px Arial, sans-serif;
+      line-height: 1;
+      color: #000000;
+    }
+    #editorToolbar .gl-i {
+      font: italic bold 15px 'Times New Roman', serif;
+    }
+    #editorToolbar .gl-u {
+      text-decoration: underline;
+    }
+    #editorToolbar .gl-p {
+      font: bold 15px Arial, sans-serif;
+    }
+    .rte-ruler {
+      position: relative;
+      flex-shrink: 0;
+      height: 29px;
+      background: #efefef;
+      border-top: 1px solid #ffffff;
+      border-bottom: 1px solid #c9c9c9;
+    }
+    .rte-ruler:before {
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 5px;
+      width: 1px;
+      height: 17px;
+      background: #f3eab0;
+    }
+    .rte-viewport {
+      flex: 1 1 0;
+      min-height: 300px;
+      max-height: 420px;
+      overflow-y: scroll;
+      overflow-x: auto;
+      background: #d9d9d9;
+      border: 1px solid #555555;
+      border-top: 2px solid #1b1b1b;
+      position: relative;
+    }
+    .rte-sheet {
+      background: #ffffff;
+      margin: 0 6% 0 6.7%;
+      min-height: 400px;
+      box-shadow: -1px 0 0 #7a7a7a, 4px 0 6px rgba(0, 0, 0, 0.55);
+    }
+    #tpl-editor {
+      background: #ffffff;
+      border: none;
+      margin: 0;
+    }
+    #tpl-editor.ql-container.ql-snow {
+      border: none !important;
+      height: auto;
+      font-family: Tahoma, Arial, sans-serif;
+      font-size: 14px;
+    }
+    #tpl-editor .ql-editor {
+      height: auto;
+      min-height: 320px;
+      overflow-y: visible;
+      padding: 16px;
+      font-family: Tahoma, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #000000;
+    }
+  </style>
 </head>
 <body>
 <div class="layout">
@@ -2173,9 +2332,15 @@ ul { list-style: none; }
               <button class="btn btn-primary btn-sm" onclick="openCreateTemplateModal()">
                 + New Template
               </button>
+              <button class="btn btn-secondary btn-sm" onclick="openUploadTemplateModal()">
+                Upload Template
+              </button>
             </div>
           </div>
           <div class="card-body">
+            <div style="margin-bottom: 20px;">
+              <input type="text" id="template-search-input" class="input-text" placeholder="Search by template name, body part or modality..." style="max-width: 400px;" oninput="searchTemplates()" />
+            </div>
             <div class="table-container">
               <table class="table">
                 <thead>
@@ -2191,6 +2356,23 @@ ul { list-style: none; }
                 </thead>
                 <tbody id="templates-table-body"></tbody>
               </table>
+            </div>
+            <div class="pagination-container" id="templates-pagination-container" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info"><span id="templates-pagination-info"></span></div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="templates-items-per-page" onchange="changeTemplatesPerPage()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="templates-pagination-buttons"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2759,7 +2941,68 @@ ul { list-style: none; }
       </div>
       <div class="input-group">
         <label class="input-label">Content</label>
-        <textarea class="input-textarea" id="tpl-content" rows="8" placeholder="Enter template content..."></textarea>
+        <div class="rte">
+<div class="rte-bar">
+              <select id="rteZoom">
+                <option value="50">50%</option>
+                <option value="75">75%</option>
+                <option value="100" selected>100%</option>
+                <option value="125">125%</option>
+                <option value="150">150%</option>
+                <option value="200">200%</option>
+              </select>
+              <select id="rteFont">
+                <option value="Tahoma" selected>Tahoma</option>
+                <option value="Calibri">Calibri</option>
+                <option value="Arial">Arial</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Courier New">Courier New</option>
+              </select>
+              <select id="rteSize">
+                <option value="10.5px">6</option>
+                <option value="12.25px">7</option>
+                <option value="" selected>8</option>
+                <option value="15.75px">9</option>
+                <option value="17.5px">10</option>
+                <option value="19.25px">11</option>
+                <option value="21px">12</option>
+                <option value="24.5px">14</option>
+                <option value="28px">16</option>
+              </select>
+              <div id="editorToolbar">
+                <span class="rte-grp">
+                  <button type="button" class="ql-bold" title="Bold"></button>
+                  <button type="button" class="ql-italic" title="Italic"></button>
+                  <button type="button" class="ql-underline" title="Underline"></button>
+                </span>
+                <span class="rte-grp">
+                  <button type="button" class="ql-align" value="" title="Align Left"></button>
+                  <button type="button" class="ql-align" value="right" title="Align Right"></button>
+                  <button type="button" class="ql-align" value="center" title="Center"></button>
+                  <button type="button" class="ql-align" value="justify" title="Justify"></button>
+                </span>
+                <span class="rte-grp tight">
+                  <button type="button" class="ql-list" value="ordered" title="Numbering"></button>
+                  <button type="button" class="ql-list" value="bullet" title="Bullets"></button>
+                </span>
+                <span class="rte-grp tight">
+                  <button type="button" class="ql-indent" value="+1" title="Increase Indent"></button>
+                  <button type="button" class="ql-indent" value="-1" title="Decrease Indent"></button>
+                </span>
+                <span class="rte-grp">
+                  <button type="button" class="ql-clean" title="Clear Formatting"></button>
+                </span>
+              </div>
+            </div>
+<div class="rte-ruler"></div>
+<div class="rte-viewport" id="editorViewport">
+<div class="rte-sheet" id="editorSheet">
+<div id="tpl-editor"></div>
+</div>
+</div>
+</div>
       </div>
       <div class="input-group">
         <label class="checkbox-label">
@@ -2771,6 +3014,58 @@ ul { list-style: none; }
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('template-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveTemplate()">Save Template</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="tpl-upload-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Upload Template</div>
+      <button class="modal-close" onclick="closeModal('tpl-upload-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="tplu-error"></div>
+      <div class="input-group">
+        <label class="input-label">Doctor</label>
+        <select class="input-text" id="tplu-doctor">
+          <option value="">Select Doctor</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Template File(s)</label>
+        <input type="file" class="input-text" id="tplu-files" multiple accept=".rtf,.sql,.html,.htm,.txt" />
+        <div style="font-size:12px;color:var(--text3);margin-top:6px;">SQL dump of t_templates or RTF / HTML / TXT files.</div>
+      </div>
+      <div class="input-group">
+        <div id="tplu-summary" style="display:none;white-space:pre-line;font-size:12.5px;color:var(--text2);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;max-height:180px;overflow:auto;"></div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Body Part (optional override)</label>
+        <select class="input-text" id="tplu-body-part">
+          <option value="">Auto (from file)</option>
+          <option value="CT TEMPLATES">CT TEMPLATES</option>
+          <option value="MRI TEMPLATES">MRI TEMPLATES</option>
+          <option value="X-RAY TEMPLATES">X-RAY TEMPLATES</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Modality (optional override)</label>
+        <select class="input-text" id="tplu-modality" disabled>
+          <option value="">Auto (from file)</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="checkbox-label">
+          <input type="checkbox" class="checkbox" id="tplu-skip" checked />
+          Skip templates that already exist for this doctor
+        </label>
+      </div>
+      <div id="tplu-progress" style="font-size:12.5px;color:var(--text3);"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('tpl-upload-modal')">Cancel</button>
+      <button class="btn btn-primary" id="tplu-start" onclick="tpluStart()">Upload</button>
     </div>
   </div>
 </div>
@@ -2927,7 +3222,588 @@ ul { list-style: none; }
   </div>
 </div>
 
+<script src="./script/queryBar.js"></script>
 <script src="./script/admin.js"></script>
+<script>
+const TplConv = (function () {
+  const TOK = /\\([a-zA-Z]+)(-?\d+)? ?|\\'([0-9a-fA-F]{2})|\\([^a-zA-Z\r\n])|([{}])|([^\\{}]+)|\\(\r?\n)/g;
+  const SKIP = new Set(['fonttbl','colortbl','stylesheet','listtable','listoverridetable','info','pict','pn','pntext','pnseclvl','header','footer','headerl','headerr','headerf','footerf','footerl','footerr','generator','txfielddef','txfieldstart','txfieldend','txfieldtype','txfieldflags','fldinst','bkmkstart','bkmkend','rsidtbl','themedata','colorschememapping','latentstyles','datastore','xmlnstbl','shpinst','private']);
+  const ALLOWED = { 'tahoma': 'Tahoma', 'calibri': 'Calibri', 'arial': 'Arial', 'times new roman': 'Times New Roman', 'verdana': 'Verdana', 'georgia': 'Georgia', 'courier new': 'Courier New' };
+  const FALLBACK = { 'arial narrow': 'Arial', 'trebuchet ms': 'Verdana', 'comic sans ms': 'Tahoma', 'consolas': 'Courier New', 'baskerville old face': 'Georgia', 'symbol': null, 'times': 'Times New Roman', 'cambria': 'Georgia', 'segoe ui': 'Tahoma', 'microsoft sans serif': 'Arial', 'garamond': 'Georgia', 'book antiqua': 'Georgia', 'bookman old style': 'Georgia', 'lucida console': 'Courier New', 'courier': 'Courier New', 'monotype corsiva': 'Georgia', 'verdana': 'Verdana' };
+  const CP1252_UNDEF = new Set([0x81, 0x8d, 0x8f, 0x90, 0x9d]);
+  let cp1252 = null;
+  try { cp1252 = new TextDecoder('windows-1252'); } catch (e) {}
+
+  function pyRound(x) {
+    const f = Math.floor(x), d = x - f;
+    if (d < 0.5) return f;
+    if (d > 0.5) return f + 1;
+    return f % 2 === 0 ? f : f + 1;
+  }
+  function decodeByte(n) {
+    if (CP1252_UNDEF.has(n)) return '\ufffd';
+    return cp1252 ? cp1252.decode(new Uint8Array([n])) : String.fromCharCode(n);
+  }
+  const mkRun = (t, st) => ({ t, b: st.b, i: st.i, u: st.u, font: st.f, size: st.fs, s: st.strike });
+
+  function parseRtf(src) {
+    const fonts = {}, lists = {}, overrides = {};
+    let m;
+    const rl = /\{\\list\\listtemplateid\d+([\s\S]*?)\\listid(-?\d+)\}/g;
+    while ((m = rl.exec(src))) { const n = /\\levelnfc(\d+)/.exec(m[1]); lists[m[2]] = { nfc: n ? parseInt(n[1], 10) : null }; }
+    const ro = /\{\\listoverride\\listid(-?\d+)[^{}]*?\\ls(\d+)/g;
+    while ((m = ro.exec(src))) overrides[parseInt(m[2], 10)] = m[1];
+
+    let st = { b: 0, i: 0, u: 0, strike: 0, f: null, fs: null, first: false };
+    const stack = [];
+    const pprops = { align: '', li: 0, fi: 0, ls: null, pn: null, ilvl: 0, intbl: false };
+    const newpara = () => ({ runs: [], align: pprops.align, li: pprops.li, fi: pprops.fi, ls: pprops.ls, pn: pprops.pn, ilvl: pprops.ilvl, intbl: pprops.intbl });
+    let cur = newpara(), ucSkip = 0, depthSkip = null, depth = 0;
+    let cells = [], curCell = [];
+    const out = [];
+    let inFonttbl = false, fontCur = null;
+
+    const endPar = () => {
+      if (pprops.intbl || cur.intbl) curCell.push(cur); else out.push(['p', cur]);
+      cur = newpara();
+    };
+
+    TOK.lastIndex = 0;
+    while ((m = TOK.exec(src))) {
+      const cw = m[1], num = m[2], hexc = m[3], sym = m[4], brace = m[5], text = m[6];
+      if (brace === '{') { depth++; stack.push([Object.assign({}, st), ucSkip]); st.first = true; continue; }
+      if (brace === '}') {
+        depth--;
+        if (depthSkip !== null && depth < depthSkip) depthSkip = null;
+        if (stack.length) { const p = stack.pop(); st = p[0]; ucSkip = p[1]; }
+        continue;
+      }
+      const first = st.first; st.first = false;
+      if (depthSkip !== null) {
+        if (cw === 'f' && inFonttbl) { fontCur = parseInt(num, 10); if (!(fontCur in fonts)) fonts[fontCur] = ''; }
+        if (text && inFonttbl && fontCur !== null) fonts[fontCur] += text;
+        continue;
+      }
+      if (cw !== undefined) {
+        if (cw === 'fonttbl') { depthSkip = depth; inFonttbl = true; continue; }
+        if (cw === 'listtable' || cw === 'listoverridetable') { depthSkip = depth; inFonttbl = false; continue; }
+        if (SKIP.has(cw)) { depthSkip = depth; inFonttbl = false; continue; }
+      }
+      if (first && sym === '*') { depthSkip = depth; inFonttbl = false; continue; }
+      if (cw !== undefined) {
+        if (cw === 'par') endPar();
+        else if (cw === 'pard') { Object.assign(pprops, { align: '', li: 0, fi: 0, ls: null, pn: null, ilvl: 0, intbl: false }); cur.align = ''; cur.li = 0; cur.fi = 0; cur.ls = null; cur.pn = null; cur.intbl = false; }
+        else if (cw === 'plain') { st.b = 0; st.i = 0; st.u = 0; st.strike = 0; st.f = null; st.fs = null; }
+        else if (cw === 'b') st.b = num === '0' ? 0 : 1;
+        else if (cw === 'i') st.i = num === '0' ? 0 : 1;
+        else if (cw === 'ul') st.u = num === '0' ? 0 : 1;
+        else if (cw === 'ulnone' || cw === 'ul0') st.u = 0;
+        else if (cw === 'uld' || cw === 'uldb' || cw === 'ulw') st.u = 1;
+        else if (cw === 'strike') st.strike = num === '0' ? 0 : 1;
+        else if (cw === 'f') st.f = parseInt(num, 10);
+        else if (cw === 'fs') st.fs = parseInt(num, 10);
+        else if (cw === 'qc') { pprops.align = cur.align = 'center'; }
+        else if (cw === 'qr') { pprops.align = cur.align = 'right'; }
+        else if (cw === 'qj') { pprops.align = cur.align = 'justify'; }
+        else if (cw === 'ql') { pprops.align = cur.align = ''; }
+        else if (cw === 'li') pprops.li = cur.li = parseInt(num, 10);
+        else if (cw === 'fi') pprops.fi = cur.fi = parseInt(num, 10);
+        else if (cw === 'ls') pprops.ls = cur.ls = parseInt(num, 10);
+        else if (cw === 'ilvl') pprops.ilvl = cur.ilvl = parseInt(num, 10);
+        else if (cw === 'pnlvlblt') pprops.pn = cur.pn = 'bullet';
+        else if (cw === 'pnlvlbody' || cw === 'pndec' || cw === 'pnlvl') pprops.pn = cur.pn = (cur.pn || 'ordered');
+        else if (cw === 'intbl') pprops.intbl = cur.intbl = true;
+        else if (cw === 'trowd') { cells = []; curCell = []; }
+        else if (cw === 'cell') { curCell.push(cur); cur = newpara(); cells.push(curCell); curCell = []; }
+        else if (cw === 'row') { out.push(['row', cells]); cells = []; }
+        else if (cw === 'tab') cur.runs.push(mkRun('\t', st));
+        else if (cw === 'line') cur.runs.push(mkRun('\n', st));
+        else if (cw === 'emdash') cur.runs.push(mkRun('\u2014', st));
+        else if (cw === 'endash') cur.runs.push(mkRun('\u2013', st));
+        else if (cw === 'bullet') cur.runs.push(mkRun('\u2022', st));
+        else if (cw === 'lquote' || cw === 'rquote') cur.runs.push(mkRun("'", st));
+        else if (cw === 'ldblquote' || cw === 'rdblquote') cur.runs.push(mkRun('"', st));
+        else if (cw === 'u') { let n = parseInt(num, 10); if (n < 0) n += 65536; cur.runs.push(mkRun(String.fromCharCode(n), st)); ucSkip = 1; }
+        continue;
+      }
+      if (hexc !== undefined) {
+        if (ucSkip) { ucSkip--; continue; }
+        cur.runs.push(mkRun(decodeByte(parseInt(hexc, 16)), st));
+        continue;
+      }
+      if (sym !== undefined) {
+        let t;
+        if (sym === '~') t = '\u00a0'; else if (sym === '_') t = '-'; else if ('\\{}'.indexOf(sym) >= 0) t = sym; else continue;
+        cur.runs.push(mkRun(t, st));
+        continue;
+      }
+      if (text !== undefined) {
+        let t = text.replace(/\r/g, '').replace(/\n/g, '');
+        if (ucSkip && t) { t = ucSkip <= t.length ? t.slice(ucSkip) : ''; ucSkip = 0; }
+        if (t) cur.runs.push(mkRun(t, st));
+      }
+    }
+    if (cur.runs.length || curCell.length) out.push(['p', cur]);
+    for (const k of Object.keys(fonts)) fonts[k] = fonts[k].replace(/[;\r\n]+/g, '').trim();
+    return { out, fonts, lists, overrides };
+  }
+
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const paraText = p => p.runs.map(r => r.t).join('');
+  const indentLevel = li => li > 0 ? Math.max(0, Math.min(8, pyRound(li / 720))) : 0;
+  const pyStrip = s => s.replace(/^[\s\u00a0]+|[\s\u00a0]+$/g, '');
+  const pyRstrip = s => s.replace(/[\s\u00a0]+$/, '');
+
+  function fontFor(idx, fonts, deff, flags) {
+    if (idx === null || idx === undefined) idx = deff;
+    const name = fonts[idx] || '', low = name.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(ALLOWED, low)) return ALLOWED[low] !== 'Tahoma' ? ALLOWED[low] : null;
+    if (Object.prototype.hasOwnProperty.call(FALLBACK, low)) { flags.fonts = true; return FALLBACK[low]; }
+    if (name) flags.fonts = true;
+    return null;
+  }
+
+  function runHtml(r, fonts, deff, flags) {
+    let t = r.t;
+    t = t.replace(/\uf0b7/g, '\u2022').replace(/\uf0a7/g, '\u25aa').replace(/\uf0fc/g, '\u2713');
+    if (t === '') return '';
+    let txt = esc(t).replace(/\u00a0/g, '&nbsp;').replace(/\n/g, '');
+    if (!txt) return '';
+    const fnt = fontFor(r.font, fonts, deff, flags);
+    let s = txt;
+    if (fnt) s = '<span style="font-family: ' + fnt + ';">' + s + '</span>';
+    if (r.s) s = '<s>' + s + '</s>';
+    if (r.u) s = '<u>' + s + '</u>';
+    if (r.i) s = '<em>' + s + '</em>';
+    if (r.b) s = '<strong>' + s + '</strong>';
+    return s;
+  }
+  function merge(runs) {
+    const out = [];
+    for (const r of runs) {
+      const l = out[out.length - 1];
+      if (l && l.b === r.b && l.i === r.i && l.u === r.u && l.s === r.s && l.font === r.font && l.size === r.size) l.t += r.t;
+      else out.push(Object.assign({}, r));
+    }
+    return out;
+  }
+  const inner = (runs, fonts, deff, flags) => merge(runs).map(r => runHtml(r, fonts, deff, flags)).join('');
+
+  function block(p, fonts, deff, flags) {
+    const txt = paraText(p), lvl = indentLevel(p.li), cls = [];
+    if (p.align) cls.push('ql-align-' + p.align);
+    if (lvl) cls.push('ql-indent-' + lvl);
+    if (!txt.replace(/^[\r\n]+|[\r\n]+$/g, '')) { if (txt === '') return '<p><br></p>'; }
+    const c = cls.length ? ' class="' + cls.join(' ') + '"' : '';
+    return '<p' + c + '>' + inner(p.runs, fonts, deff, flags) + '</p>';
+  }
+
+  function tableRows(rows, fonts, deff) {
+    const res = [], mats = [];
+    for (const cells of rows) {
+      const cols = [];
+      for (const c of cells) {
+        const ps = c.slice();
+        while (ps.length > 1 && !pyStrip(paraText(ps[ps.length - 1]))) ps.pop();
+        cols.push(ps.length ? ps : [{ runs: [], align: '', li: 0, fi: 0, ls: null, pn: null, ilvl: 0, intbl: true }]);
+      }
+      mats.push([cols, cols.length ? Math.max.apply(null, cols.map(c => c.length)) : 1]);
+    }
+    const ncol = mats.reduce((a, x) => Math.max(a, x[0].length), 0);
+    const maxlen = new Array(ncol).fill(0);
+    for (const [cols] of mats) cols.forEach((c, j) => c.forEach(p => { maxlen[j] = Math.max(maxlen[j], pyStrip(paraText(p)).length); }));
+    for (const [cols, n] of mats) {
+      for (let k = 0; k < n; k++) {
+        let parts = [];
+        cols.forEach((c, j) => {
+          const p = k < c.length ? c[k] : null;
+          let runs = (p ? p.runs : []).map(r => Object.assign({}, r, { t: r.t.replace(/^[\r\n]+|[\r\n]+$/g, '') }));
+          const L = pyRstrip(runs.map(r => r.t).join('')).length;
+          while (runs.length && pyStrip(runs[runs.length - 1].t) === '') runs.pop();
+          if (runs.length) runs[runs.length - 1] = Object.assign({}, runs[runs.length - 1], { t: pyRstrip(runs[runs.length - 1].t) });
+          if (j < cols.length - 1) {
+            let tabs = Math.floor(maxlen[j] / 4) - Math.floor(L / 4) + 1;
+            if (L === 0 && maxlen[j] === 0) tabs = 1;
+            runs = runs.concat([{ t: '\t'.repeat(Math.max(0, tabs)), b: 0, i: 0, u: 0, font: null, size: null, s: 0 }]);
+          }
+          parts = parts.concat(runs);
+        });
+        const all = pyStrip(parts.map(r => r.t).join('').replace(/\t/g, ''));
+        if (!all) res.push(['blank', null]);
+        else res.push(['p', { runs: parts, align: '', li: 0, fi: 0, ls: null, pn: null, ilvl: 0, intbl: false }]);
+      }
+    }
+    return res;
+  }
+
+  function convertRtf(rtf) {
+    const flags = { tables: false, fonts: false, image: /\\pict\b/.test(rtf) };
+    const dm = /\\deff(\d+)/.exec(rtf), deff = dm ? parseInt(dm[1], 10) : 0;
+    const { out, fonts, lists, overrides } = parseRtf(rtf);
+    let items = [], i = 0;
+    while (i < out.length) {
+      if (out[i][0] === 'row') {
+        let j = i; while (j < out.length && out[j][0] === 'row') j++;
+        flags.tables = true;
+        items = items.concat(tableRows(out.slice(i, j).map(x => x[1]), fonts, deff));
+        i = j;
+      } else { items.push(['p', out[i][1]]); i++; }
+    }
+    while (items.length) {
+      const l = items[items.length - 1];
+      if (l[0] === 'blank' || (l[0] === 'p' && !pyStrip(paraText(l[1])))) items.pop(); else break;
+    }
+    const parts = []; let curList = null;
+    const closeList = () => { if (curList) { parts.push('<' + curList[0] + '>' + curList[1].join('') + '</' + curList[0] + '>'); curList = null; } };
+    const listType = p => {
+      if (p.pn === 'bullet') return 'ul';
+      if (p.pn === 'ordered') return 'ol';
+      if (p.ls !== null) {
+        const lid = overrides[p.ls];
+        const nfc = lid !== undefined && lists[lid] ? lists[lid].nfc : null;
+        return nfc === 0 ? 'ol' : 'ul';
+      }
+      return null;
+    };
+    for (const [k, p] of items) {
+      if (k === 'blank') { closeList(); parts.push('<p><br></p>'); continue; }
+      const lt = listType(p);
+      if (lt && pyStrip(paraText(p))) {
+        const lvl = Math.max(0, indentLevel(p.li) - 1);
+        let c = lvl ? ' class="ql-indent-' + lvl + '"' : '';
+        if (p.align) c = lvl ? ' class="ql-indent-' + lvl + ' ql-align-' + p.align + '"' : ' class="ql-align-' + p.align + '"';
+        const li = '<li' + c + '>' + inner(p.runs, fonts, deff, flags) + '</li>';
+        if (curList && curList[0] === lt) curList[1].push(li); else { closeList(); curList = [lt, [li]]; }
+        continue;
+      }
+      closeList();
+      parts.push(block(p, fonts, deff, flags));
+    }
+    closeList();
+    return { html: parts.join(''), flags };
+  }
+
+  const textOf = h => h.replace(/<br>/g, '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\s+/g, '');
+
+  function toQuill(content) {
+    const c = content.replace(/^\ufeff/, '');
+    const notes = [];
+    if (/^\s*\{\\rtf/.test(c)) {
+      const r = convertRtf(c);
+      if (r.flags.tables) notes.push('table converted to tab layout');
+      if (r.flags.fonts) notes.push('font substituted');
+      if (r.flags.image) notes.push('image dropped');
+      if (!textOf(r.html)) return { html: '', notes: ['empty'] };
+      return { html: r.html, notes };
+    }
+    if (/<(p|br|strong|b|u|i|em|ul|ol|li|div|font)\b/i.test(c)) return { html: c.trim(), notes: [] };
+    const html = c.split(/\r?\n/).map(l => '<p>' + (l.trim() ? esc(l) : '<br>') + '</p>').join('');
+    return { html, notes: [] };
+  }
+
+  function parseSql(text) {
+    const out = [], re = /INSERT INTO `t_templates` \([^)]*\) VALUES /g;
+    const ESC = { n: '\n', r: '\r', t: '\t', '0': '\0', Z: '\x1a', b: '\b' };
+    let m;
+    while ((m = re.exec(text))) {
+      let pos = m.index + m[0].length;
+      for (;;) {
+        if (text[pos] !== '(') break;
+        pos++;
+        const vals = [];
+        for (;;) {
+          while (' \n\r\t'.indexOf(text[pos]) >= 0) pos++;
+          if (text[pos] === "'") {
+            pos++;
+            const buf = [];
+            for (;;) {
+              const ch = text[pos];
+              if (ch === '\\') { const nx = text[pos + 1]; buf.push(Object.prototype.hasOwnProperty.call(ESC, nx) ? ESC[nx] : nx); pos += 2; }
+              else if (ch === "'") { if (text[pos + 1] === "'") { buf.push("'"); pos += 2; } else { pos++; break; } }
+              else { buf.push(ch); pos++; }
+            }
+            vals.push(buf.join(''));
+          } else {
+            const mm = /[^,)\s]+/y; mm.lastIndex = pos; const r = mm.exec(text); vals.push(r[0].toUpperCase() === 'NULL' ? null : r[0]); pos = mm.lastIndex;
+          }
+          while (' \n\r\t'.indexOf(text[pos]) >= 0) pos++;
+          if (text[pos] === ',') { pos++; continue; }
+          if (text[pos] === ')') { pos++; break; }
+        }
+        out.push({ name: (vals[0] || '').trim(), content: vals[1] || '', node: vals[6] || '' });
+        while (' \n\r\t'.indexOf(text[pos]) >= 0) pos++;
+        if (text[pos] === ',') { pos++; while (' \n\r\t'.indexOf(text[pos]) >= 0) pos++; continue; }
+        break;
+      }
+    }
+    return out;
+  }
+
+  const RF_RE = /barium|cystogram|\bmcu\b|\brgu\b|urethrogram|sinogram|fistulogram|enema|swallow|\bmeal\b|follow\s*thr|arthrogram|myelogram|t-?tube|cholangio|sialo|dacryo|hysterosalp|micturating|loopogram|nephrostogram/i;
+  const MG_RE = /mammo|breast|\bmg\b/i;
+  const PX_RE = /\bopg\b|panoram|dental|orthopan/i;
+
+  function classify(name, node) {
+    if (node === '1') return { body_part: 'CT TEMPLATES', modality: 'CT' };
+    if (node === '2') return { body_part: 'MRI TEMPLATES', modality: 'MR' };
+    if (!node) {
+      if (/\bMRI?\b|\bMRCP\b/i.test(name)) return { body_part: 'MRI TEMPLATES', modality: 'MR' };
+      if (/\b(CT|HRCT|NECT|CECT)\b/i.test(name)) return { body_part: 'CT TEMPLATES', modality: 'CT' };
+    }
+    const x = 'X-RAY TEMPLATES';
+    if (MG_RE.test(name)) return { body_part: x, modality: 'MG' };
+    if (PX_RE.test(name)) return { body_part: x, modality: 'PX' };
+    if (RF_RE.test(name)) return { body_part: x, modality: 'RF' };
+    return { body_part: x, modality: 'CR' };
+  }
+
+  return { toQuill, parseSql, classify };
+})();
+
+const tpluState = { items: [], busy: false };
+
+function tpluEl(id) { return document.getElementById(id); }
+
+function tpluShowError(msg) {
+  const el = tpluEl('tplu-error');
+  if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.textContent = msg;
+  el.style.display = 'inline-flex';
+}
+
+function tpluEffective(item) {
+  const bp = tpluEl('tplu-body-part').value;
+  const mo = tpluEl('tplu-modality').value;
+  if (bp && mo) return { body_part: bp, modality: mo };
+  return { body_part: item.body_part, modality: item.modality };
+}
+
+function tpluFillModalities() {
+  const bp = tpluEl('tplu-body-part').value;
+  const sel = tpluEl('tplu-modality');
+  const options = (typeof TEMPLATE_MODALITY_OPTIONS !== 'undefined' && TEMPLATE_MODALITY_OPTIONS[bp]) || [];
+  if (!bp || !options.length) {
+    sel.innerHTML = '<option value="">Auto (from file)</option>';
+    sel.disabled = true;
+  } else {
+    sel.disabled = false;
+    sel.innerHTML = '<option value="">Select Modality</option>' + options.map(m => '<option value="' + m + '">' + m + '</option>').join('');
+  }
+  tpluRenderSummary();
+}
+
+async function tpluLoadDoctors() {
+  const sel = tpluEl('tplu-doctor');
+  let users = (typeof allUsers !== 'undefined' && allUsers && allUsers.length) ? allUsers : null;
+  if (!users) {
+    try {
+      const res = await api('/api/users/');
+      if (res.ok) users = await res.json();
+    } catch (e) {}
+  }
+  const doctors = (users || [])
+    .filter(u => u.userprofile && u.userprofile.role_name === 'Doctor' && u.is_active !== false)
+    .map(u => ({ username: u.username, label: ((u.userprofile.full_name || u.username) + ' (' + u.username + ')') }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  sel.innerHTML = '<option value="">Select Doctor</option><option value="__shared__">Admin (shared with all doctors)</option>';
+  doctors.forEach(d => {
+    const o = document.createElement('option');
+    o.value = d.username;
+    o.textContent = d.label;
+    sel.appendChild(o);
+  });
+}
+
+function tpluRenderSummary() {
+  const box = tpluEl('tplu-summary');
+  const items = tpluState.items;
+  if (!items.length) { box.style.display = 'none'; box.textContent = ''; return; }
+  const groups = {};
+  items.forEach(i => { const e = tpluEffective(i); const k = e.body_part + ' / ' + e.modality; groups[k] = (groups[k] || 0) + 1; });
+  let text = items.length + ' template' + (items.length === 1 ? '' : 's') + ' ready to upload.\n' +
+    Object.keys(groups).sort().map(k => '• ' + k + ': ' + groups[k]).join('\n');
+  const noted = items.filter(i => i.notes.length);
+  if (noted.length) {
+    text += '\n\nNotes (' + noted.length + '):\n' + noted.slice(0, 8).map(i => '• ' + i.name + ' – ' + i.notes.join(', ')).join('\n');
+    if (noted.length > 8) text += '\n• …and ' + (noted.length - 8) + ' more';
+  }
+  box.textContent = text;
+  box.style.display = 'block';
+}
+
+async function tpluReadFile(file) {
+  const buf = await file.arrayBuffer();
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch (e) { return new TextDecoder('windows-1252').decode(buf); }
+}
+
+async function tpluOnFiles() {
+  tpluShowError('');
+  tpluState.items = [];
+  tpluRenderSummary();
+  const files = Array.from(tpluEl('tplu-files').files || []);
+  if (!files.length) return;
+  const items = [];
+  const skipped = [];
+  for (const f of files) {
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    let text;
+    try { text = await tpluReadFile(f); } catch (e) { skipped.push(f.name); continue; }
+    if (ext === 'sql') {
+      TplConv.parseSql(text).forEach(r => {
+        const o = TplConv.toQuill(r.content);
+        if (o.html && r.name) {
+          const c = TplConv.classify(r.name, r.node);
+          items.push({ name: r.name.slice(0, 200), html: o.html, notes: o.notes, body_part: c.body_part, modality: c.modality });
+        } else skipped.push(r.name || f.name);
+      });
+    } else if (['rtf', 'html', 'htm', 'txt'].includes(ext)) {
+      const name = f.name.replace(/\.[^.]+$/, '').trim().slice(0, 200);
+      const o = TplConv.toQuill(text);
+      if (o.html && name) {
+        const c = TplConv.classify(name, '');
+        items.push({ name, html: o.html, notes: o.notes, body_part: c.body_part, modality: c.modality });
+      } else skipped.push(f.name);
+    } else {
+      skipped.push(f.name);
+    }
+  }
+  tpluState.items = items;
+  tpluRenderSummary();
+  if (skipped.length) tpluShowError('Skipped (unsupported or empty): ' + skipped.slice(0, 5).join(', ') + (skipped.length > 5 ? ' …' : ''));
+}
+
+function openUploadTemplateModal() {
+  tpluState.items = [];
+  tpluEl('tplu-body-part').value = '';
+  tpluFillModalities();
+  tpluEl('tplu-files').value = '';
+  tpluEl('tplu-skip').checked = true;
+  tpluEl('tplu-progress').textContent = '';
+  tpluEl('tplu-start').disabled = false;
+  tpluShowError('');
+  tpluRenderSummary();
+  tpluLoadDoctors();
+  openModal('tpl-upload-modal');
+}
+
+async function tpluFetchExisting() {
+  const keys = new Set();
+  let page = 1, total = 1;
+  while (page <= total) {
+    const res = await api('/api/manage-templates/?page_size=200&page=' + page);
+    if (!res.ok) throw new Error('Could not check existing templates.');
+    const data = await res.json();
+    (data.templates || []).forEach(t => {
+      const owner = t.is_admin_template ? '__shared__' : (t.created_by_username || '__shared__');
+      keys.add([owner, t.body_part, t.modality, (t.template_name || '').trim()].join('|'));
+    });
+    total = data.total_pages || 1;
+    page++;
+  }
+  return keys;
+}
+
+async function tpluStart() {
+  if (tpluState.busy) return;
+  tpluShowError('');
+  const doctor = tpluEl('tplu-doctor').value;
+  const bodyPart = tpluEl('tplu-body-part').value;
+  const modality = tpluEl('tplu-modality').value;
+  if (!doctor) { tpluShowError('Please select a doctor.'); return; }
+  if (bodyPart && !modality) { tpluShowError('Please select a modality, or set Body Part back to Auto.'); return; }
+  if (!tpluState.items.length) { tpluShowError('Please choose at least one template file.'); return; }
+  const owner = doctor === '__shared__' ? '' : doctor;
+  const ownerKey = owner || '__shared__';
+  const startBtn = tpluEl('tplu-start');
+  const progress = tpluEl('tplu-progress');
+  tpluState.busy = true;
+  startBtn.disabled = true;
+  let todo = tpluState.items.map(i => Object.assign({}, i, tpluEffective(i)));
+  let skippedExisting = 0;
+  try {
+    if (tpluEl('tplu-skip').checked) {
+      progress.textContent = 'Checking existing templates…';
+      const existing = await tpluFetchExisting();
+      todo = todo.filter(i => {
+        if (existing.has([ownerKey, i.body_part, i.modality, i.name.trim()].join('|'))) { skippedExisting++; return false; }
+        return true;
+      });
+    }
+  } catch (e) {
+    tpluShowError(e.message || 'Failed to check existing templates.');
+    tpluState.busy = false; startBtn.disabled = false; progress.textContent = '';
+    return;
+  }
+  if (!todo.length) {
+    progress.textContent = '';
+    tpluShowError('Nothing to upload: all ' + skippedExisting + ' template(s) already exist for this doctor.');
+    tpluState.busy = false; startBtn.disabled = false;
+    return;
+  }
+  let done = 0, failed = 0;
+  const errors = [];
+  let abort = false;
+  const send = async item => {
+    const payload = { body_part: item.body_part, modality: item.modality, template_name: item.name, content: item.html, is_active: true };
+    if (owner) payload.created_by_username = owner;
+    const res = await api('/api/manage-templates/', { method: 'POST', body: JSON.stringify(payload) });
+    let data = {};
+    try { data = await res.json(); } catch (e) {}
+    return { res, data };
+  };
+  const update = () => { progress.textContent = 'Uploading… ' + (done + failed) + ' / ' + todo.length + (failed ? ' (' + failed + ' failed)' : ''); };
+  update();
+  try {
+    const firstResult = await send(todo[0]);
+    if (!firstResult.res.ok) {
+      failed++; errors.push(todo[0].name + ': ' + (firstResult.data.error || firstResult.data.detail || firstResult.res.status));
+    } else {
+      done++;
+      const created = firstResult.data.template || {};
+      if (owner && created.created_by_username !== owner) {
+        if (created.id) { try { await api('/api/manage-templates/', { method: 'DELETE', body: JSON.stringify({ id: created.id }) }); } catch (e) {} }
+        abort = true;
+        done--;
+        errors.push('The server did not assign the template to the selected doctor. Upload stopped.');
+      }
+    }
+    update();
+    if (!abort) {
+      let idx = 1;
+      const worker = async () => {
+        while (idx < todo.length) {
+          const item = todo[idx++];
+          try {
+            const r = await send(item);
+            if (r.res.ok) done++;
+            else { failed++; if (errors.length < 5) errors.push(item.name + ': ' + (r.data.error || r.data.detail || r.res.status)); }
+          } catch (e) { failed++; if (errors.length < 5) errors.push(item.name + ': network error'); }
+          update();
+        }
+      };
+      await Promise.all([worker(), worker(), worker(), worker()]);
+    }
+  } catch (e) {
+    errors.push(e.message || 'Upload failed.');
+  }
+  tpluState.busy = false;
+  startBtn.disabled = false;
+  progress.textContent = '';
+  if (done) { loadTemplates(); loadDashboard(); }
+  const summary = done + ' uploaded' + (skippedExisting ? ', ' + skippedExisting + ' already existed' : '') + (failed ? ', ' + failed + ' failed' : '') + '.';
+  if (errors.length) {
+    tpluShowError(summary + ' ' + errors.slice(0, 3).join(' | '));
+  } else {
+    toast(summary, 'success');
+    closeModal('tpl-upload-modal');
+  }
+}
+
+document.getElementById('tplu-body-part').addEventListener('change', tpluFillModalities);
+document.getElementById('tplu-modality').addEventListener('change', tpluRenderSummary);
+document.getElementById('tplu-files').addEventListener('change', tpluOnFiles);
+</script>
 
 </body>
 </html>

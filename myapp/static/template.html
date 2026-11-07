@@ -246,17 +246,159 @@
       font-size: 14px;
     }
 
-    #editor-box {
-      border: 1px solid #ccc;
-      border-radius: 3px;
+    .rte {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+      margin: 0;
     }
-
-    .ql-container {
+    .rte-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+      row-gap: 3px;
+      background: #f0f0f0;
+      padding: 3px 0;
+      min-height: 31px;
+    }
+    .rte-bar select {
+      height: 25px;
+      padding: 0 4px;
+      font: 13px Tahoma, Arial, sans-serif;
+      color: #333333;
+      background: #f7f7f7;
+      border: 1px solid #9a9a9a;
+      border-radius: 0;
+      flex: 0 0 auto;
+    }
+    #rteZoom {
+      width: 66px;
+    }
+    #rteFont {
+      width: 174px;
+      margin-left: 1px;
+    }
+    #rteSize {
+      width: 70px;
+      margin-left: 1px;
+    }
+    #editorToolbar.ql-toolbar.ql-snow {
+      display: flex;
+      align-items: center;
+      margin-left: 11px;
+      padding: 0;
+      border: none;
+      background: none;
+      font-family: Tahoma, Arial, sans-serif;
+    }
+    #editorToolbar.ql-toolbar.ql-snow:after {
+      display: none;
+    }
+    #editorToolbar .rte-grp {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      margin-right: 11px;
+    }
+    #editorToolbar .rte-grp.tight {
+      gap: 0;
+    }
+    #editorToolbar.ql-toolbar.ql-snow button {
+      float: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 25px;
+      height: 25px;
+      padding: 0;
+      color: #000000;
+      background: linear-gradient(#fdfdfd, #e2e2e2);
+      border: 1px solid #a0a0a0;
+      border-radius: 1px;
+      cursor: pointer;
+    }
+    #editorToolbar.ql-toolbar.ql-snow button:hover {
+      background: linear-gradient(#ffffff, #eeeeee);
+      color: #000000;
+    }
+    #editorToolbar.ql-toolbar.ql-snow button.ql-active {
+      background: #cfcfcf;
+      box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.35);
+      color: #000000;
+    }
+    #editorToolbar.ql-toolbar.ql-snow button svg {
+      float: none;
+      width: 16px;
+      height: 14px;
+    }
+    #editorToolbar .gl {
+      font: bold 14px Arial, sans-serif;
+      line-height: 1;
+      color: #000000;
+    }
+    #editorToolbar .gl-i {
+      font: italic bold 15px 'Times New Roman', serif;
+    }
+    #editorToolbar .gl-u {
+      text-decoration: underline;
+    }
+    #editorToolbar .gl-p {
+      font: bold 15px Arial, sans-serif;
+    }
+    .rte-ruler {
+      position: relative;
+      flex-shrink: 0;
+      height: 29px;
+      background: #efefef;
+      border-top: 1px solid #ffffff;
+      border-bottom: 1px solid #c9c9c9;
+    }
+    .rte-ruler:before {
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 5px;
+      width: 1px;
+      height: 17px;
+      background: #f3eab0;
+    }
+    .rte-viewport {
+      flex: 1 1 0;
+      min-height: 300px;
+      overflow-y: scroll;
+      overflow-x: auto;
+      background: #d9d9d9;
+      border: 1px solid #555555;
+      border-top: 2px solid #1b1b1b;
+      position: relative;
+    }
+    .rte-sheet {
+      background: #ffffff;
+      margin: 0 6% 0 6.7%;
+      min-height: 1100px;
+      box-shadow: -1px 0 0 #7a7a7a, 4px 0 6px rgba(0, 0, 0, 0.55);
+    }
+    #editor-box {
+      background: #ffffff;
+      border: none;
+      margin: 0;
+    }
+    #editor-box.ql-container.ql-snow {
+      border: none !important;
+      height: auto;
+      font-family: Tahoma, Arial, sans-serif;
       font-size: 14px;
     }
-
-    .ql-editor {
-      min-height: 250px;
+    #editor-box .ql-editor {
+      height: auto;
+      min-height: 320px;
+      overflow-y: visible;
+      padding: 16px;
+      font-family: Tahoma, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #000000;
     }
 
     .modal-footer {
@@ -502,7 +644,68 @@
 
           <div class="field">
             <label>Content *</label>
-            <div id="editor-box"></div>
+            <div class="rte">
+<div class="rte-bar">
+              <select id="rteZoom">
+                <option value="50">50%</option>
+                <option value="75">75%</option>
+                <option value="100" selected>100%</option>
+                <option value="125">125%</option>
+                <option value="150">150%</option>
+                <option value="200">200%</option>
+              </select>
+              <select id="rteFont">
+                <option value="Tahoma" selected>Tahoma</option>
+                <option value="Calibri">Calibri</option>
+                <option value="Arial">Arial</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Courier New">Courier New</option>
+              </select>
+              <select id="rteSize">
+                <option value="10.5px">6</option>
+                <option value="12.25px">7</option>
+                <option value="" selected>8</option>
+                <option value="15.75px">9</option>
+                <option value="17.5px">10</option>
+                <option value="19.25px">11</option>
+                <option value="21px">12</option>
+                <option value="24.5px">14</option>
+                <option value="28px">16</option>
+              </select>
+              <div id="editorToolbar">
+                <span class="rte-grp">
+                  <button type="button" class="ql-bold" title="Bold"></button>
+                  <button type="button" class="ql-italic" title="Italic"></button>
+                  <button type="button" class="ql-underline" title="Underline"></button>
+                </span>
+                <span class="rte-grp">
+                  <button type="button" class="ql-align" value="" title="Align Left"></button>
+                  <button type="button" class="ql-align" value="right" title="Align Right"></button>
+                  <button type="button" class="ql-align" value="center" title="Center"></button>
+                  <button type="button" class="ql-align" value="justify" title="Justify"></button>
+                </span>
+                <span class="rte-grp tight">
+                  <button type="button" class="ql-list" value="ordered" title="Numbering"></button>
+                  <button type="button" class="ql-list" value="bullet" title="Bullets"></button>
+                </span>
+                <span class="rte-grp tight">
+                  <button type="button" class="ql-indent" value="+1" title="Increase Indent"></button>
+                  <button type="button" class="ql-indent" value="-1" title="Decrease Indent"></button>
+                </span>
+                <span class="rte-grp">
+                  <button type="button" class="ql-clean" title="Clear Formatting"></button>
+                </span>
+              </div>
+            </div>
+<div class="rte-ruler"></div>
+<div class="rte-viewport" id="editorViewport">
+<div class="rte-sheet" id="editorSheet">
+<div id="editor-box"></div>
+</div>
+</div>
+</div>
           </div>
 
           <div class="field">
@@ -813,17 +1016,72 @@
       document.getElementById('modal').classList.remove('show');
     }
 
+    function setSelectValue(id, value, fallback) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const has = Array.from(el.options).some(function(o) { return o.value === value; });
+      el.value = has ? value : fallback;
+    }
+
+    function syncFormatControls(range) {
+      if (!editor || !range) return;
+      const f = editor.getFormat(range);
+      setSelectValue('rteFont', f.font || 'Tahoma', 'Tahoma');
+      setSelectValue('rteSize', f.size || '', '');
+    }
+
     function initEditor() {
       if (editor) return;
+      const SizeStyle = Quill.import('attributors/style/size');
+      SizeStyle.whitelist = ['10.5px', '11px', '12px', '12.25px', '13px', '15.75px', '16px', '17.5px', '18px', '19.25px', '20px', '21px', '24px', '24.5px', '28px', '12.3px', '13.9px', '15.4px', '17px', '21.6px', '24.7px', '27.8px'];
+      Quill.register(SizeStyle, true);
+      const FontStyle = Quill.import('attributors/style/font');
+      FontStyle.whitelist = ['Tahoma', 'Calibri', 'Arial', 'Times New Roman', 'Verdana', 'Georgia', 'Courier New'];
+      Quill.register(FontStyle, true);
+
+      const svg = function(body) {
+        return '<svg viewBox="0 0 16 14" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#222" stroke-width="1.4" shape-rendering="crispEdges">' + body + '</svg>';
+      };
+      const icons = Quill.import('ui/icons');
+      icons['bold'] = '<span class="gl">B</span>';
+      icons['italic'] = '<span class="gl gl-i">I</span>';
+      icons['underline'] = '<span class="gl gl-u">U</span>';
+      icons['align'] = {
+        '': svg('<path d="M2 2.5h12M2 5.5h8M2 8.5h12M2 11.5h8"/>'),
+        'right': svg('<path d="M2 2.5h12M6 5.5h8M2 8.5h12M6 11.5h8"/>'),
+        'center': svg('<path d="M2 2.5h12M4 5.5h8M2 8.5h12M4 11.5h8"/>'),
+        'justify': svg('<path d="M2 2.5h12M2 5.5h12M2 8.5h12M2 11.5h12"/>')
+      };
+      icons['list'] = {
+        'ordered': svg('<text x="0" y="4" font-size="4.5" fill="#222" stroke="none">1</text><text x="0" y="8" font-size="4.5" fill="#222" stroke="none">2</text><text x="0" y="12" font-size="4.5" fill="#222" stroke="none">3</text><path d="M5 2.5h10M5 6.5h10M5 10.5h10"/>'),
+        'bullet': svg('<rect x="1" y="1.5" width="2" height="2" fill="#222" stroke="none"/><rect x="1" y="5.5" width="2" height="2" fill="#222" stroke="none"/><rect x="1" y="9.5" width="2" height="2" fill="#222" stroke="none"/><path d="M5 2.5h10M5 6.5h10M5 10.5h10"/>')
+      };
+      icons['indent'] = {
+        '+1': '<span class="gl gl-p">&para;</span>',
+        '-1': svg('<path d="M2 2.5h12M7 5.5h7M7 8.5h7M2 11.5h12"/><path d="M5 4.5l-3 2 3 2z" fill="#222"/>')
+      };
+      icons['clean'] = svg('<rect x="1.5" y="1.5" width="13" height="11"/><path d="M5 4v5h5" stroke-width="1.8"/>');
+
       editor = new Quill('#editor-box', {
         theme: 'snow',
+        scrollingContainer: '#editorViewport',
         modules: {
-          toolbar: [
-            ['bold', 'italic', 'underline'],
-            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-            ['clean']
-          ]
+          toolbar: '#editorToolbar'
         }
+      });
+      document.getElementById('rteZoom').addEventListener('change', function() {
+        document.getElementById('editorSheet').style.zoom = parseInt(this.value, 10) / 100;
+      });
+      document.getElementById('rteFont').addEventListener('change', function() {
+        editor.format('font', this.value, 'user');
+        editor.focus();
+      });
+      document.getElementById('rteSize').addEventListener('change', function() {
+        editor.format('size', this.value || false, 'user');
+        editor.focus();
+      });
+      editor.on('selection-change', function(range) {
+        syncFormatControls(range);
       });
     }
 

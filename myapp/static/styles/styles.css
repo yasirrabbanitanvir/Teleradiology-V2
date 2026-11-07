@@ -585,3 +585,58 @@ nav ul li a:hover {
   transform: none;
   padding: 0;
 }
+
+
+.doc-chip {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin: 2px 0 !important;
+  padding: 1px 3px 1px 7px !important;
+  min-height: 20px;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.78) !important;
+  border: 1px solid rgba(0, 77, 64, 0.16);
+  border-radius: 10px !important;
+  font-size: 11.5px;
+  line-height: 16px;
+  text-align: left;
+}
+
+.doc-chip span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-chip-group {
+  background: #efe3f8 !important;
+  border-color: rgba(106, 13, 173, 0.22);
+}
+
+.doc-chip button {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 11px !important;
+  line-height: 13px;
+  text-align: center;
+  border-radius: 50% !important;
+  background: #d9534f !important;
+  opacity: 0.85;
+}
+
+.doc-chip button:hover {
+  opacity: 1;
+}
+
+.study-list td:has(> .doc-chip) {
+  min-width: 190px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}

@@ -23,7 +23,8 @@ from django.conf import settings
 from django.utils import timezone as dj_timezone
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
-from django.db.models import Q, Count, Sum, Max, Min
+from django.db.models import Q, Count, Sum, Max, Min, Case, When, Value, F, CharField, DateTimeField, OuterRef, Subquery
+from django.db.models.functions import Cast, Concat
 from django.core.cache import cache
 from django_filters import rest_framework as filters
 from pathlib import Path
@@ -1332,6 +1333,137 @@ def receive_dicom_data(request):
             status=500
         )
 
+STUDY_REPORTED_STATUSES = ('Reported', 'Reviewed', 'Draft')
+TRUE_VALUES = ('true', '1', 'yes', 'on')
+
+
+def _param(params, *keys):
+    for key in keys:
+        value = params.get(key)
+        if value is not None and str(value).strip() != '':
+            return str(value).strip()
+    return ''
+
+
+def _int_param(params, key, default, minimum, maximum):
+    try:
+        value = int(params.get(key, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(value, maximum))
+
+
+def _parse_filter_date(value):
+    value = (value or '').strip().replace('-', '')
+    if len(value) != 8 or not value.isdigit():
+        return None
+    try:
+        return datetime.strptime(value, '%Y%m%d').date()
+    except ValueError:
+        return None
+
+
+def _apply_study_filters(queryset, params, exact_center=False):
+    patient_name = _param(params, 'patient_name', 'patient_name__icontains')
+    for token in [t for t in re.split(r'[\s^,]+', patient_name) if t]:
+        queryset = queryset.filter(patient_name__icontains=token)
+
+    patient_id = _param(params, 'patient_id', 'patient_id__icontains')
+    if patient_id:
+        queryset = queryset.filter(patient_id__icontains=patient_id)
+
+    status_value = _param(params, 'status')
+    if status_value and status_value.lower() != 'all':
+        queryset = queryset.filter(status=status_value)
+
+    modality_value = _param(params, 'modality', 'modality__in')
+    modalities = [m.strip().upper() for m in modality_value.split(',') if m.strip()]
+    if modalities:
+        queryset = queryset.filter(modality__in=modalities)
+
+    if _param(params, 'emergency', 'is_emergency').lower() in TRUE_VALUES:
+        queryset = queryset.filter(is_emergency=True)
+
+    scan_start = _parse_filter_date(_param(params, 'start_date', 'date_from'))
+    if scan_start:
+        queryset = queryset.filter(study_date__gte=scan_start.strftime('%Y%m%d'))
+    scan_end = _parse_filter_date(_param(params, 'end_date', 'date_to'))
+    if scan_end:
+        queryset = queryset.filter(study_date__lte=scan_end.strftime('%Y%m%d'))
+
+    center_value = _param(params, 'center_name')
+    if center_value and center_value.upper() != 'ALL':
+        if exact_center:
+            queryset = queryset.filter(center_name__iexact=center_value)
+        else:
+            queryset = queryset.filter(_center_name_filter(center_value))
+
+    institute_value = _param(params, 'institute_name')
+    if institute_value and institute_value.upper() != 'ALL':
+        queryset = queryset.filter(_center_name_filter(institute_value))
+
+    reported_by = _param(params, 'reported_by')
+    if reported_by:
+        queryset = queryset.filter(reported_by__iexact=reported_by)
+
+    report_start = _parse_filter_date(_param(params, 'report_start'))
+    report_end = _parse_filter_date(_param(params, 'report_end'))
+    if report_start or report_end:
+        queryset = queryset.filter(status__in=STUDY_REPORTED_STATUSES)
+        if report_start:
+            queryset = queryset.filter(updated_at__date__gte=report_start)
+        if report_end:
+            queryset = queryset.filter(updated_at__date__lte=report_end)
+
+    server_start = _parse_filter_date(_param(params, 'server_start'))
+    server_end = _parse_filter_date(_param(params, 'server_end'))
+    if server_start or server_end:
+        first_received = Subquery(
+            DICOMImage.objects.filter(study_instance_uid=OuterRef('study_instance_uid'))
+            .order_by()
+            .values('study_instance_uid')
+            .annotate(first=Min('created_at'))
+            .values('first')[:1]
+        )
+        queryset = queryset.annotate(
+            study_received_at=Case(
+                When(study_instance_uid='', then=F('created_at')),
+                default=first_received,
+                output_field=DateTimeField(),
+            )
+        )
+        if server_start:
+            queryset = queryset.filter(study_received_at__date__gte=server_start)
+        if server_end:
+            queryset = queryset.filter(study_received_at__date__lte=server_end)
+
+    return queryset
+
+
+def _study_group_page(queryset, page, page_size):
+    group_key = Case(
+        When(study_instance_uid='', then=Concat(Value('id:'), Cast('id', CharField()))),
+        default=F('study_instance_uid'),
+        output_field=CharField(),
+    )
+    groups = (
+        queryset.order_by()
+        .annotate(gkey=group_key)
+        .values('gkey')
+        .annotate(rep_id=Max('id'), latest=Max('created_at'))
+        .order_by('-latest', '-rep_id')
+    )
+    total = groups.count()
+    total_pages = (total + page_size - 1) // page_size if total else 0
+    if total_pages and page > total_pages:
+        page = total_pages
+    start = (page - 1) * page_size
+    rep_ids = [row['rep_id'] for row in groups[start:start + page_size]]
+    by_id = {img.id: img for img in DICOMImage.objects.filter(id__in=rep_ids)}
+    rows = [by_id[i] for i in rep_ids if i in by_id]
+    return rows, total, total_pages, page
+
+
 class PatientPagination:
     def __init__(self, page_size=10):
         self.page_size = page_size
@@ -1402,41 +1534,7 @@ class DICOMImageViewSet(viewsets.ModelViewSet):
             if allowed is not None:
                 queryset = queryset.filter(center_name__in=allowed)
 
-        params = self.request.query_params
-
-        center_name = params.get("center_name")
-        if center_name:
-            queryset = queryset.filter(_center_name_filter(center_name))
-
-        patient_name = params.get("patient_name")
-        if patient_name:
-            queryset = queryset.filter(patient_name__icontains=patient_name)
-
-        patient_id = params.get("patient_id")
-        if patient_id:
-            queryset = queryset.filter(patient_id__icontains=patient_id)
-
-        status_filter = params.get("status")
-        if status_filter and status_filter != "All":
-            queryset = queryset.filter(status=status_filter)
-
-        modality = params.get("modality")
-        if modality:
-            modalities = [m.strip() for m in modality.split(",") if m.strip()]
-            if modalities:
-                queryset = queryset.filter(modality__in=modalities)
-
-        emergency = params.get("emergency")
-        if emergency and emergency.lower() == "true":
-            queryset = queryset.filter(is_emergency=True)
-
-        start_date = params.get("start_date")
-        if start_date:
-            queryset = queryset.filter(study_date__gte=start_date.replace("-", ""))
-
-        end_date = params.get("end_date")
-        if end_date:
-            queryset = queryset.filter(study_date__lte=end_date.replace("-", ""))
+        queryset = _apply_study_filters(queryset, self.request.query_params)
 
         return queryset.order_by("-created_at")
 
@@ -1458,6 +1556,25 @@ class DICOMImageViewSet(viewsets.ModelViewSet):
 
     def list(self, request):
         queryset = self.filter_queryset(self.get_queryset())
+
+        if (request.query_params.get("group") or "").lower() == "study":
+            study_page = _int_param(request.query_params, "page", 1, 1, 10**9)
+            study_size = _int_param(request.query_params, "page_size", 10, 1, 200)
+            rows, total, total_pages, study_page = _study_group_page(queryset, study_page, study_size)
+            context = self.get_serializer_context()
+            context["institute_name_map"] = _build_center_name_to_institute_map()
+            context["study_received_map"] = _build_study_received_map(rows)
+            serializer = self.get_serializer(rows, many=True, context=context)
+            return Response(
+                {
+                    "results": serializer.data,
+                    "count": total,
+                    "total_pages": total_pages,
+                    "current_page": study_page,
+                    "patients_on_page": len(rows),
+                }
+            )
+
         page = int(request.query_params.get("page", 1))
         page_size = int(request.query_params.get("page_size", 10))
 
@@ -1758,25 +1875,41 @@ class DICOMImageViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f'Error checking institutions: {str(e)}')
         
-        images = images.order_by('-created_at')
+        params = request.query_params
+        institute_map = _build_center_name_to_institute_map()
 
-        page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 50))
-        total_count = images.count()
-        start_idx = (page - 1) * page_size
-        end_idx = start_idx + page_size
-        page_images = list(images[start_idx:end_idx])
+        centers_payload = None
+        if params.get('centers') == '1':
+            seen = {}
+            for cn in images.order_by().values_list('center_name', flat=True).distinct():
+                if cn:
+                    seen[cn] = institute_map.get(cn, cn)
+            centers_payload = sorted(
+                [{'center_name': cn, 'institute_name': inst} for cn, inst in seen.items()],
+                key=lambda c: c['institute_name']
+            )
+
+        images = _apply_study_filters(images, params)
+
+        page = _int_param(params, 'page', 1, 1, 10**9)
+        page_size = _int_param(params, 'page_size', 10, 1, 200)
+        page_images, total_count, total_pages, page = _study_group_page(images, page, page_size)
 
         context = self.get_serializer_context()
-        context['institute_name_map'] = _build_center_name_to_institute_map()
+        context['institute_name_map'] = institute_map
         context['study_received_map'] = _build_study_received_map(page_images)
         serializer = self.get_serializer(page_images, many=True, context=context)
-        
-        return Response({
+
+        payload = {
             'success': True,
             'images': serializer.data,
-            'count': total_count
-        })
+            'count': total_count,
+            'total_pages': total_pages,
+            'current_page': page,
+        }
+        if centers_payload is not None:
+            payload['centers'] = centers_payload
+        return Response(payload)
 
     @action(detail=False, methods=["post"])
     def remove_single_doctor(self, request):
@@ -2486,43 +2619,24 @@ class DICOMImageListView(generics.ListAPIView):
         return DICOMImage.objects.all().order_by("-created_at")
 
     def list(self, request, *args, **kwargs):
-        from django.db.models import OuterRef, Subquery
+        params = request.query_params
+        queryset = _apply_study_filters(self.get_queryset(), params, exact_center=True)
 
-        queryset = self.filter_queryset(self.get_queryset())
-
-        latest_id_for_uid = Subquery(
-            DICOMImage.objects.filter(
-                study_instance_uid=OuterRef('study_instance_uid')
-            ).order_by('-id').values('id')[:1]
-        )
-
-        deduped_qs = queryset.filter(
-            Q(study_instance_uid__isnull=True) |
-            Q(study_instance_uid__exact='') |
-            Q(id=latest_id_for_uid)
-        ).order_by('-created_at')
-
-        page_size = max(1, min(int(request.query_params.get('page_size', 100)), 500))
-        page_num = max(1, int(request.query_params.get('page', 1)))
-        start = (page_num - 1) * page_size
-        end = start + page_size
-
-        total = deduped_qs.count()
-        page_records = deduped_qs[start:end]
+        page = _int_param(params, 'page', 1, 1, 10**9)
+        page_size = _int_param(params, 'page_size', 100, 1, 500)
+        page_records, total, total_pages, page = _study_group_page(queryset, page, page_size)
 
         context = self.get_serializer_context()
         context['institute_name_map'] = _build_center_name_to_institute_map()
-        page_records = list(page_records)
         context['study_received_map'] = _build_study_received_map(page_records)
         serializer = self.get_serializer(page_records, many=True, context=context)
-        next_url = None
-        if end < total:
-            next_url = "has_more"
 
         return Response({
             'count': total,
-            'next': next_url,
+            'next': 'has_more' if page < total_pages else None,
             'previous': None,
+            'total_pages': total_pages,
+            'current_page': page,
             'results': serializer.data,
         })
 
@@ -3173,59 +3287,12 @@ def get_institute_studies(request):
 
         queryset = DICOMImage.objects.filter(center_name__in=center_names_list)
 
-        center_filter = request.GET.get("center_name")
-        if center_filter:
-            queryset = queryset.filter(center_name=center_filter)
+        queryset = _apply_study_filters(queryset, request.GET, exact_center=True)
 
-        status_filter = request.GET.get("status")
-        if status_filter and status_filter != "All":
-            queryset = queryset.filter(status=status_filter)
+        page = _int_param(request.GET, "page", 1, 1, 10**9)
+        page_size = _int_param(request.GET, "page_size", 10, 1, 200)
+        page_rows, total_count, total_pages, page = _study_group_page(queryset, page, page_size)
 
-        patient_name = request.GET.get("patient_name")
-        if patient_name:
-            queryset = queryset.filter(patient_name__icontains=patient_name)
-
-        patient_id = request.GET.get("patient_id")
-        if patient_id:
-            queryset = queryset.filter(patient_id__icontains=patient_id)
-
-        modality = request.GET.get("modality")
-        if modality:
-            modalities = [m.strip() for m in modality.split(",") if m.strip()]
-            if modalities:
-                queryset = queryset.filter(modality__in=modalities)
-
-        emergency = request.GET.get("emergency")
-        if emergency and emergency.lower() == "true":
-            queryset = queryset.filter(is_emergency=True)
-
-        start_date = request.GET.get("start_date")
-        if start_date:
-            queryset = queryset.filter(study_date__gte=start_date.replace("-", ""))
-
-        end_date = request.GET.get("end_date")
-        if end_date:
-            queryset = queryset.filter(study_date__lte=end_date.replace("-", ""))
-
-        page = int(request.GET.get("page", 1))
-        page_size = int(request.GET.get("page_size", 10))
-
-        patient_groups = list(
-            queryset.values("patient_id")
-            .annotate(latest_created_at=Max("created_at"))
-            .order_by("-latest_created_at")
-        )
-        total_patients = len(patient_groups)
-        total_pages = (total_patients + page_size - 1) // page_size if page_size else 1
-        start_idx = (page - 1) * page_size
-        end_idx = start_idx + page_size
-        page_patient_ids = [row["patient_id"] for row in patient_groups[start_idx:end_idx]]
-
-        page_queryset = queryset.filter(patient_id__in=page_patient_ids).order_by(
-            "-created_at"
-        )
-
-        page_rows = list(page_queryset)
         serializer = DICOMImageSerializer(
             page_rows, many=True,
             context={
@@ -3240,7 +3307,7 @@ def get_institute_studies(request):
                 "results": serializer.data,
                 "institute_name": institute_name,
                 "centers": center_names_list,
-                "total_count": total_patients,
+                "total_count": total_count,
                 "total_pages": total_pages,
                 "current_page": page,
             }
@@ -3515,7 +3582,7 @@ def manage_templates(request):
                 templates = templates.filter(modality__iexact=modality)
             if search:
                 templates = templates.filter(
-                    Q(template_name__icontains=search) | Q(body_part__icontains=search)
+                    Q(template_name__icontains=search) | Q(body_part__icontains=search) | Q(modality__icontains=search)
                 )
             templates = templates.order_by("body_part", "template_name")
             
@@ -3556,6 +3623,15 @@ def manage_templates(request):
             template_name = request.data.get("template_name", "").strip()
             content = request.data.get("content", "").strip()
             is_active = request.data.get("is_active", True)
+            owner = user
+            owner_name = str(request.data.get("created_by_username") or "").strip()
+            if owner_name and is_admin:
+                owner = User.objects.filter(username=owner_name).first()
+                if owner is None:
+                    return Response(
+                        {"success": False, "error": "Doctor not found"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
             if not body_part or not modality or not template_name or not content:
                 return Response(
                     {
@@ -3582,7 +3658,7 @@ def manage_templates(request):
                 template_name=template_name,
                 content=content,
                 is_active=is_active,
-                created_by=user,
+                created_by=owner,
             )
             serializer = ReportTemplateSerializer(template)
             return Response(
@@ -3851,6 +3927,7 @@ except ImportError:
 
 DEFAULT_REPORT_TOP_MARGIN = 1.8
 DEFAULT_REPORT_BOTTOM_MARGIN = 0.4
+REPORT_SIDE_MARGIN = 0.83
 
 def get_center_report_format(dicom_id):
     try:
@@ -3950,8 +4027,8 @@ def generate_report_docx(request):
         section.page_width = Inches(8.27)
         section.top_margin = Inches(0.4)
         section.bottom_margin = Inches(bottom_margin_in)
-        section.left_margin = Inches(0.5)
-        section.right_margin = Inches(0.5)
+        section.left_margin = Inches(REPORT_SIDE_MARGIN)
+        section.right_margin = Inches(REPORT_SIDE_MARGIN)
         section.header_distance = Inches(top_margin_in)
         
         header = section.header
@@ -3960,11 +4037,12 @@ def generate_report_docx(request):
         title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         title_run = title_para.runs[0]
         title_run.bold = True
-        title_run.font.size = Pt(13)
-        title_run.font.name = 'Calibri'
-        title_run.font.color.rgb = RGBColor(128, 128, 128)
+        title_run.font.size = Pt(10)
+        title_run.font.name = 'Verdana'
+        title_run.font.color.rgb = RGBColor(0, 0, 0)
         title_para_format = title_para.paragraph_format
-        title_para_format.space_after = Pt(4)
+        title_para_format.space_before = Pt(1.2)
+        title_para_format.space_after = Pt(6)
         
         name = patient_data.get('patientName', 'Unknown')
         pid = patient_data.get('patientId', 'N/A')
@@ -3976,156 +4054,66 @@ def generate_report_docx(request):
         template_name = data.get('template_name', '')
         report_submission_datetime = data.get('report_submission_datetime', 'N/A')
         
-        tbl_xml = f'''<w:tbl xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-            <w:tblPr>
-                <w:tblW w:w="5000" w:type="pct"/>
-                <w:tblBorders>
-                    <w:top w:val="single" w:sz="6" w:space="0" w:color="000000"/>
-                    <w:left w:val="single" w:sz="6" w:space="0" w:color="000000"/>
-                    <w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>
-                    <w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/>
-                    <w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/>
-                    <w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/>
-                </w:tblBorders>
-            </w:tblPr>
-            <w:tr>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="1100" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:color w:val="000000"/></w:rPr>
-                        <w:t>Name</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="150" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>:</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="2800" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>{name}</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="1300" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>Patient ID</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="150" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>:</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="2100" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>{pid}</w:t></w:r></w:p>
-                </w:tc>
-            </w:tr>
-            <w:tr>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="1100" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>Age</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="150" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>:</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="2800" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>{age}Y</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="1300" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>Exam date</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="150" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>:</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="2100" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>{exam_date.split()[0] if exam_date != 'N/A' else 'N/A'}</w:t></w:r></w:p>
-                </w:tc>
-            </w:tr>
-            <w:tr>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="1100" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>Sex</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="150" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>:</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="2800" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>{sex}</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="1300" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>Report date/Time</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="150" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>:</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="2100" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>{report_submission_datetime if report_submission_datetime != 'N/A' else 'N/A'}</w:t></w:r></w:p>
-                </w:tc>
-            </w:tr>
-            <w:tr>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="1100" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>Refd By</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="150" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>:</w:t></w:r></w:p>
-                </w:tc>
-                <w:tc>
-                    <w:tcPr><w:tcW w:w="6350" w:type="dxa"/><w:gridSpan w:val="4"/><w:vAlign w:val="center"/></w:tcPr>
-                    <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="50" w:after="50"/></w:pPr>
-                        <w:r><w:rPr><w:sz w:val="22"/><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>
-                        <w:t>{doctor}</w:t></w:r></w:p>
-                </w:tc>
-            </w:tr>
-        </w:tbl>'''
-        
+        from xml.sax.saxutils import escape as xml_escape
+
+        def info_cell(width, text, bold=False, align='left', span=1, indent=0):
+            font = 'Verdana' if bold else 'Calibri'
+            size = 16 if bold else 19
+            bold_tag = '<w:b/>' if bold else ''
+            span_tag = f'<w:gridSpan w:val="{span}"/>' if span > 1 else ''
+            indent_tag = f'<w:ind w:left="{indent}"/>' if indent else ''
+            return (
+                f'<w:tc><w:tcPr><w:tcW w:w="{width}" w:type="dxa"/>{span_tag}<w:vAlign w:val="center"/></w:tcPr>'
+                f'<w:p><w:pPr><w:spacing w:before="75" w:after="75" w:line="240" w:lineRule="auto"/>{indent_tag}<w:jc w:val="{align}"/></w:pPr>'
+                f'<w:r><w:rPr><w:rFonts w:ascii="{font}" w:hAnsi="{font}" w:cs="{font}"/>{bold_tag}<w:color w:val="000000"/><w:sz w:val="{size}"/></w:rPr>'
+                f'<w:t xml:space="preserve">{xml_escape(str(text))}</w:t></w:r></w:p></w:tc>'
+            )
+
+        info_cols = (1354, 197, 3220, 1460, 311, 1839)
+        exam_date_only = exam_date.split()[0] if exam_date and exam_date != 'N/A' else 'N/A'
+        report_date_only = report_submission_datetime.split()[0] if report_submission_datetime and report_submission_datetime != 'N/A' else 'N/A'
+
+        def info_row(label_a, value_a, bold_a, label_b, value_b, bold_b):
+            return (
+                '<w:tr><w:trPr><w:cantSplit/></w:trPr>'
+                + info_cell(info_cols[0], label_a)
+                + info_cell(info_cols[1], ':', align='center')
+                + info_cell(info_cols[2], value_a, bold=bold_a)
+                + info_cell(info_cols[3], label_b)
+                + info_cell(info_cols[4], ':', indent=6)
+                + info_cell(info_cols[5], value_b, bold=bold_b)
+                + '</w:tr>'
+            )
+
+        tbl_xml = (
+            '<w:tbl xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            '<w:tblPr><w:tblW w:w="' + str(sum(info_cols)) + '" w:type="dxa"/><w:tblInd w:w="70" w:type="dxa"/>'
+            '<w:tblBorders>'
+            '<w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+            '<w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+            '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+            '<w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+            '<w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+            '<w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+            '</w:tblBorders><w:tblLayout w:type="fixed"/>'
+            '<w:tblCellMar><w:left w:w="65" w:type="dxa"/><w:right w:w="65" w:type="dxa"/></w:tblCellMar></w:tblPr>'
+            '<w:tblGrid>' + ''.join(f'<w:gridCol w:w="{w}"/>' for w in info_cols) + '</w:tblGrid>'
+            + info_row('Patient ID', pid, True, 'Exam date', exam_date_only, False)
+            + info_row('Patient Name', name, True, 'Reporting date', report_date_only, False)
+            + info_row('Age', f'{age}Y', False, 'Sex', sex, False)
+            + '<w:tr><w:trPr><w:cantSplit/></w:trPr>'
+            + info_cell(info_cols[0], 'Refd. by')
+            + info_cell(info_cols[1], ':', align='center')
+            + info_cell(sum(info_cols[2:]), doctor, bold=True, span=4)
+            + '</w:tr></w:tbl>'
+        )
+
         table_element = parse_xml(tbl_xml)
         header._element.append(table_element)
+        header._element.append(parse_xml(
+            '<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            '<w:pPr><w:spacing w:before="0" w:after="0" w:line="54" w:lineRule="exact"/></w:pPr></w:p>'
+        ))
         
         spacing_para = doc.add_paragraph()
         spacing_para.paragraph_format.space_before = Pt(0)
@@ -4135,11 +4123,11 @@ def generate_report_docx(request):
             template_heading = doc.add_paragraph()
             template_heading_run = template_heading.add_run(template_name)
             template_heading_run.bold = True
-            template_heading_run.font.size = Pt(13)
+            template_heading_run.font.size = Pt(12)
             template_heading_run.font.name = report_font_name
             template_heading_run.underline = True
-            template_heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            template_heading.paragraph_format.space_after = Pt(4)
+            template_heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            template_heading.paragraph_format.space_after = Pt(2)
             template_heading.paragraph_format.space_before = Pt(0)
         
         import re
@@ -4250,7 +4238,7 @@ def generate_report_docx(request):
                 sizes = [(r[4] or 12) * ratio for r in runs] or [base_pt]
                 largest = max(sizes)
                 chars = len(''.join(r[0] for r in runs))
-                per_line = 523.0 / (largest * 0.49)
+                per_line = ((8.27 - 2 * REPORT_SIDE_MARGIN) * 72.0) / (largest * 0.49)
                 if kind != 'p':
                     per_line *= 0.94
                 lines = max(1, math.ceil(chars / per_line))
@@ -4353,7 +4341,7 @@ def generate_report_docx(request):
             add_tight_para(doc, doctor_info.get('institute_name'), font_size=11)
 
         if doctor_info.get('bmdc_reg_no'):
-            add_tight_para(doc, f"BMDC Reg No: {doctor_info.get('bmdc_reg_no')}", font_size=11)
+            add_tight_para(doc, f"BMDC Reg:{doctor_info.get('bmdc_reg_no')}", font_size=11)
 
         if doctor_info.get('mobile') or doctor_info.get('contact_number'):
             mobile = doctor_info.get('mobile') or doctor_info.get('contact_number')
@@ -4367,55 +4355,55 @@ def generate_report_docx(request):
                         version=1,
                         error_correction=qr_module.constants.ERROR_CORRECT_L,
                         box_size=10,
-                        border=2,
+                        border=0,
                     )
                     qr.add_data(viewer_link)
                     qr.make(fit=True)
                     
                     qr_img = qr.make_image(fill_color="black", back_color="white")
-                    
+
+                    raw_buffer = BytesIO()
+                    qr_img.save(raw_buffer, format='PNG')
+                    raw_buffer.seek(0)
+
+                    from PIL import Image as PILImage, ImageDraw
+
+                    box_w, box_h, qr_px = 386, 351, 237
+                    qr_small = PILImage.open(raw_buffer).convert('RGB').resize((qr_px, qr_px), PILImage.NEAREST)
+                    canvas = PILImage.new('RGB', (box_w, box_h), 'white')
+                    canvas.paste(qr_small, ((box_w - qr_px) // 2, (box_h - qr_px) // 2))
+                    ImageDraw.Draw(canvas).rectangle([0, 0, box_w - 1, box_h - 1], outline='black', width=2)
+
                     qr_buffer = BytesIO()
-                    qr_img.save(qr_buffer, format='PNG')
+                    canvas.save(qr_buffer, format='PNG', dpi=(300, 300))
                     qr_buffer.seek(0)
-                    
+
                     from docx.oxml import OxmlElement
                     from docx.oxml.ns import qn
 
-                    def set_qr_frame(paragraph):
-                        frame = OxmlElement('w:framePr')
-                        for attr, value in (
-                            ('w:w', '1440'),
-                            ('w:hSpace', '0'),
-                            ('w:wrap', 'around'),
-                            ('w:vAnchor', 'page'),
-                            ('w:hAnchor', 'page'),
-                            ('w:x', '8885'),
-                            ('w:y', '5400'),
-                        ):
-                            frame.set(qn(attr), value)
-                        paragraph._p.get_or_add_pPr().insert(0, frame)
+                    qr_y = max(0, 2913 + int(round((top_margin_in - DEFAULT_REPORT_TOP_MARGIN) * 1440)))
 
                     qr_para = doc.add_paragraph()
-                    set_qr_frame(qr_para)
+                    frame = OxmlElement('w:framePr')
+                    for attr, value in (
+                        ('w:w', '1900'),
+                        ('w:hSpace', '0'),
+                        ('w:wrap', 'around'),
+                        ('w:vAnchor', 'page'),
+                        ('w:hAnchor', 'page'),
+                        ('w:x', '9576'),
+                        ('w:y', str(qr_y)),
+                    ):
+                        frame.set(qn(attr), value)
+                    qr_para._p.get_or_add_pPr().insert(0, frame)
                     qr_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                    qr_run = qr_para.add_run()
-                    qr_run.add_picture(qr_buffer, width=Inches(0.9))
                     qr_para.paragraph_format.space_before = Pt(0)
-                    qr_para.paragraph_format.space_after = Pt(2)
-                    
-                    qr_text_para = doc.add_paragraph()
-                    set_qr_frame(qr_text_para)
-                    qr_text_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                    qr_text_run = qr_text_para.add_run("Scan to view images")
-                    qr_text_run.font.size = Pt(8)
-                    qr_text_run.font.name = 'Calibri'
-                    qr_text_run.font.color.rgb = RGBColor(0, 102, 204)
-                    qr_text_para.paragraph_format.space_before = Pt(0)
-                    qr_text_para.paragraph_format.space_after = Pt(0)
+                    qr_para.paragraph_format.space_after = Pt(0)
+                    qr_para.paragraph_format.line_spacing = 1.0
+                    qr_para.add_run().add_picture(qr_buffer, width=Inches(box_w / 300.0), height=Inches(box_h / 300.0))
 
                     spacing_para._p.addprevious(qr_para._p)
-                    spacing_para._p.addprevious(qr_text_para._p)
-                    
+
                     logger.info(f"QR code added successfully")
                 else:
                     logger.warning("qrcode library not available")

@@ -296,7 +296,25 @@ function scheduleReceivingPoll(refetch) {
   }, WAIT_GIF_POLL_MS);
 }
 
-async function fetchInstituteStudies(page = 1, maintainPage = false) {
+let appliedInstituteFilters = null;
+let instituteFetchSeq = 0;
+
+function collectInstituteFilters() {
+  const val = id => (document.getElementById(id)?.value || '').trim();
+  return {
+    name: val('patient-name'),
+    id: val('patient-id'),
+    status: val('status') || 'All',
+    center: val('center-filter') || 'All',
+    emergency: !!document.getElementById('emergency')?.checked,
+    start: val('scan-start-date'),
+    end: val('scan-end-date'),
+    modalities: Array.from(document.querySelectorAll('.modality-checkbox:checked')).map(cb => cb.value)
+  };
+}
+
+async function fetchInstituteStudies(page = 1, maintainPage = false, silent = false) {
+  let barOn = false;
   try {
     if (!instituteName) {
       return;
@@ -309,27 +327,36 @@ async function fetchInstituteStudies(page = 1, maintainPage = false) {
       sessionStorage.setItem('instituteCurrentPage', currentPage);
     }
 
-    const nameQ = document.getElementById('patient-name')?.value.trim() || '';
-    const idQ = document.getElementById('patient-id')?.value.trim() || '';
-    const statusQ = document.getElementById('status')?.value || 'All';
-    const emergencyFilter = document.getElementById('emergency')?.checked || false;
-    const selectedModalities = Array.from(document.querySelectorAll('.modality-checkbox:checked')).map(cb => cb.value);
-    const selectedCenter = document.getElementById('center-filter')?.value || '';
-    const startDate = document.getElementById('scan-start-date')?.value || '';
-    const endDate = document.getElementById('scan-end-date')?.value || '';
+    if (!maintainPage || !appliedInstituteFilters) {
+      const collected = collectInstituteFilters();
+      if (collected.start && collected.end && collected.start > collected.end) {
+        alert('Start date cannot be after end date');
+        return;
+      }
+      appliedInstituteFilters = collected;
+    }
+
+    const f = appliedInstituteFilters;
+    const seq = ++instituteFetchSeq;
+    const totalModalities = document.querySelectorAll('.modality-checkbox').length;
 
     const params = new URLSearchParams();
     params.append('page', currentPage.toString());
     params.append('page_size', itemsPerPage.toString());
 
-    if (selectedCenter && selectedCenter !== 'All') params.append('center_name', selectedCenter);
-    if (statusQ !== 'All') params.append('status', statusQ);
-    if (nameQ) params.append('patient_name', nameQ);
-    if (idQ) params.append('patient_id', idQ);
-    if (emergencyFilter) params.append('emergency', 'true');
-    if (selectedModalities.length > 0) params.append('modality', selectedModalities.join(','));
-    if (startDate) params.append('start_date', startDate);
-    if (endDate) params.append('end_date', endDate);
+    if (f.center && f.center !== 'All') params.append('center_name', f.center);
+    if (f.status && f.status !== 'All') params.append('status', f.status);
+    if (f.name) params.append('patient_name', f.name);
+    if (f.id) params.append('patient_id', f.id);
+    if (f.emergency) params.append('emergency', 'true');
+    if (f.modalities.length > 0 && f.modalities.length < totalModalities) params.append('modality', f.modalities.join(','));
+    if (f.start) params.append('start_date', f.start);
+    if (f.end) params.append('end_date', f.end);
+
+    if (!silent) {
+      window.QueryBar?.start();
+      barOn = true;
+    }
 
     const res = await fetch(`${baseUrl}/api/institute-studies/?${params.toString()}`, {
       headers: { 
@@ -343,6 +370,8 @@ async function fetchInstituteStudies(page = 1, maintainPage = false) {
     syncServerClock(res);
     
     const responseData = await res.json();
+
+    if (seq !== instituteFetchSeq) return;
     
     if (!responseData.success) {
       throw new Error(responseData.error || 'Failed to fetch studies');
@@ -455,6 +484,10 @@ async function fetchInstituteStudies(page = 1, maintainPage = false) {
     totalCount = typeof responseData.total_count === 'number' ? responseData.total_count : filteredPatients.length;
     totalPages = typeof responseData.total_pages === 'number' ? responseData.total_pages : 1;
 
+    if (typeof responseData.current_page === 'number' && responseData.current_page > 0) {
+      currentPage = responseData.current_page;
+      sessionStorage.setItem('instituteCurrentPage', currentPage);
+    }
     if (currentPage > totalPages && totalPages > 0) {
       currentPage = totalPages;
       sessionStorage.setItem('instituteCurrentPage', currentPage);
@@ -466,7 +499,7 @@ async function fetchInstituteStudies(page = 1, maintainPage = false) {
 
     loadPatients(filteredPatients);
     createPaginationControls();
-    scheduleReceivingPoll(() => fetchInstituteStudies(currentPage, true));
+    scheduleReceivingPoll(() => fetchInstituteStudies(currentPage, true, true));
     
   } catch (err) {
     alert('Error fetching institute studies: ' + err.message);
@@ -474,6 +507,8 @@ async function fetchInstituteStudies(page = 1, maintainPage = false) {
     filteredPatients = [];
     const studyList = document.querySelector('.study-list');
     if (studyList) studyList.style.display = 'none';
+  } finally {
+    if (barOn) window.QueryBar?.end();
   }
 }
 
@@ -534,13 +569,13 @@ function generateDoctorsList(study, canRemove = false) {
     const parts = [];
     groupMatches.forEach(g => {
       if (canRemove) {
-        parts.push(`<div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;padding:3px 5px;background:#e8d5f5;border-radius:3px;">
-          <span style="font-weight:600;color:#6a0dad;">👥 ${g.name}</span>
+        parts.push(`<div class="doc-chip doc-chip-group" style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;padding:3px 5px;background:#e8d5f5;border-radius:3px;">
+          <span title="${g.name}" style="font-weight:600;color:#6a0dad;">👥 ${g.name}</span>
           <button onclick="removeSingleDoctor(${study.id}, '${g.name}')" style="background:#ff4444;color:white;border:none;border-radius:3px;padding:2px 6px;cursor:pointer;font-size:12px;margin-left:5px;">×</button>
         </div>`);
       } else {
-        parts.push(`<div style="margin:3px 0;padding:3px 5px;background:#e8d5f5;border-radius:3px;">
-          <span style="font-weight:600;color:#6a0dad;">👥 ${g.name}</span>
+        parts.push(`<div class="doc-chip doc-chip-group" style="margin:3px 0;padding:3px 5px;background:#e8d5f5;border-radius:3px;">
+          <span title="${g.name}" style="font-weight:600;color:#6a0dad;">👥 ${g.name}</span>
         </div>`);
       }
     });
@@ -548,13 +583,13 @@ function generateDoctorsList(study, canRemove = false) {
     doctorsList.forEach(doctor => {
       if (!groupNames.includes(doctor) && !membersCoveredByGroups.has(doctor)) {
         if (canRemove) {
-          parts.push(`<div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;padding:3px 5px;background:#f0f0f0;border-radius:3px;">
-            <span>${doctor}</span>
+          parts.push(`<div class="doc-chip" style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;padding:3px 5px;background:#f0f0f0;border-radius:3px;">
+            <span title="${doctor}">${doctor}</span>
             <button onclick="removeSingleDoctor(${study.id}, '${doctor}')" style="background:#ff4444;color:white;border:none;border-radius:3px;padding:2px 6px;cursor:pointer;font-size:12px;margin-left:5px;">×</button>
           </div>`);
         } else {
-          parts.push(`<div style="margin:3px 0;padding:3px 5px;background:#f0f0f0;border-radius:3px;">
-            <span>${doctor}</span>
+          parts.push(`<div class="doc-chip" style="margin:3px 0;padding:3px 5px;background:#f0f0f0;border-radius:3px;">
+            <span title="${doctor}">${doctor}</span>
           </div>`);
         }
       }
@@ -564,15 +599,15 @@ function generateDoctorsList(study, canRemove = false) {
 
   if (canRemove) {
     return doctorsList.map(doctor => {
-      return `<div style="display: flex; justify-content: space-between; align-items: center; margin: 3px 0; padding: 3px 5px; background: #f0f0f0; border-radius: 3px;">
-        <span>${doctor}</span>
+      return `<div class="doc-chip" style="display: flex; justify-content: space-between; align-items: center; margin: 3px 0; padding: 3px 5px; background: #f0f0f0; border-radius: 3px;">
+        <span title="${doctor}">${doctor}</span>
         <button onclick="removeSingleDoctor(${study.id}, '${doctor}')" style="background: #ff4444; color: white; border: none; border-radius: 3px; padding: 2px 6px; cursor: pointer; font-size: 12px; margin-left: 5px;">×</button>
       </div>`;
     }).join('');
   } else {
     return doctorsList.map(doctor => {
-      return `<div style="margin: 3px 0; padding: 3px 5px; background: #f0f0f0; border-radius: 3px;">
-        <span>${doctor}</span>
+      return `<div class="doc-chip" style="margin: 3px 0; padding: 3px 5px; background: #f0f0f0; border-radius: 3px;">
+        <span title="${doctor}">${doctor}</span>
       </div>`;
     }).join('');
   }
@@ -916,9 +951,9 @@ function updatePaginationInfo() {
   const endPatient = Math.min(currentPage * itemsPerPage, totalCount);
   
   if (totalCount === 0) {
-    infoElement.textContent = 'No patients to show';
+    infoElement.textContent = 'No studies to show';
   } else {
-    infoElement.textContent = `Showing ${startPatient}-${endPatient} of ${totalCount} patients`;
+    infoElement.textContent = `Showing ${startPatient}-${endPatient} of ${totalCount} studies`;
   }
 }
 
@@ -1169,6 +1204,18 @@ document.getElementById('center-filter')?.addEventListener('change', () => {
   fetchInstituteStudies(1, false);
 });
 
+['patient-name', 'patient-id'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        fetchInstituteStudies(1, false);
+      }
+    });
+  }
+});
+
 window.addEventListener('DOMContentLoaded', async () => {
   if (!token) {
     window.location.href = '/static/login.html';
@@ -1244,7 +1291,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     await fetchInstituteStudies(currentPage, true);
 
     setInterval(() => {
-      fetchInstituteStudies(currentPage, true);
+      fetchInstituteStudies(currentPage, true, true);
     }, 30000);
 
   } catch (error) {
@@ -1457,9 +1504,95 @@ async function prepareReportDocx(buffer) {
     if (text) frame.text = text;
     para.parentNode.removeChild(para);
   }
+  const floated = Array.from(doc.getElementsByTagName('w:tblpPr'));
+  for (const fp of floated) {
+    const tbl = fp.parentNode && fp.parentNode.parentNode;
+    if (!tbl || tbl.nodeName !== 'w:tbl' || !tbl.parentNode) continue;
+    const num = (el, attr) => el ? (parseInt(el.getAttribute(attr), 10) || 0) : 0;
+    const box = {
+      x: parseInt(fp.getAttribute('w:tblpX'), 10) || 0,
+      y: parseInt(fp.getAttribute('w:tblpY'), 10) || 0,
+      w: num(tbl.getElementsByTagName('w:tblW')[0], 'w:w'),
+      h: num(tbl.getElementsByTagName('w:trHeight')[0], 'w:val'),
+      bordered: tbl.getElementsByTagName('w:tblBorders').length > 0,
+      image: '',
+      imageWidthPt: 0,
+      text: ''
+    };
+    const blip = tbl.getElementsByTagName('a:blip')[0];
+    if (blip) {
+      const target = relMap[blip.getAttribute('r:embed')];
+      const imgFile = target ? zip.file('word/' + target.replace(/^\/?(word\/)?/, '')) : null;
+      if (imgFile) {
+        const ext = (target.split('.').pop() || 'png').toLowerCase();
+        const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : `image/${ext}`;
+        box.image = `data:${mime};base64,${await imgFile.async('base64')}`;
+        const extent = tbl.getElementsByTagName('wp:extent')[0];
+        if (extent) box.imageWidthPt = (parseInt(extent.getAttribute('cx'), 10) || 0) / 12700;
+      }
+    }
+    frames.push(box);
+    tbl.parentNode.removeChild(tbl);
+  }
   if (!frames.length) return { data: buffer, frames };
   zip.file('word/document.xml', new XMLSerializer().serializeToString(doc));
   return { data: await zip.generateAsync({ type: 'arraybuffer' }), frames };
+}
+
+function normalizeReportLines(root) {
+  const doc = root.ownerDocument;
+  const view = doc.defaultView;
+  const bodyRun = doc.querySelector('section.docx article span[style*="font-family"]');
+  const bodyFont = bodyRun ? bodyRun.style.fontFamily : '';
+  const naturalOf = (size, family) => {
+    const probe = doc.createElement('div');
+    probe.style.cssText = `position:absolute;visibility:hidden;line-height:normal;font-size:${size};font-family:${family};`;
+    probe.textContent = 'Xgy';
+    doc.body.appendChild(probe);
+    const ratio = probe.getBoundingClientRect().height / (parseFloat(size) || 16);
+    probe.remove();
+    return ratio > 0.8 ? ratio : 1.2;
+  };
+  root.querySelectorAll('section.docx p').forEach(p => {
+    const inHeader = !!p.closest('header,footer');
+    const runs = Array.from(p.querySelectorAll('span')).filter(s => s.style.fontSize && (s.textContent || '').length);
+    if (runs.length) {
+      let big = runs[0];
+      let bigSize = parseFloat(big.style.fontSize) || 0;
+      runs.forEach(r => {
+        const size = parseFloat(r.style.fontSize) || 0;
+        if (size > bigSize) { big = r; bigSize = size; }
+      });
+      p.style.fontSize = big.style.fontSize;
+      if (big.style.fontFamily) p.style.fontFamily = big.style.fontFamily;
+    }
+    const isEmpty = !runs.length && !(p.textContent || '').trim() && !p.querySelector('img,svg,table');
+    if (isEmpty) {
+      p.style.fontSize = '11pt';
+      if (bodyFont) p.style.fontFamily = bodyFont;
+    }
+    const cs = view.getComputedStyle(p);
+    const fs = parseFloat(cs.fontSize);
+    const natural = naturalOf(cs.fontSize, cs.fontFamily);
+    let linePx = natural * fs;
+    const lh = parseFloat(cs.lineHeight);
+    if (cs.lineHeight !== 'normal' && lh && fs) {
+      const mult = lh / fs;
+      if (Math.abs(mult - 1) < 0.02) {
+        p.style.lineHeight = 'normal';
+      } else if (mult > 1.02 && mult < 3 && !inHeader && /^[\d.]*$/.test(p.style.lineHeight || '')) {
+        p.style.lineHeight = (mult * natural).toFixed(3);
+        linePx = mult * natural * fs;
+      } else {
+        linePx = lh;
+      }
+    }
+    if (isEmpty && !inHeader) p.style.minHeight = linePx.toFixed(2) + 'px';
+  });
+  root.querySelectorAll('section.docx td, section.docx th').forEach(cell => {
+    if (!cell.style.paddingTop) cell.style.paddingTop = '0';
+    if (!cell.style.paddingBottom) cell.style.paddingBottom = '0';
+  });
 }
 
 async function renderDocxPopup(win, reports) {
@@ -1501,12 +1634,16 @@ async function renderDocxPopup(win, reports) {
         renderHeaders: true,
         renderFooters: true
       });
+      normalizeReportLines(holder);
       const page = holder.querySelector('section');
       if (page) {
         page.style.position = 'relative';
         item.frames.forEach(frame => {
           const box = d.createElement('div');
           box.style.cssText = `position:absolute;left:${frame.x / 20}pt;top:${frame.y / 20}pt;z-index:5;`;
+          if (frame.w) {
+            box.style.cssText += `box-sizing:border-box;width:${frame.w / 20}pt;${frame.h ? `height:${frame.h / 20}pt;` : ''}display:flex;align-items:center;justify-content:center;background:#fff;${frame.bordered ? 'border:1px solid #000;' : ''}`;
+          }
           if (frame.image) {
             const img = d.createElement('img');
             img.src = frame.image;

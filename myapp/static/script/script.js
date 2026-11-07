@@ -9,6 +9,8 @@ let itemsPerPage = 10;
 let totalPages = 1;
 let totalCount = 0;
 let groupedPatients = {};
+let appliedFilters = null;
+let searchSeq = 0;
 
 async function loadCurrentUser() {
   if (!token) {
@@ -204,11 +206,11 @@ async function getGroupsFromDB() {
   }
 }
 
-async function fetchAndLoadStudies(maintainPage = false) {
+async function fetchAndLoadStudies(maintainPage = false, silent = false) {
   if (!checkAuthentication()) {
     return;
   }
-  await searchStudies(maintainPage);
+  await searchStudies(maintainPage, silent);
 }
 
 function populateCenterDropdown(centers) {
@@ -277,13 +279,27 @@ function isSearchPanelEmpty() {
   const endDate = document.getElementById('scan-end-date')?.value || '';
   const allModalities = Array.from(document.querySelectorAll('.modality-checkbox')).every(cb => cb.checked);
 
-  const startIsDefault = !startDate || startDate === fmt(past);
-  const endIsDefault = !endDate || endDate === fmt(today);
+  const startIsDefault = startDate === fmt(past);
+  const endIsDefault = endDate === fmt(today);
 
   return !nameQ && !idQ && statusQ === 'All' && centerQ === 'ALL' && !emergency && allModalities && startIsDefault && endIsDefault;
 }
 
-async function searchStudies(maintainPage = false) {
+function collectSearchFilters() {
+  const val = id => (document.getElementById(id)?.value || '').trim();
+  return {
+    name: val('patient-name'),
+    id: val('patient-id'),
+    status: val('status') || 'All',
+    center: val('center') || 'ALL',
+    emergency: !!document.getElementById('emergency')?.checked,
+    start: val('scan-start-date'),
+    end: val('scan-end-date'),
+    modalities: Array.from(document.querySelectorAll('.modality-checkbox:checked')).map(cb => cb.value)
+  };
+}
+
+async function searchStudies(maintainPage = false, silent = false) {
   if (!maintainPage && isSearchPanelEmpty()) {
     sessionStorage.removeItem('currentPage');
     window.location.reload();
@@ -299,27 +315,34 @@ async function searchStudies(maintainPage = false) {
     sessionStorage.setItem('currentPage', currentPage);
   }
 
-  const nameQ = document.getElementById('patient-name')?.value.trim() || '';
-  const idQ = document.getElementById('patient-id')?.value.trim() || '';
-  const statusQ = document.getElementById('status')?.value || 'All';
-  const centerQ = document.getElementById('center')?.value || 'ALL';
-  const emergencyFilter = document.getElementById('emergency')?.checked || false;
-  const selectedModalities = Array.from(document.querySelectorAll('.modality-checkbox:checked')).map(cb => cb.value);
-  const startDate = document.getElementById('scan-start-date')?.value || '';
-  const endDate = document.getElementById('scan-end-date')?.value || '';
+  if (!maintainPage || !appliedFilters) {
+    const collected = collectSearchFilters();
+    if (collected.start && collected.end && collected.start > collected.end) {
+      alert('Start date cannot be after end date');
+      return;
+    }
+    appliedFilters = collected;
+  }
+
+  const f = appliedFilters;
+  const seq = ++searchSeq;
+  const totalModalities = document.querySelectorAll('.modality-checkbox').length;
 
   const params = new URLSearchParams();
+  params.append('group', 'study');
   params.append('page', currentPage.toString());
   params.append('page_size', itemsPerPage.toString());
 
-  if (nameQ) params.append('patient_name', nameQ);
-  if (idQ) params.append('patient_id', idQ);
-  if (statusQ !== 'All') params.append('status', statusQ);
-  if (centerQ !== 'ALL') params.append('center_name', centerQ);
-  if (emergencyFilter) params.append('emergency', 'true');
-  if (selectedModalities.length > 0) params.append('modality', selectedModalities.join(','));
-  if (startDate) params.append('start_date', startDate);
-  if (endDate) params.append('end_date', endDate);
+  if (f.name) params.append('patient_name', f.name);
+  if (f.id) params.append('patient_id', f.id);
+  if (f.status && f.status !== 'All') params.append('status', f.status);
+  if (f.center && f.center !== 'ALL') params.append('center_name', f.center);
+  if (f.emergency) params.append('emergency', 'true');
+  if (f.modalities.length > 0 && f.modalities.length < totalModalities) params.append('modality', f.modalities.join(','));
+  if (f.start) params.append('start_date', f.start);
+  if (f.end) params.append('end_date', f.end);
+
+  if (!silent) window.QueryBar?.start();
 
   try {
     const [res, doctorsRes, groupsRes] = await Promise.all([
@@ -385,6 +408,8 @@ async function searchStudies(maintainPage = false) {
     }
 
     const responseData = await res.json();
+
+    if (seq !== searchSeq) return;
 
     let dicomImages;
     if (responseData.results && Array.isArray(responseData.results)) {
@@ -484,6 +509,10 @@ async function searchStudies(maintainPage = false) {
     totalCount = typeof responseData.count === 'number' ? responseData.count : groupedPatients.length;
     totalPages = typeof responseData.total_pages === 'number' ? responseData.total_pages : 1;
 
+    if (typeof responseData.current_page === 'number' && responseData.current_page > 0) {
+      currentPage = responseData.current_page;
+      sessionStorage.setItem('currentPage', currentPage);
+    }
     if (currentPage > totalPages && totalPages > 0) {
       currentPage = totalPages;
       sessionStorage.setItem('currentPage', currentPage);
@@ -496,11 +525,13 @@ async function searchStudies(maintainPage = false) {
     loadStudies();
     createPaginationControls();
     refreshLocks();
-    scheduleReceivingPoll(() => fetchAndLoadStudies(true));
+    scheduleReceivingPoll(() => fetchAndLoadStudies(true, true));
 
   } catch (err) {
     console.error('Error fetching studies:', err);
     alert('Error fetching studies: ' + err.message);
+  } finally {
+    if (!silent) window.QueryBar?.end();
   }
 }
 
@@ -575,9 +606,9 @@ function updatePaginationInfo() {
   const endPatient = Math.min(currentPage * itemsPerPage, totalCount);
   
   if (totalCount === 0) {
-    infoElement.textContent = 'No patients to show';
+    infoElement.textContent = 'No studies to show';
   } else {
-    infoElement.textContent = `Showing ${startPatient}-${endPatient} of ${totalCount} patients`;
+    infoElement.textContent = `Showing ${startPatient}-${endPatient} of ${totalCount} studies`;
   }
 }
 
@@ -655,16 +686,16 @@ function generateDoctorsList(study) {
 
     const parts = [];
     groupMatches.forEach(g => {
-      parts.push(`<div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;padding:3px 5px;background:#e8d5f5;border-radius:3px;">
-        <span style="font-weight:600;color:#6a0dad;">👥 ${g.name}</span>
+      parts.push(`<div class="doc-chip doc-chip-group" style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;padding:3px 5px;background:#e8d5f5;border-radius:3px;">
+        <span title="${g.name}" style="font-weight:600;color:#6a0dad;">👥 ${g.name}</span>
         <button onclick="removeSingleDoctor(${study.id}, '${g.name}')" style="background:#ff4444;color:white;border:none;border-radius:3px;padding:2px 6px;cursor:pointer;font-size:12px;margin-left:5px;">×</button>
       </div>`);
     });
 
     assignedSet.forEach(doctor => {
       if (!groupNames.includes(doctor) && !membersCoveredByGroups.has(doctor)) {
-        parts.push(`<div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;padding:3px 5px;background:#f0f0f0;border-radius:3px;">
-          <span>${doctor}</span>
+        parts.push(`<div class="doc-chip" style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;padding:3px 5px;background:#f0f0f0;border-radius:3px;">
+          <span title="${doctor}">${doctor}</span>
           <button onclick="removeSingleDoctor(${study.id}, '${doctor}')" style="background:#ff4444;color:white;border:none;border-radius:3px;padding:2px 6px;cursor:pointer;font-size:12px;margin-left:5px;">×</button>
         </div>`);
       }
@@ -673,8 +704,8 @@ function generateDoctorsList(study) {
   }
 
   return study.assignedDoctors.map(doctor => {
-    return `<div style="display: flex; justify-content: space-between; align-items: center; margin: 3px 0; padding: 3px 5px; background: #f0f0f0; border-radius: 3px;">
-      <span>${doctor}</span>
+    return `<div class="doc-chip" style="display: flex; justify-content: space-between; align-items: center; margin: 3px 0; padding: 3px 5px; background: #f0f0f0; border-radius: 3px;">
+      <span title="${doctor}">${doctor}</span>
       <button onclick="removeSingleDoctor(${study.id}, '${doctor}')" style="background: #ff4444; color: white; border: none; border-radius: 3px; padding: 2px 6px; cursor: pointer; font-size: 12px; margin-left: 5px;">×</button>
     </div>`;
   }).join('');
@@ -1132,6 +1163,18 @@ document.addEventListener('DOMContentLoaded', function() {
   if (assignBtn) {
     assignBtn.addEventListener('click', assignSelectedStudies);
   }
+
+  ['patient-name', 'patient-id'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          searchStudies();
+        }
+      });
+    }
+  });
 });
 
 async function assignSelectedStudies() {
@@ -1669,9 +1712,95 @@ async function prepareReportDocx(buffer) {
     if (text) frame.text = text;
     para.parentNode.removeChild(para);
   }
+  const floated = Array.from(doc.getElementsByTagName('w:tblpPr'));
+  for (const fp of floated) {
+    const tbl = fp.parentNode && fp.parentNode.parentNode;
+    if (!tbl || tbl.nodeName !== 'w:tbl' || !tbl.parentNode) continue;
+    const num = (el, attr) => el ? (parseInt(el.getAttribute(attr), 10) || 0) : 0;
+    const box = {
+      x: parseInt(fp.getAttribute('w:tblpX'), 10) || 0,
+      y: parseInt(fp.getAttribute('w:tblpY'), 10) || 0,
+      w: num(tbl.getElementsByTagName('w:tblW')[0], 'w:w'),
+      h: num(tbl.getElementsByTagName('w:trHeight')[0], 'w:val'),
+      bordered: tbl.getElementsByTagName('w:tblBorders').length > 0,
+      image: '',
+      imageWidthPt: 0,
+      text: ''
+    };
+    const blip = tbl.getElementsByTagName('a:blip')[0];
+    if (blip) {
+      const target = relMap[blip.getAttribute('r:embed')];
+      const imgFile = target ? zip.file('word/' + target.replace(/^\/?(word\/)?/, '')) : null;
+      if (imgFile) {
+        const ext = (target.split('.').pop() || 'png').toLowerCase();
+        const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : `image/${ext}`;
+        box.image = `data:${mime};base64,${await imgFile.async('base64')}`;
+        const extent = tbl.getElementsByTagName('wp:extent')[0];
+        if (extent) box.imageWidthPt = (parseInt(extent.getAttribute('cx'), 10) || 0) / 12700;
+      }
+    }
+    frames.push(box);
+    tbl.parentNode.removeChild(tbl);
+  }
   if (!frames.length) return { data: buffer, frames };
   zip.file('word/document.xml', new XMLSerializer().serializeToString(doc));
   return { data: await zip.generateAsync({ type: 'arraybuffer' }), frames };
+}
+
+function normalizeReportLines(root) {
+  const doc = root.ownerDocument;
+  const view = doc.defaultView;
+  const bodyRun = doc.querySelector('section.docx article span[style*="font-family"]');
+  const bodyFont = bodyRun ? bodyRun.style.fontFamily : '';
+  const naturalOf = (size, family) => {
+    const probe = doc.createElement('div');
+    probe.style.cssText = `position:absolute;visibility:hidden;line-height:normal;font-size:${size};font-family:${family};`;
+    probe.textContent = 'Xgy';
+    doc.body.appendChild(probe);
+    const ratio = probe.getBoundingClientRect().height / (parseFloat(size) || 16);
+    probe.remove();
+    return ratio > 0.8 ? ratio : 1.2;
+  };
+  root.querySelectorAll('section.docx p').forEach(p => {
+    const inHeader = !!p.closest('header,footer');
+    const runs = Array.from(p.querySelectorAll('span')).filter(s => s.style.fontSize && (s.textContent || '').length);
+    if (runs.length) {
+      let big = runs[0];
+      let bigSize = parseFloat(big.style.fontSize) || 0;
+      runs.forEach(r => {
+        const size = parseFloat(r.style.fontSize) || 0;
+        if (size > bigSize) { big = r; bigSize = size; }
+      });
+      p.style.fontSize = big.style.fontSize;
+      if (big.style.fontFamily) p.style.fontFamily = big.style.fontFamily;
+    }
+    const isEmpty = !runs.length && !(p.textContent || '').trim() && !p.querySelector('img,svg,table');
+    if (isEmpty) {
+      p.style.fontSize = '11pt';
+      if (bodyFont) p.style.fontFamily = bodyFont;
+    }
+    const cs = view.getComputedStyle(p);
+    const fs = parseFloat(cs.fontSize);
+    const natural = naturalOf(cs.fontSize, cs.fontFamily);
+    let linePx = natural * fs;
+    const lh = parseFloat(cs.lineHeight);
+    if (cs.lineHeight !== 'normal' && lh && fs) {
+      const mult = lh / fs;
+      if (Math.abs(mult - 1) < 0.02) {
+        p.style.lineHeight = 'normal';
+      } else if (mult > 1.02 && mult < 3 && !inHeader && /^[\d.]*$/.test(p.style.lineHeight || '')) {
+        p.style.lineHeight = (mult * natural).toFixed(3);
+        linePx = mult * natural * fs;
+      } else {
+        linePx = lh;
+      }
+    }
+    if (isEmpty && !inHeader) p.style.minHeight = linePx.toFixed(2) + 'px';
+  });
+  root.querySelectorAll('section.docx td, section.docx th').forEach(cell => {
+    if (!cell.style.paddingTop) cell.style.paddingTop = '0';
+    if (!cell.style.paddingBottom) cell.style.paddingBottom = '0';
+  });
 }
 
 async function renderDocxPopup(win, reports) {
@@ -1713,12 +1842,16 @@ async function renderDocxPopup(win, reports) {
         renderHeaders: true,
         renderFooters: true
       });
+      normalizeReportLines(holder);
       const page = holder.querySelector('section');
       if (page) {
         page.style.position = 'relative';
         item.frames.forEach(frame => {
           const box = d.createElement('div');
           box.style.cssText = `position:absolute;left:${frame.x / 20}pt;top:${frame.y / 20}pt;z-index:5;`;
+          if (frame.w) {
+            box.style.cssText += `box-sizing:border-box;width:${frame.w / 20}pt;${frame.h ? `height:${frame.h / 20}pt;` : ''}display:flex;align-items:center;justify-content:center;background:#fff;${frame.bordered ? 'border:1px solid #000;' : ''}`;
+          }
           if (frame.image) {
             const img = d.createElement('img');
             img.src = frame.image;
@@ -1925,7 +2058,7 @@ window.onload = async function() {
   setupOnlineDoctorButton();
 
   setInterval(() => {
-    fetchAndLoadStudies(true);
+    fetchAndLoadStudies(true, true);
   }, 30000);
 
   setInterval(refreshLocks, 10000);
