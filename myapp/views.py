@@ -31,6 +31,7 @@ from pathlib import Path
 import os
 import mimetypes
 import zipfile
+import math
 import re
 from datetime import datetime, timezone
 import logging
@@ -64,6 +65,8 @@ from .models import (
     ReportHistory,
     ReportTemplate,
     UserSession,
+    InstituteBill,
+    InstituteBillFile,
 )
 from .serializers import (
     PatientSerializer,
@@ -1372,9 +1375,19 @@ def _apply_study_filters(queryset, params, exact_center=False):
     if patient_id:
         queryset = queryset.filter(patient_id__icontains=patient_id)
 
+    body_part = _param(params, 'body_part')
+    if body_part:
+        for token in [t for t in re.split(r'\s+', body_part) if t]:
+            queryset = queryset.filter(
+                Q(study_description__icontains=token) | Q(series_description__icontains=token)
+            )
+
     status_value = _param(params, 'status')
     if status_value and status_value.lower() != 'all':
-        queryset = queryset.filter(status=status_value)
+        if status_value.lower() == 'unreported':
+            queryset = queryset.filter(status__in=['Unreported', 'Not Assigned'])
+        else:
+            queryset = queryset.filter(status=status_value)
 
     modality_value = _param(params, 'modality', 'modality__in')
     modalities = [m.strip().upper() for m in modality_value.split(',') if m.strip()]
@@ -5323,4 +5336,978 @@ def download_study_zip(request):
     tmp.seek(0)
     response = FileResponse(tmp, content_type="application/zip")
     response["Content-Disposition"] = f'attachment; filename="{safe_name}.zip"'
+    return response
+
+
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+IMAGE_DIR = os.path.join(settings.BASE_DIR, "myapp", "static", "images")
+LOGO_FILE = "telerad_logo.png"
+SIGN_FILE = "azad_signature.png"
+
+NS = (
+    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+    'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+    'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+    'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"'
+)
+LINE = 'w:val="single" w:sz="4" w:space="0" w:color="000000"'
+DOTTED_LINE = 'w:val="dotted" w:sz="4" w:space="0" w:color="000000"'
+CONTROL_CHARS = re.compile("[\u0000-\u0008\u000B\u000C\u000E-\u001F]")
+
+
+def _x(value):
+    text = "" if value is None else str(value)
+    text = CONTROL_CHARS.sub("", text)
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _num(value):
+    rounded = math.floor(value * 100 + 0.5) / 100
+    if rounded == int(rounded):
+        return str(int(rounded))
+    return repr(rounded)
+
+
+def _money(value):
+    text = _num(value)
+    return text if "." in text else text + ".0"
+
+
+def _run(text, f="Arial", b=False, i=False, c=None, sz=None, u=False, ab=False):
+    if b:
+        f = "Arial Black"
+    pr = (
+        f'<w:rFonts w:ascii="{f}" w:hAnsi="{f}" w:eastAsia="{f}" w:cs="{f}"/>'
+    )
+    if ab:
+        pr += "<w:b/><w:bCs/>"
+    if i:
+        pr += "<w:i/><w:iCs/>"
+    if c:
+        pr += f'<w:color w:val="{c}"/>'
+    if sz:
+        pr += f'<w:sz w:val="{sz}"/><w:szCs w:val="{sz}"/>'
+    if u:
+        pr += '<w:u w:val="single"/>'
+    out = ""
+    for index, part in enumerate(("" if text is None else str(text)).split("\t")):
+        if index:
+            out += "<w:tab/>"
+        if part:
+            out += f'<w:t xml:space="preserve">{_x(part)}</w:t>'
+    return f"<w:r><w:rPr>{pr}</w:rPr>{out}</w:r>"
+
+
+def _para(runs, keep=False, pb=False, tabs=None, before=0, after=0, line=240, ind=None, jc=None, psz=None):
+    pr = ""
+    if keep:
+        pr += "<w:keepNext/>"
+    if pb:
+        pr += "<w:pageBreakBefore/>"
+    if tabs:
+        pr += "<w:tabs>" + "".join(f'<w:tab w:val="left" w:pos="{t}"/>' for t in tabs) + "</w:tabs>"
+    pr += f'<w:spacing w:before="{before}" w:after="{after}" w:line="{line}" w:lineRule="auto"/>'
+    if ind:
+        pr += f'<w:ind w:left="{ind}"/>'
+    if jc:
+        pr += f'<w:jc w:val="{jc}"/>'
+    if psz:
+        pr += f'<w:rPr><w:sz w:val="{psz}"/><w:szCs w:val="{psz}"/></w:rPr>'
+    body = "".join(runs) if isinstance(runs, (list, tuple)) else (runs or "")
+    return f"<w:p><w:pPr>{pr}</w:pPr>{body}</w:p>"
+
+
+def _cell(w, content, span=None, vm=None, bd=None, va=None, shd=None):
+    pr = f'<w:tcW w:w="{w}" w:type="dxa"/>'
+    if span:
+        pr += f'<w:gridSpan w:val="{span}"/>'
+    if vm:
+        pr += '<w:vMerge w:val="restart"/>' if vm == "start" else "<w:vMerge/>"
+    if bd:
+        pr += f"<w:tcBorders>{bd}</w:tcBorders>"
+    if shd:
+        pr += f'<w:shd w:val="clear" w:color="auto" w:fill="{shd}"/>'
+    if va:
+        pr += f'<w:vAlign w:val="{va}"/>'
+    body = "".join(content) if isinstance(content, (list, tuple)) else content
+    if not body:
+        body = _para("")
+    return f"<w:tc><w:tcPr>{pr}</w:tcPr>{body}</w:tc>"
+
+
+def _row(cells, cant=False, h=None, head=False):
+    pr = ""
+    if cant:
+        pr += "<w:cantSplit/>"
+    if h:
+        pr += f'<w:trHeight w:val="{h}" w:hRule="atLeast"/>'
+    if head:
+        pr += "<w:tblHeader/>"
+    return "<w:tr>" + (f"<w:trPr>{pr}</w:trPr>" if pr else "") + "".join(cells) + "</w:tr>"
+
+
+def _table(grid, rows, plain=False, lr=80, line=None):
+    total = sum(grid)
+    side = 'w:val="nil"' if plain else (line or LINE)
+    borders = (
+        f"<w:tblBorders><w:top {side}/><w:left {side}/><w:bottom {side}/>"
+        f"<w:right {side}/><w:insideH {side}/><w:insideV {side}/></w:tblBorders>"
+    )
+    return (
+        f'<w:tbl><w:tblPr><w:tblW w:w="{total}" w:type="dxa"/>{borders}'
+        '<w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="40" w:type="dxa"/>'
+        f'<w:left w:w="{lr}" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/>'
+        f'<w:right w:w="{lr}" w:type="dxa"/></w:tblCellMar></w:tblPr>'
+        "<w:tblGrid>" + "".join(f'<w:gridCol w:w="{g}"/>' for g in grid) + "</w:tblGrid>"
+        + "".join(rows)
+        + "</w:tbl>"
+    )
+
+
+def _pic(rid, pid, name, cx, cy):
+    return (
+        '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'
+        f'<wp:extent cx="{cx}" cy="{cy}"/><wp:docPr id="{pid}" name="{name}"/>'
+        '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+        f'<pic:pic><pic:nvPicPr><pic:cNvPr id="{pid}" name="{name}"/><pic:cNvPicPr/></pic:nvPicPr>'
+        f'<pic:blipFill><a:blip r:embed="{rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+        f'<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>'
+        '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>'
+        "</a:graphicData></a:graphic></wp:inline></w:drawing></w:r>"
+    )
+
+
+def _day(value):
+    return value.strftime("%d-%m-%Y")
+
+
+def _stamp(value):
+    if not value:
+        return ""
+    if dj_timezone.is_aware(value):
+        value = dj_timezone.localtime(value)
+    return value.strftime("%d-%m-%Y %H:%M:%S")
+
+
+def _age_years(birth_date):
+    if not birth_date:
+        return 0
+    try:
+        born = datetime.strptime(birth_date, "%Y%m%d")
+    except (ValueError, TypeError):
+        return 0
+    today = datetime.now()
+    age = today.year - born.year
+    if (today.month, today.day) < (born.month, born.day):
+        age -= 1
+    return max(0, age)
+
+
+def _age_sex(age, sex):
+    match = re.search(r"(\d+)\s*([YMDymd])?", str(age if age is not None else "").strip())
+    out = ""
+    if match:
+        out = match.group(1).zfill(3) + (match.group(2).upper() if match.group(2) else "Y")
+    s = str(sex or "").strip()[:1].upper()
+    return out + ("/" + s if s else "")
+
+
+def _collect_rows(queryset, inst):
+    records = []
+    page = 1
+    while True:
+        chunk, _total, total_pages, page = _study_group_page(queryset, page, 500)
+        records.extend(chunk)
+        if not total_pages or page >= total_pages:
+            break
+        page += 1
+
+    uids = list({r.study_instance_uid for r in records if r.study_instance_uid})
+    counts = {}
+    for i in range(0, len(uids), 500):
+        batch = uids[i:i + 500]
+        for row in (
+            DICOMImage.objects.filter(study_instance_uid__in=batch)
+            .order_by()
+            .values("study_instance_uid")
+            .annotate(n=Count("id"))
+        ):
+            counts[row["study_instance_uid"]] = row["n"]
+
+    received = _build_study_received_map(records)
+    institutes = _build_center_name_to_institute_map()
+
+    rows = []
+    for r in records:
+        uid = r.study_instance_uid
+        rows.append(
+            {
+                "name": r.patient_name or "",
+                "id": r.patient_id or "",
+                "agesex": _age_sex(_age_years(r.patient_birth_date), r.patient_sex),
+                "inst": institutes.get(r.center_name, r.center_name) or inst,
+                "mod": (r.modality or "N/A").upper(),
+                "body": r.study_description or "",
+                "imgs": counts.get(uid, 1) if uid else 1,
+                "recv": _stamp(received.get(uid) or r.created_at),
+                "rep": _stamp(r.updated_at),
+                "by": r.reported_by or "",
+            }
+        )
+    return rows
+
+
+def _build_docx(inst, start, end, rows, logo, sign):
+    mods = []
+    counts = {}
+    for r in rows:
+        if r["mod"] not in counts:
+            counts[r["mod"]] = 0
+            mods.append(r["mod"])
+        counts[r["mod"]] += 1
+    prices = {m: 0 for m in mods}
+
+    today = _day(datetime.now())
+    date_from = _day(start)
+    date_to = _day(end)
+
+    W = 10546
+    many = len(mods) > 3
+    rh = 300 if many else 340
+    bl = 240 if many else 270
+    ink = "33339C"
+    body = ""
+
+    logo_pic = _pic("rIdLogo", 1, "Logo", 900000, 1008000)
+    sign_pic = _pic("rIdSign", 2, "Signature", 1030000, 450000)
+    right_line = f"<w:right {LINE}/>"
+
+    head = [
+        _row(
+            [
+                _cell(2000, _para(logo_pic, jc="center"), bd=right_line, va="center"),
+                _cell(
+                    8546,
+                    [
+                        _para(_run("Telerad Bangladesh Ltd.", sz=44, c=ink, b=True), ind=240, after=60),
+                        _para(
+                            _run("Afza Tower, 27/F, Sangsad Avenue, Monipuri Para, Tejgaon, Dhaka-1215,", sz=18),
+                            ind=240,
+                            after=60,
+                        ),
+                        _para(
+                            _run("Contact No \u2013 01979797234-9, 01730716541-2, +88-02-58151415", sz=18),
+                            ind=240,
+                            after=40,
+                        ),
+                        _para(
+                            [
+                                _run("E-mail: ", sz=18),
+                                _run("info@teleradbangladesh.com", sz=18, u=True),
+                                _run(", web: ", sz=18),
+                                _run("www.teleradbangladesh.com", sz=18, u=True),
+                            ],
+                            ind=240,
+                        ),
+                    ],
+                    va="center",
+                ),
+            ]
+        ),
+    ]
+    body += _table([2000, 8546], head, plain=True)
+    body += _para(_run("Billing Invoice", sz=32, u=True, b=True), jc="center", before=160, after=120)
+
+    hd = {"sz": 18}
+    hb = {"sz": 18, "b": True}
+    info = [
+        _row(
+            [
+                _cell(2000, _para(_run("Billing Invoice", **hb)), va="center"),
+                _cell(3273, _para([_run("From Date :  ", **hb), _run(date_from, **hd)]), va="center"),
+                _cell(5273, _para([_run("To Date :  ", **hb), _run(date_to, **hd)]), va="center"),
+            ],
+            h=rh,
+        ),
+        _row(
+            [
+                _cell(5273, _para(_run("Customer Information", **hb), jc="center"), span=2, va="center"),
+                _cell(5273, _para(_run("Company Information", **hb), jc="center"), va="center"),
+            ],
+            h=rh,
+        ),
+        _row(
+            [
+                _cell(2000, _para(_run("Name", **hb)), va="center"),
+                _cell(8546, _para([_run(":  ", **hd), _run(inst, **hb)]), span=2, va="center"),
+            ],
+            h=rh,
+        ),
+    ]
+    for label in ("Email", "Contact No", "Address"):
+        info.append(
+            _row(
+                [
+                    _cell(2000, _para(_run(label, **hb)), va="center"),
+                    _cell(8546, _para(_run(":", **hd)), span=2, va="center"),
+                ],
+                h=rh,
+            )
+        )
+    body += _table([2000, 3273, 5273], info)
+
+    body += _para(
+        [_run("Payment due date:", sz=20, u=True), _run(" " + today, sz=20, b=True)],
+        jc="right",
+        before=100,
+        after=180,
+    )
+
+    g = [800, 4846, 1400, 1900, 1600]
+    hs = {"sz": 18}
+    hsb = {"sz": 18, "b": True}
+    items = [
+        _row(
+            [
+                _cell(g[0], _para(_run("S.NO.", **hsb), jc="center"), va="center"),
+                _cell(g[1], _para(_run("ITEM DESCRIPTION", **hsb)), va="center"),
+                _cell(g[2], _para(_run("QUANTITY", **hsb), jc="right"), va="center"),
+                _cell(g[3], _para(_run("UNIT PRICE(\u09f3)", **hsb), jc="right"), va="center"),
+                _cell(g[4], _para(_run("AMOUNT(\u09f3)", **hsb), jc="right"), va="center"),
+            ],
+            head=True,
+            cant=True,
+            h=rh,
+        )
+    ]
+    total = 0
+    for i, m in enumerate(mods):
+        q = counts[m]
+        price = prices.get(m, 0)
+        amount = q * price
+        total += amount
+        items.append(
+            _row(
+                [
+                    _cell(g[0], _para(_run(str(i + 1), **hs), jc="center"), va="center"),
+                    _cell(g[1], _para(_run(m + " MODALITY", **hs)), va="center"),
+                    _cell(g[2], _para(_run(str(q), **hs), jc="right"), va="center"),
+                    _cell(g[3], _para(_run(_num(price), **hs), jc="right"), va="center"),
+                    _cell(g[4], _para(_run(_money(amount), **hs), jc="right"), va="center"),
+                ],
+                cant=True,
+                h=rh,
+            )
+        )
+    cst = total * 0.04
+    for label, value in (("TOTAL(\u09f3)", total), ("INCL CST@4% (\u09f3)", cst), ("GRANDSUM(\u09f3)", total + cst)):
+        ts = hsb if label.startswith("GRANDSUM") else hs
+        items.append(
+            _row(
+                [
+                    _cell(g[0] + g[1] + g[2] + g[3], _para(_run(label, **ts), jc="right"), span=4, va="center"),
+                    _cell(g[4], _para(_run(_money(value), **ts), jc="right"), va="center"),
+                ],
+                cant=True,
+                h=rh,
+            )
+        )
+    body += _table(g, items)
+
+    body += _para(sign_pic, before=160, ind=1300, keep=True)
+    nm = {"sz": 20}
+    nb = {"sz": 20, "b": True}
+    sg = [1000, 300, 5600]
+
+    def sig_row(a, b, c, keep=True, strong=False):
+        return _row(
+            [
+                _cell(sg[0], _para(_run(a, **nm), keep=keep, line=260)),
+                _cell(sg[1], _para(_run(b, **nm), keep=keep, line=260)),
+                _cell(sg[2], _para(_run(c, **(nb if strong else nm)), keep=keep, line=260)),
+            ],
+            cant=True,
+        )
+
+    body += _table(
+        sg,
+        [
+            sig_row("Name", ":", "Md. Abu Saed Azad", strong=True),
+            sig_row("", "", "Director \u2013 Accounts and Finance"),
+            sig_row("", "", "Telerad Bangladesh Ltd."),
+            sig_row("Date", ":", today, keep=False),
+        ],
+        plain=True,
+        lr=0,
+    )
+
+    body += _para(
+        _run("Please pay your bill at any of the following Bank accounts:", sz=20, b=True),
+        before=160,
+        after=60,
+        keep=True,
+    )
+
+    bs = {"sz": 17}
+    bv = {"sz": 17, "b": True}
+
+    def bank(no, lines):
+        return [
+            _cell(500, _para(_run(no, sz=20), jc="center"), va="center"),
+            _cell(4773, [_para(line, line=bl) for line in lines], va="center"),
+        ]
+
+    def bank_lines(name, acc_name, acc_no, branch):
+        return [
+            [_run("Name of Bank: ", **bs), _run(name, **bv)],
+            [_run("Account Name: ", **bs), _run(acc_name, **bv)],
+            [_run("Account No: ", **bs), _run(acc_no, **bv)],
+            [_run("Branch: ", **bs), _run(branch, **bv)],
+        ]
+
+    mobile_lines = [
+        [_run("BKASH: ", **bs), _run("01979797234 (MERCHENT)", **bv)],
+        [_run("BKASH: ", **bs), _run("01979797235 (Personal)", **bv)],
+        [_run("Nagad: ", **bs), _run("01979797235 (MERCHENT)", **bv)],
+    ]
+
+    last_row = (
+        "<w:tr><w:trPr><w:cantSplit/>"
+        '<w:gridAfter w:val="2"/><w:wAfter w:w="5273" w:type="dxa"/></w:trPr>'
+        + "".join(
+            bank(
+                "05",
+                bank_lines("Janata Bank PLC", "Telerad Bangladesh Ltd.", "0100295277810", "Bangshal Road Branch (0113)"),
+            )
+        )
+        + "</w:tr>"
+    )
+
+    banks = [
+        _row(
+            bank(
+                "01",
+                bank_lines("Al-Arafa Islami Bank", "Telerad Bangladesh Ltd.", "0841020002942", "Panthapath Branch"),
+            )
+            + bank(
+                "02",
+                bank_lines("Dutch Bangla Bank Ltd", "Telerad Bangladesh Ltd.", "2551100002816", "Panthapath Branch"),
+            ),
+            cant=True,
+        ),
+        _row(
+            bank(
+                "03",
+                bank_lines(
+                    "Islami Bank Bangladesh Ltd",
+                    "Telerad Bangladesh Ltd.",
+                    "20507140100000403",
+                    "Monipuripara Sub Branch",
+                ),
+            )
+            + bank("04", mobile_lines),
+            cant=True,
+        ),
+        last_row,
+    ]
+    body += _table([500, 4773, 500, 4773], banks)
+
+    body += _para(_run("Note: Any bank charges /fee to be bear by the customer", sz=20, b=True), before=160)
+
+    body += _para(_run("Case Details", sz=24, u=True, b=True), pb=True, after=160)
+    cg = [380, 1450, 620, 760, 1700, 420, 1250, 520, 480, 1000, 1000, 966]
+    ch = [
+        "No.", "Name", "ID", "Age/Sex", "Inst.Name", "Mod", "Body Part",
+        "No.of Image", "Price", "Scan Rcv Date/Time", "Report Time", "Reported By",
+    ]
+    cases = [
+        _row(
+            [_cell(cg[i], _para(_run(t, sz=15, ab=True)), va="center") for i, t in enumerate(ch)],
+            head=True,
+            cant=True,
+        )
+    ]
+    for i, r in enumerate(rows):
+        vals = [
+            str(i + 1), r["name"], r["id"], r["agesex"], r["inst"], r["mod"], r["body"],
+            r["imgs"], _num(prices.get(r["mod"], 0)), r["recv"], r["rep"], r["by"],
+        ]
+        cases.append(
+            _row([_cell(cg[k], _para(_run(v, sz=15)), va="center") for k, v in enumerate(vals)], cant=True)
+        )
+    body += _table(cg, cases, lr=40, line=DOTTED_LINE)
+
+    body += _para(_run("Total Amount =", sz=22, b=True), before=300)
+
+    sect = (
+        '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
+        '<w:pgMar w:top="567" w:right="680" w:bottom="567" w:left="680" '
+        'w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>'
+    )
+    doc = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f"<w:document {NS}><w:body>{body}{sect}</w:body></w:document>"
+    )
+
+    head_xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    types = (
+        head_xml
+        + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Default Extension="png" ContentType="image/png"/>'
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+        "</Types>"
+    )
+    rels = (
+        head_xml
+        + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+        "</Relationships>"
+    )
+    doc_rels = (
+        head_xml
+        + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        '<Relationship Id="rIdLogo" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo.png"/>'
+        '<Relationship Id="rIdSign" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/signature.png"/>'
+        "</Relationships>"
+    )
+    styles = (
+        head_xml
+        + '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults>'
+        '<w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/>'
+        '<w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="en-US"/></w:rPr></w:rPrDefault>'
+        '<w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault>'
+        '</w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal">'
+        '<w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>'
+    )
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", types)
+        z.writestr("_rels/.rels", rels)
+        z.writestr("word/document.xml", doc)
+        z.writestr("word/styles.xml", styles)
+        z.writestr("word/_rels/document.xml.rels", doc_rels)
+        z.writestr("word/media/logo.png", logo)
+        z.writestr("word/media/signature.png", sign)
+    return buffer.getvalue()
+
+
+def _parse_day(value):
+    try:
+        return datetime.strptime((value or "").strip(), "%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+INVOICE_NAME_RE = re.compile(r"^[A-Za-z0-9\-_]+\.(docx|zip)$")
+ZIP_MIME = "application/zip"
+
+
+def _invoice_dir(user):
+    return os.path.join(settings.MEDIA_ROOT, "billing_invoices", str(user.pk))
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated, AdminOrSubAdminPermission])
+def billing_invoice_files(request):
+    folder = _invoice_dir(request.user)
+    items = []
+    if os.path.isdir(folder):
+        for name in os.listdir(folder):
+            full = os.path.join(folder, name)
+            if INVOICE_NAME_RE.match(name) and os.path.isfile(full):
+                st = os.stat(full)
+                items.append((st.st_mtime, name, st.st_size))
+    items.sort(reverse=True)
+    return Response(
+        [
+            {
+                "name": name,
+                "size": size,
+                "generated_at": datetime.fromtimestamp(mtime, timezone.utc).isoformat(),
+            }
+            for mtime, name, size in items[:10]
+        ]
+    )
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated, AdminOrSubAdminPermission])
+def billing_invoice_file_download(request):
+    name = (request.GET.get("name") or "").strip()
+    if not INVOICE_NAME_RE.match(name):
+        return Response({"error": "Invalid file name."}, status=400)
+    full = os.path.join(_invoice_dir(request.user), name)
+    if not os.path.isfile(full):
+        return Response({"error": "File not found."}, status=404)
+    mime = ZIP_MIME if name.lower().endswith(".zip") else DOCX_MIME
+    response = FileResponse(open(full, "rb"), content_type=mime)
+    response["Content-Disposition"] = f'attachment; filename="{name}"'
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+
+def _invoice_allowed_names(user):
+    profile = UserProfile.objects.filter(user=user).first()
+    if profile and profile.role and profile.role.name == "SubAdmin":
+        return get_subadmin_allowed_center_names(user)
+    return None
+
+
+def _invoice_rows(user, inst, start, end):
+    queryset = DICOMImage.objects.all()
+    allowed = _invoice_allowed_names(user)
+    if allowed is not None:
+        queryset = queryset.filter(center_name__in=allowed)
+
+    queryset = _apply_study_filters(
+        queryset,
+        {
+            "institute_name": inst,
+            "server_start": start.strftime("%Y-%m-%d"),
+            "server_end": end.strftime("%Y-%m-%d"),
+            "status": "Reported",
+        },
+    )
+    return _collect_rows(queryset, inst)
+
+
+def _invoice_institutes(user):
+    allowed = _invoice_allowed_names(user)
+    centers = (
+        Center.objects.exclude(institute_name__isnull=True)
+        .exclude(institute_name__exact="")
+        .exclude(institute_name__iexact="default")
+        .prefetch_related("center_names")
+        .order_by("institute_name")
+    )
+    names = []
+    seen = set()
+    for center in centers:
+        name = center.institute_name.strip()
+        key = name.lower()
+        if not name or key in seen:
+            continue
+        if allowed is not None and not any(cn.name in allowed for cn in center.center_names.all()):
+            continue
+        seen.add(key)
+        names.append(name)
+    return names
+
+
+def _invoice_safe_name(text):
+    return re.sub(r"[^A-Za-z0-9\-]+", "_", text).strip("_") or "Institute"
+
+
+def _invoice_save_copy(user, file_name, data):
+    try:
+        folder = _invoice_dir(user)
+        os.makedirs(folder, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        base, ext = os.path.splitext(file_name)
+        with open(os.path.join(folder, base + "_" + stamp + ext), "wb") as fh:
+            fh.write(data)
+    except OSError:
+        logger.exception("Could not save generated invoice")
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated, AdminOrSubAdminPermission])
+def billing_invoice(request):
+    inst = (request.GET.get("institute_name") or "").strip()
+    start = _parse_day(request.GET.get("start"))
+    end = _parse_day(request.GET.get("end"))
+    if not inst:
+        return Response({"error": "Please select an institution."}, status=400)
+    if not start or not end:
+        return Response({"error": "Please select start and end date."}, status=400)
+    if start > end:
+        return Response({"error": "Start date cannot be after end date."}, status=400)
+
+    if inst.upper() == "ALL":
+        return _billing_invoice_all(request, start, end)
+
+    rows = _invoice_rows(request.user, inst, start, end)
+    if not rows:
+        return Response(
+            {"error": "No reported cases found for this institution in the selected date range."},
+            status=404,
+        )
+
+    try:
+        with open(os.path.join(IMAGE_DIR, LOGO_FILE), "rb") as fh:
+            logo = fh.read()
+        with open(os.path.join(IMAGE_DIR, SIGN_FILE), "rb") as fh:
+            sign = fh.read()
+    except OSError:
+        return Response({"error": "Invoice images are missing on the server."}, status=500)
+
+    data = _build_docx(inst, start, end, rows, logo, sign)
+    file_name = re.sub(r"[^A-Za-z0-9\-]+", "_", f"{inst}_{_day(start)}_{_day(end)}") + ".docx"
+    _invoice_save_copy(request.user, file_name, data)
+
+    response = HttpResponse(data, content_type=DOCX_MIME)
+    response["Content-Disposition"] = f'attachment; filename="{file_name}"'
+    response["X-Case-Count"] = str(len(rows))
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+def _billing_invoice_all(request, start, end):
+    try:
+        with open(os.path.join(IMAGE_DIR, LOGO_FILE), "rb") as fh:
+            logo = fh.read()
+        with open(os.path.join(IMAGE_DIR, SIGN_FILE), "rb") as fh:
+            sign = fh.read()
+    except OSError:
+        return Response({"error": "Invoice images are missing on the server."}, status=500)
+
+    buffer = io.BytesIO()
+    used = set()
+    total_cases = 0
+    total_files = 0
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for inst in _invoice_institutes(request.user):
+            rows = _invoice_rows(request.user, inst, start, end)
+            if not rows:
+                continue
+            base = _invoice_safe_name(f"{inst}_{_day(start)}_{_day(end)}")
+            entry = base + ".docx"
+            number = 2
+            while entry.lower() in used:
+                entry = f"{base}_{number}.docx"
+                number += 1
+            used.add(entry.lower())
+            archive.writestr(entry, _build_docx(inst, start, end, rows, logo, sign))
+            total_cases += len(rows)
+            total_files += 1
+
+    if not total_files:
+        return Response(
+            {"error": "No reported cases found for any institution in the selected date range."},
+            status=404,
+        )
+
+    data = buffer.getvalue()
+    file_name = _invoice_safe_name(f"ALL_Institutes_{_day(start)}_{_day(end)}") + ".zip"
+    _invoice_save_copy(request.user, file_name, data)
+
+    response = HttpResponse(data, content_type=ZIP_MIME)
+    response["Content-Disposition"] = f'attachment; filename="{file_name}"'
+    response["X-Case-Count"] = str(total_cases)
+    response["X-Invoice-Count"] = str(total_files)
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+MAX_BILL_FILE_BYTES = 25 * 1024 * 1024
+
+
+def _bill_file_entries(bill):
+    entries = []
+    if bill.bill_file:
+        entries.append((0, bill.bill_file))
+    for item in bill.files.all():
+        if item.file:
+            entries.append((item.id, item.file))
+    return entries
+
+
+def _serialize_bill(bill, request=None):
+    when = bill.bill_date
+    if when and settings.USE_TZ and dj_timezone.is_aware(when):
+        when = dj_timezone.localtime(when)
+    files = [
+        {'id': file_id, 'name': os.path.basename(stored.name)}
+        for file_id, stored in _bill_file_entries(bill)
+    ]
+    return {
+        'id': bill.id,
+        'institute_name': bill.institute_name,
+        'title': bill.title,
+        'description': bill.description or '',
+        'bill_date': when.strftime('%d-%m-%Y %H:%M:%S') if when else '',
+        'has_file': bool(files),
+        'file_name': files[0]['name'] if files else '',
+        'files': files,
+        'is_active': bill.is_active,
+    }
+
+
+def _user_institute_name(user):
+    profile = UserProfile.objects.filter(user=user).select_related('center').first()
+    if profile and profile.center and profile.center.institute_name:
+        return profile.center.institute_name
+    return ''
+
+
+@api_view(["GET", "POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated, AdminPermission])
+def institute_bills_admin(request):
+    if request.method == "GET":
+        bills = InstituteBill.objects.prefetch_related("files")
+        return Response({"success": True, "results": [_serialize_bill(b, request) for b in bills]})
+
+    institute_name = (request.data.get("institute_name") or "").strip()
+    title = (request.data.get("title") or "").strip()
+    description = (request.data.get("description") or "").strip()
+    if not institute_name:
+        return Response({"success": False, "error": "Please select an institute."}, status=400)
+    if not Center.objects.filter(institute_name=institute_name).exists():
+        return Response({"success": False, "error": "Unknown institute."}, status=400)
+    if not title:
+        return Response({"success": False, "error": "Bill title is required."}, status=400)
+
+    bill_files = request.FILES.getlist("bill_file")
+    for bill_file in bill_files:
+        if bill_file.size > MAX_BILL_FILE_BYTES:
+            return Response(
+                {"success": False, "error": f"{bill_file.name} is too large (max 25 MB)."},
+                status=400,
+            )
+
+    from datetime import timedelta
+
+    bill = InstituteBill.objects.create(
+        institute_name=institute_name,
+        title=title[:200],
+        description=description[:200],
+        bill_date=dj_timezone.now() - timedelta(days=7),
+        created_by=request.user,
+    )
+    for bill_file in bill_files:
+        InstituteBillFile.objects.create(bill=bill, file=bill_file)
+    return Response({"success": True, "bill": _serialize_bill(bill, request)}, status=201)
+
+
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated, AdminPermission])
+def institute_bill_toggle(request):
+    try:
+        bill = InstituteBill.objects.get(pk=request.data.get("bill_id"))
+    except (InstituteBill.DoesNotExist, ValueError, TypeError):
+        return Response({"success": False, "error": "Bill not found."}, status=404)
+    bill.is_active = bool(request.data.get("is_active"))
+    bill.save(update_fields=["is_active"])
+    return Response({"success": True, "bill": _serialize_bill(bill, request)})
+
+
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated, AdminPermission])
+def institute_bill_delete(request):
+    try:
+        bill = InstituteBill.objects.get(pk=request.data.get("bill_id"))
+    except (InstituteBill.DoesNotExist, ValueError, TypeError):
+        return Response({"success": False, "error": "Bill not found."}, status=404)
+    for _file_id, stored in _bill_file_entries(bill):
+        try:
+            stored.delete(save=False)
+        except Exception:
+            logger.warning("Could not remove bill file for bill %s", bill.pk)
+    bill.delete()
+    return Response({"success": True})
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def institute_active_bills(request):
+    institute_name = _user_institute_name(request.user)
+    if not institute_name:
+        return Response({"success": True, "results": []})
+    bills = InstituteBill.objects.filter(institute_name=institute_name, is_active=True).prefetch_related("files")
+    return Response({"success": True, "results": [_serialize_bill(b, request) for b in bills]})
+
+
+def _bill_institutes_for_staff(user):
+    allowed = _invoice_allowed_names(user)
+    if allowed is None:
+        return None
+    mapping = _build_center_name_to_institute_map()
+    return {mapping.get(name, name) for name in allowed}
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated, AdminOrSubAdminPermission])
+def institute_bills_feed(request):
+    bills = InstituteBill.objects.prefetch_related("files")
+    institutes = _bill_institutes_for_staff(request.user)
+    if institutes is not None:
+        bills = bills.filter(institute_name__in=institutes)
+    from datetime import timedelta
+
+    def _day_bound(naive):
+        return dj_timezone.make_aware(naive) if settings.USE_TZ else naive
+
+    start_raw = (request.GET.get("start") or "").strip()
+    end_raw = (request.GET.get("end") or "").strip()
+    try:
+        if start_raw:
+            bills = bills.filter(bill_date__gte=_day_bound(datetime.strptime(start_raw, "%Y-%m-%d")))
+        if end_raw:
+            bills = bills.filter(
+                bill_date__lt=_day_bound(datetime.strptime(end_raw, "%Y-%m-%d") + timedelta(days=1))
+            )
+    except ValueError:
+        return Response({"success": False, "error": "Invalid date."}, status=400)
+    return Response({"success": True, "results": [_serialize_bill(b, request) for b in bills]})
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def institute_bill_download(request, bill_id):
+    try:
+        bill = InstituteBill.objects.get(pk=bill_id)
+    except InstituteBill.DoesNotExist:
+        return Response({"error": "Bill not found."}, status=404)
+    profile = UserProfile.objects.filter(user=request.user).first()
+    role_name = profile.role.name if profile and profile.role else ""
+    if request.user.is_superuser or role_name == "Admin":
+        pass
+    elif role_name == "SubAdmin":
+        institutes = _bill_institutes_for_staff(request.user)
+        if institutes is not None and bill.institute_name not in institutes:
+            return Response({"error": "Access denied."}, status=403)
+    elif not bill.is_active or _user_institute_name(request.user) != bill.institute_name:
+        return Response({"error": "Access denied."}, status=403)
+    entries = _bill_file_entries(bill)
+    if not entries:
+        return Response({"error": "No file attached."}, status=404)
+    wanted = request.GET.get("file")
+    if wanted in (None, ""):
+        stored = entries[0][1]
+    else:
+        try:
+            wanted_id = int(wanted)
+        except ValueError:
+            return Response({"error": "Invalid file."}, status=400)
+        stored = next((item for file_id, item in entries if file_id == wanted_id), None)
+        if stored is None:
+            return Response({"error": "File not found."}, status=404)
+    try:
+        handle = stored.open("rb")
+    except (OSError, ValueError):
+        return Response({"error": "File not found."}, status=404)
+    response = FileResponse(handle, as_attachment=True, filename=os.path.basename(stored.name))
+    response["Cache-Control"] = "no-store"
+    response["X-Content-Type-Options"] = "nosniff"
     return response

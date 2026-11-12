@@ -25,7 +25,7 @@
       .series-toggle:hover { background: #dcdcdc; }
       tr.series-detail-row > td {
         background: #ece4d2 !important;
-        padding: 6px 0 8px 125px !important;
+        padding: 5px 0 4px 82px !important;
         text-align: left !important;
         border-top: 0 !important;
       }
@@ -46,7 +46,7 @@
       tr.series-detail-row table.series-table th {
         background: #4cb85c !important;
         color: #fff !important;
-        padding: 3px 8px !important;
+        padding: 2px 6px !important;
         border: 1px solid #fff !important;
         font-size: 11px !important;
         font-weight: bold !important;
@@ -55,16 +55,17 @@
         white-space: nowrap;
       }
       tr.series-detail-row table.series-table td {
-        background: #f7f2e6 !important;
-        color: #3d5a57 !important;
-        padding: 2px 8px !important;
+        background: #f5f3e6 !important;
+        color: #666 !important;
+        line-height: 1.25 !important;
+        padding: 2px 6px !important;
         border: 1px solid #fff !important;
         font-size: 11px !important;
         text-align: center !important;
         vertical-align: middle;
       }
       tr.series-detail-row table.series-table td.series-desc {
-        min-width: 80px;
+        min-width: 74px;
         max-width: 140px;
         white-space: normal;
         word-break: break-word;
@@ -73,6 +74,7 @@
         background: #4cb85c !important;
         color: #fff !important;
         font-weight: bold !important;
+        padding: 1px 6px !important;
       }
       tr.series-detail-row table.series-table input[type="checkbox"] {
         margin: 0;
@@ -91,7 +93,8 @@
         font-weight: bold;
         font-size: 11px;
         border: 1px solid #999;
-        padding: 1px 8px;
+        padding: 0 7px;
+        line-height: 14px;
         cursor: pointer;
       }
       .search-actions {

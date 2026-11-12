@@ -30,6 +30,7 @@
   </div>
 
   <section class="search-panel">
+    <div class="search-inputs-col">
     <div class="search-inputs">
       <input type="text" id="patient-name" placeholder="Patient Name" />
       <input type="text" id="patient-id" placeholder="Patient ID" />
@@ -54,6 +55,8 @@
         <input type="checkbox" id="emergency" />
         Show only Emergency Cases
       </label>
+    </div>
+      <button type="button" class="clear-search-btn" onclick="clearSearch()">Clear Search</button>
     </div>
     <div class="modality-filter">
       <label>
@@ -81,7 +84,7 @@
     </div>
     <div class="search-actions">
       <button onclick="searchStudies()">Search</button>
-      <button id="refresh-btn" onclick="refreshStudies()">Refresh</button>
+      <button id="refresh-btn" onclick="refreshCurrentPage()">Refresh</button>
     </div>
   </section>
 
@@ -119,7 +122,7 @@
           <th></th>
           <th>Reported By</th>
           <th>Group</th>
-          <th>Lock</th>
+          <th class="lock-th">Lock</th>
         </tr>
       </thead>
       <tbody id="study-table-body"></tbody>
@@ -134,7 +137,8 @@
     </div>
   </footer>
 
-  <script src="./script/seriesPanel.js?v=5"></script>
+  <script src="./script/queryBar.js"></script>
+  <script src="./script/seriesPanel.js?v=6"></script>
   <script src="./script/script.js"></script>
   <script src="./script/extraViewers.js"></script>
 </body>

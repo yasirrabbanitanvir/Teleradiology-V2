@@ -5,12 +5,13 @@ let role = sessionStorage.getItem('role') || localStorage.getItem('role');
 let availableDoctors = [];
 
 let currentPage = parseInt(sessionStorage.getItem('currentPage')) || 1;
-let itemsPerPage = 10;
+let itemsPerPage = 20;
 let totalPages = 1;
 let totalCount = 0;
 let groupedPatients = {};
 let appliedFilters = null;
 let searchSeq = 0;
+let billsToShow = [];
 
 async function loadCurrentUser() {
   if (!token) {
@@ -272,6 +273,7 @@ function isSearchPanelEmpty() {
 
   const nameQ = document.getElementById('patient-name')?.value.trim() || '';
   const idQ = document.getElementById('patient-id')?.value.trim() || '';
+  const bodyQ = document.getElementById('body-part')?.value.trim() || '';
   const statusQ = document.getElementById('status')?.value || 'All';
   const centerQ = document.getElementById('center')?.value || 'ALL';
   const emergency = document.getElementById('emergency')?.checked || false;
@@ -280,9 +282,9 @@ function isSearchPanelEmpty() {
   const allModalities = Array.from(document.querySelectorAll('.modality-checkbox')).every(cb => cb.checked);
 
   const startIsDefault = startDate === fmt(past);
-  const endIsDefault = endDate === fmt(today);
+  const endIsDefault = endDate === '';
 
-  return !nameQ && !idQ && statusQ === 'All' && centerQ === 'ALL' && !emergency && allModalities && startIsDefault && endIsDefault;
+  return !nameQ && !idQ && !bodyQ && statusQ === 'All' && centerQ === 'ALL' && !emergency && allModalities && startIsDefault && endIsDefault;
 }
 
 function collectSearchFilters() {
@@ -290,6 +292,7 @@ function collectSearchFilters() {
   return {
     name: val('patient-name'),
     id: val('patient-id'),
+    bodyPart: val('body-part'),
     status: val('status') || 'All',
     center: val('center') || 'ALL',
     emergency: !!document.getElementById('emergency')?.checked,
@@ -299,9 +302,82 @@ function collectSearchFilters() {
   };
 }
 
+function saveSearchFilters(f) {
+  try {
+    sessionStorage.setItem('subadminFilters', JSON.stringify(f));
+  } catch (e) {}
+}
+
+function restoreSearchFilters() {
+  let f = null;
+  try {
+    f = JSON.parse(sessionStorage.getItem('subadminFilters') || 'null');
+  } catch (e) {}
+  if (!f || typeof f !== 'object') return null;
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value || '';
+  };
+  set('patient-name', f.name);
+  set('patient-id', f.id);
+  set('body-part', f.bodyPart);
+  set('status', f.status || 'All');
+  set('scan-start-date', f.start);
+  set('scan-end-date', f.end);
+  const emergency = document.getElementById('emergency');
+  if (emergency) emergency.checked = !!f.emergency;
+  if (Array.isArray(f.modalities)) {
+    const boxes = Array.from(document.querySelectorAll('.modality-checkbox'));
+    boxes.forEach(cb => { cb.checked = f.modalities.includes(cb.value); });
+    const all = document.getElementById('modality-all');
+    if (all) all.checked = boxes.length > 0 && boxes.every(cb => cb.checked);
+  }
+  const centerInput = document.getElementById('center-search-input');
+  if (centerInput && f.center && f.center !== 'ALL') centerInput.value = f.center;
+  return f;
+}
+
+async function fetchSubadminBills() {
+  try {
+    const res = await fetch(`${baseUrl}/api/institute-bills-feed/`, {
+      headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.success ? (data.results || []) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function isBillSearch(f) {
+  return /bill/i.test(f.bodyPart || '');
+}
+
+function isDefaultView(f, totalModalities) {
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const past = new Date();
+  past.setDate(past.getDate() - 3);
+  return !f.name &&
+    !f.id &&
+    !f.bodyPart &&
+    (!f.status || f.status === 'All') &&
+    (!f.center || f.center === 'ALL') &&
+    !f.emergency &&
+    !f.end &&
+    (!f.start || f.start === fmt(past)) &&
+    f.modalities.length >= totalModalities;
+}
+
+function canShowBills(f, totalModalities) {
+  if (currentPage !== 1) return false;
+  return isBillSearch(f) || isDefaultView(f, totalModalities);
+}
+
 async function searchStudies(maintainPage = false, silent = false) {
   if (!maintainPage && isSearchPanelEmpty()) {
     sessionStorage.removeItem('currentPage');
+    sessionStorage.removeItem('subadminFilters');
     window.location.reload();
     return;
   }
@@ -322,6 +398,7 @@ async function searchStudies(maintainPage = false, silent = false) {
       return;
     }
     appliedFilters = collected;
+    saveSearchFilters(collected);
   }
 
   const f = appliedFilters;
@@ -335,18 +412,27 @@ async function searchStudies(maintainPage = false, silent = false) {
 
   if (f.name) params.append('patient_name', f.name);
   if (f.id) params.append('patient_id', f.id);
+  if (f.bodyPart) params.append('body_part', f.bodyPart);
   if (f.status && f.status !== 'All') params.append('status', f.status);
   if (f.center && f.center !== 'ALL') params.append('center_name', f.center);
   if (f.emergency) params.append('emergency', 'true');
   if (f.modalities.length > 0 && f.modalities.length < totalModalities) params.append('modality', f.modalities.join(','));
-  if (f.start) params.append('start_date', f.start);
-  if (f.end) params.append('end_date', f.end);
+  if (f.start) params.append('server_start', f.start);
+  if (f.end) params.append('server_end', f.end);
+
+  const billsOnly = isDefaultView(f, totalModalities);
+
+  const billsPromise = canShowBills(f, totalModalities)
+    ? fetchSubadminBills()
+    : Promise.resolve([]);
 
   if (!silent) window.QueryBar?.start();
 
   try {
     const [res, doctorsRes, groupsRes] = await Promise.all([
-      fetch(`${baseUrl}/api/dicom-images/?${params.toString()}`, {
+      billsOnly
+        ? Promise.resolve(new Response(JSON.stringify({ results: [], count: 0, total_pages: 1, current_page: 1 }), { status: 200 }))
+        : fetch(`${baseUrl}/api/dicom-images/?${params.toString()}`, {
         headers: {
           'Authorization': `Token ${token}`,
           'Content-Type': 'application/json'
@@ -367,6 +453,7 @@ async function searchStudies(maintainPage = false, silent = false) {
       sessionStorage.removeItem('token');
       sessionStorage.removeItem('role');
       sessionStorage.removeItem('currentPage');
+      sessionStorage.removeItem('subadminFilters');
       window.location.href = 'login.html';
       return;
     }
@@ -409,6 +496,9 @@ async function searchStudies(maintainPage = false, silent = false) {
 
     const responseData = await res.json();
 
+    if (seq !== searchSeq) return;
+
+    billsToShow = await billsPromise;
     if (seq !== searchSeq) return;
 
     let dicomImages;
@@ -535,6 +625,45 @@ async function searchStudies(maintainPage = false, silent = false) {
   }
 }
 
+function paginationButtonsHtml() {
+  return `<div class="pagination-buttons">
+    <button onclick="goToPage(1)" ${currentPage === 1 ? 'disabled' : ''} class="pagination-btn">⟪</button>
+    <button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="pagination-btn">⟨</button>
+    <div class="page-numbers"></div>
+    <button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="pagination-btn">⟩</button>
+    <button onclick="goToPage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''} class="pagination-btn">⟫</button>
+  </div>`;
+}
+
+function syncTopPagination(show) {
+  let top = document.getElementById('pagination-top');
+  const anchor = document.getElementById('load-studies-btn');
+  if (!anchor) return;
+  const host = anchor.closest('.load-bar-flex') || anchor.parentElement;
+  if (!host) return;
+  if (!top) {
+    top = document.createElement('div');
+    top.id = 'pagination-top';
+    top.className = 'pagination-top';
+  }
+  if (top.parentElement !== host) {
+    host.appendChild(top);
+  }
+  if (getComputedStyle(host).display !== 'flex') {
+    host.style.display = 'flex';
+    host.style.alignItems = 'center';
+    host.style.justifyContent = 'space-between';
+    host.style.flexWrap = 'wrap';
+    host.style.gap = '6px 12px';
+  }
+  if (!show) {
+    top.style.display = 'none';
+    return;
+  }
+  top.style.display = 'flex';
+  top.innerHTML = '<span class="pagination-info-text"></span>' + paginationButtonsHtml();
+}
+
 function createPaginationControls() {
   let paginationContainer = document.getElementById('pagination-container');
   
@@ -552,19 +681,14 @@ function createPaginationControls() {
   paginationContainer.innerHTML = `
     <div class="pagination-wrapper">
       <div class="pagination-info">
-        <span id="pagination-info-text"></span>
+        <span class="pagination-info-text"></span>
       </div>
       
-      <div class="pagination-buttons">
-        <button onclick="goToPage(1)" ${currentPage === 1 ? 'disabled' : ''} class="pagination-btn">⟪</button>
-        <button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="pagination-btn">⟨</button>
-        <div class="page-numbers" id="page-numbers"></div>
-        <button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="pagination-btn">⟩</button>
-        <button onclick="goToPage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''} class="pagination-btn">⟫</button>
-      </div>
+      ${paginationButtonsHtml()}
     </div>
   `;
 
+  syncTopPagination(true);
   generatePageNumbers();
   updatePaginationInfo();
   
@@ -574,10 +698,10 @@ function createPaginationControls() {
 }
 
 function generatePageNumbers() {
-  const pageNumbersContainer = document.getElementById('page-numbers');
-  if (!pageNumbersContainer) return;
+  const pageNumbersContainers = document.querySelectorAll('.page-numbers');
+  if (!pageNumbersContainers.length) return;
   
-  pageNumbersContainer.innerHTML = '';
+  pageNumbersContainers.forEach(c => { c.innerHTML = ''; });
   
   let startPage = Math.max(1, currentPage - 2);
   let endPage = Math.min(totalPages, currentPage + 2);
@@ -589,27 +713,31 @@ function generatePageNumbers() {
     startPage = Math.max(totalPages - 4, 1);
   }
   
-  for (let i = startPage; i <= endPage; i++) {
-    const button = document.createElement('button');
-    button.textContent = i;
-    button.className = `pagination-btn page-btn ${i === currentPage ? 'active' : ''}`;
-    button.onclick = () => goToPage(i);
-    pageNumbersContainer.appendChild(button);
-  }
+  pageNumbersContainers.forEach(container => {
+    for (let i = startPage; i <= endPage; i++) {
+      const button = document.createElement('button');
+      button.textContent = i;
+      button.className = `pagination-btn page-btn ${i === currentPage ? 'active' : ''}`;
+      button.onclick = () => goToPage(i);
+      container.appendChild(button);
+    }
+  });
 }
 
 function updatePaginationInfo() {
-  const infoElement = document.getElementById('pagination-info-text');
-  if (!infoElement) return;
+  const infoElements = document.querySelectorAll('.pagination-info-text');
+  if (!infoElements.length) return;
   
   const startPatient = Math.min((currentPage - 1) * itemsPerPage + 1, totalCount);
   const endPatient = Math.min(currentPage * itemsPerPage, totalCount);
   
-  if (totalCount === 0) {
-    infoElement.textContent = 'No studies to show';
-  } else {
-    infoElement.textContent = `Showing ${startPatient}-${endPatient} of ${totalCount} studies`;
-  }
+  infoElements.forEach(infoElement => {
+    if (totalCount === 0) {
+      infoElement.textContent = 'No studies to show';
+    } else {
+      infoElement.textContent = `Showing ${startPatient}-${endPatient} of ${totalCount} studies`;
+    }
+  });
 }
 
 async function removeSingleDoctor(imageId, doctorName) {
@@ -725,10 +853,10 @@ function ensureLockStyles() {
     .lock-box {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
       min-width: 170px;
       padding: 4px 2px;
-      font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+      font-family: inherit;
     }
     .lock-head {
       display: flex;
@@ -766,8 +894,8 @@ function ensureLockStyles() {
     .lock-user {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 4px 5px 4px 4px;
+      gap: 5px;
+      padding: 1px 3px 1px 3px;
       background: #ffffff;
       border: 1px solid #e2e8f0;
       border-radius: 999px;
@@ -780,13 +908,13 @@ function ensureLockStyles() {
     }
     .lock-avatar {
       flex: 0 0 auto;
-      width: 24px;
-      height: 24px;
+      width: 17px;
+      height: 17px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 10.5px;
+      font-size: 8px;
       font-weight: 700;
       letter-spacing: 0.02em;
     }
@@ -798,20 +926,21 @@ function ensureLockStyles() {
       text-overflow: ellipsis;
       white-space: nowrap;
       text-align: left;
-      font-size: 12.5px;
-      font-weight: 500;
+      font-size: 11.5px;
+      line-height: 16px;
+      font-weight: 400;
       color: #0f172a;
     }
     .lock-remove {
       flex: 0 0 auto;
-      width: 20px;
-      height: 20px;
+      width: 15px;
+      height: 15px;
       padding: 0;
       border: none;
       border-radius: 50%;
       background: transparent;
       color: #94a3b8;
-      font-size: 15px;
+      font-size: 13px;
       line-height: 1;
       cursor: pointer;
       display: flex;
@@ -945,7 +1074,50 @@ function setDefaultDateRange() {
   const past = new Date();
   past.setDate(today.getDate() - 3);
   if (startInput && !startInput.value) startInput.value = fmt(past);
-  if (endInput && !endInput.value) endInput.value = fmt(today);
+}
+
+function fitStudyTable() {
+  const table = document.querySelector('table.subadmin-table');
+  const box = table && table.closest('.study-list');
+  if (!table || !box) return;
+  table.style.zoom = '';
+  table.style.width = '';
+  const available = box.clientWidth;
+  table.style.width = 'min-content';
+  const needed = table.getBoundingClientRect().width;
+  table.style.width = '';
+  if (available > 0 && needed > available) {
+    const ratio = (available - 2) / needed;
+    table.style.zoom = String(ratio);
+    table.style.width = needed + 'px';
+  }
+}
+
+let fitStudyTableFrame = null;
+function scheduleFitStudyTable() {
+  if (fitStudyTableFrame) cancelAnimationFrame(fitStudyTableFrame);
+  fitStudyTableFrame = requestAnimationFrame(() => {
+    fitStudyTableFrame = null;
+    fitStudyTable();
+  });
+}
+
+window.addEventListener('resize', scheduleFitStudyTable);
+
+if (window.ResizeObserver) {
+  const watchStudyTable = () => {
+    const table = document.querySelector('table.subadmin-table');
+    if (!table) return;
+    const observer = new ResizeObserver(scheduleFitStudyTable);
+    observer.observe(table);
+    const box = table.closest('.study-list');
+    if (box) observer.observe(box);
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', watchStudyTable);
+  } else {
+    watchStudyTable();
+  }
 }
 
 function loadStudies() {
@@ -956,6 +1128,10 @@ function loadStudies() {
   }
   
   tbody.innerHTML = '';
+
+  billsToShow.forEach(bill => {
+    tbody.appendChild(buildBillRow(bill));
+  });
   
   const currentPatients = groupedPatients;
   
@@ -996,7 +1172,7 @@ function loadStudies() {
         <td>${s.bodyPart}</td>
         <td>${s.modality}</td>
         <td>${s.institute}</td>
-        <td>${s.receiveDateTime || s.scanDateTime}</td>
+        <td>${receiveCellHtml(s.receiveDateTime || s.scanDateTime)}</td>
         <td class="refd-by-cell" data-id="${s.id}" data-value="${(s.referredBy || '').replace(/"/g, '&quot;')}"><span class="refd-by-text" style="cursor:pointer;" onclick="startEditRefBy(this)">${s.referredBy || '<em style=\'color:#bbb\'>—</em>'}</span></td>
         <td style="text-align:center;">${s.studyUID ? `<button class="action-btn zip-btn" title="Download Scan in ZIP Format" style="padding:0;background:none;border:none;cursor:pointer;" onclick="downloadStudyZip('${s.studyUID}', this)">${ZIP_ICON_SVG}</button>` : ''}</td>
         <td>
@@ -1018,6 +1194,9 @@ function loadStudies() {
     const newSelectAll = document.getElementById('select-all');
     
     newSelectAll.addEventListener('change', () => {
+      document.querySelectorAll('.bill-checkbox').forEach(cb => {
+        cb.checked = newSelectAll.checked;
+      });
       const checkboxes = document.querySelectorAll('.row-checkbox');
       const maxSelect = 20;
       checkboxes.forEach((cb, idx) => {
@@ -1027,6 +1206,8 @@ function loadStudies() {
       });
     });
   }
+
+  fitStudyTable();
 }
 
 function addPaginationStyles() {
@@ -1164,7 +1345,7 @@ document.addEventListener('DOMContentLoaded', function() {
     assignBtn.addEventListener('click', assignSelectedStudies);
   }
 
-  ['patient-name', 'patient-id'].forEach(id => {
+  ['patient-name', 'patient-id', 'body-part'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener('keydown', (e) => {
@@ -1250,6 +1431,10 @@ function refreshStudies() {
   window.location.reload();
 }
 
+function refreshCurrentPage() {
+  return fetchAndLoadStudies(true);
+}
+
 function buildViewerWarning(names) {
   const list = names.map((name, i) => `${i + 1}. ${name}`).join('\n');
   return `Following users are currently viewing the study:\n\n${list}\n\nDo you really wish to load this study?`;
@@ -1264,9 +1449,11 @@ function confirmViewerWarning(win, names) {
 }
 
 async function loadSelectedStudies() {
+  const checkedBills = document.querySelectorAll('.bill-checkbox:checked');
+  checkedBills.forEach(cb => openBillViewer(Number(cb.dataset.billId), true));
   const checked = document.querySelectorAll('.row-checkbox:checked');
   if (!checked.length) {
-    alert('Please select at least one study');
+    if (!checkedBills.length) alert('Please select at least one study');
     return;
   }
 
@@ -1543,12 +1730,18 @@ const REPORT_BAR_CSS = "body{padding-top:56px;font-family:'Segoe UI',Arial,sans-
 const REPORT_PRINT_ICON = '<svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>';
 const REPORT_DOWNLOAD_ICON = '<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
 
-function buildReportBar(d, win, onDownload) {
+function buildReportBar(d, win, onDownload, reportedAt) {
   const bar = d.createElement('div');
   bar.className = 'report-bar';
   const title = d.createElement('div');
   title.className = 'title';
   title.textContent = 'Report';
+  if (reportedAt) {
+    const stamp = d.createElement('span');
+    stamp.style.cssText = 'font-size:13px;font-weight:400;margin-left:8px;opacity:0.95;';
+    stamp.textContent = `/ ${reportedAt}`;
+    title.appendChild(stamp);
+  }
   const actions = d.createElement('div');
   actions.className = 'actions';
   const printBtn = d.createElement('button');
@@ -1632,6 +1825,8 @@ function renderReportPopup(win, reports) {
     win.document.write(html);
     win.document.close();
     const fileUrl = (items.find(r => r.report_file) || {}).report_file;
+    const stampItem = items.find(r => r.report_file) || items[0];
+    const reportedAt = (stampItem && stampItem.created_at) || '';
     buildReportBar(win.document, win, fileUrl ? () => {
       const a = win.document.createElement('a');
       a.href = fileUrl;
@@ -1639,7 +1834,7 @@ function renderReportPopup(win, reports) {
       win.document.body.appendChild(a);
       a.click();
       a.remove();
-    } : null);
+    } : null, reportedAt);
     win.focus();
     return true;
   } catch (e) {
@@ -1821,6 +2016,8 @@ async function renderDocxPopup(win, reports) {
     d.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><style>html,body{margin:0;background:#e9ecef;}.docx-wrapper{background:#e9ecef !important;padding:20px 0 !important;}${REPORT_BAR_CSS}@page{size:A4;margin:0;}@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}html,body{background:#fff !important;margin:0 !important;}.report-bar{display:none !important;}body{padding-top:0 !important;}.docx-wrapper{background:#fff !important;padding:0 !important;display:block !important;}.docx-wrapper > section.docx{box-shadow:none !important;margin:0 auto !important;min-height:0 !important;break-after:page;page-break-after:always;}.docx-wrapper > section.docx:last-child{break-after:auto;page-break-after:auto;}}</style></head><body></body></html>`);
     d.close();
     const first = prepared[0];
+    const firstDocxReport = reports.find(r => r.report_file && /\.docx(\?|$)/i.test(r.report_file));
+    const docxReportedAt = (firstDocxReport && firstDocxReport.created_at) || '';
     buildReportBar(d, win, () => {
       const a = d.createElement('a');
       a.href = URL.createObjectURL(new Blob([first.original], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
@@ -1829,7 +2026,7 @@ async function renderDocxPopup(win, reports) {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    });
+    }, docxReportedAt);
     for (const item of prepared) {
       const holder = d.createElement('div');
       d.body.appendChild(holder);
@@ -2030,11 +2227,16 @@ function logout() {
   sessionStorage.removeItem('token');
   sessionStorage.removeItem('role');
   sessionStorage.removeItem('currentPage');
+  sessionStorage.removeItem('subadminFilters');
   window.location.href = 'login.html';
 }
 
 window.onload = async function() {
-  setDefaultDateRange();
+  const savedFilters = restoreSearchFilters();
+  if (!savedFilters) setDefaultDateRange();
+  if (savedFilters) {
+    appliedFilters = Object.assign(collectSearchFilters(), { center: savedFilters.center || 'ALL' });
+  }
 
   // Show skeleton loading immediately
   showTableSkeleton();
@@ -2045,6 +2247,11 @@ window.onload = async function() {
     fetchAndLoadStudies(true),
     loadCenterOptions()
   ]);
+
+  if (savedFilters && savedFilters.center && savedFilters.center !== 'ALL') {
+    const centerSelect = document.getElementById('center');
+    if (centerSelect) centerSelect.value = savedFilters.center;
+  }
 
   if (!userData) {
     return;
@@ -2260,10 +2467,141 @@ function showTableSkeleton() {
 }
 
 
+function receiveCellHtml(value) {
+  const text = String(value == null ? '' : value).trim();
+  const gap = text.indexOf(' ');
+  if (gap < 0) return escapeReportText(text);
+  return `<span class="dt-date">${escapeReportText(text.slice(0, gap))}</span><span class="dt-time">${escapeReportText(text.slice(gap + 1))}</span>`;
+}
+
+function buildBillRow(bill) {
+  const tr = document.createElement('tr');
+  tr.className = 'bill-row';
+  const fileLink = bill.has_file
+    ? `<a href="#" class="bill-file-link" style="color:#0000ee;text-decoration:underline;">Bill View</a>`
+    : '';
+  tr.innerHTML = `
+    <td><input type="checkbox" class="bill-checkbox" data-bill-id="${bill.id}" /></td>
+    <td><button class="action-btn view-btn bill-view-btn" title="View Bill"><img src="images/view.png" alt="View" width="32" height="32"></button></td>
+    <td></td>
+    <td>${escapeReportText(bill.institute_name)}</td>
+    <td>${escapeReportText(bill.title)}</td>
+    <td></td>
+    <td></td>
+    <td>${escapeReportText(bill.description || bill.title)}</td>
+    <td>CR</td>
+    <td>${escapeReportText(bill.institute_name)}</td>
+    <td>${receiveCellHtml(bill.bill_date)}</td>
+    <td><em style="color:#bbb">—</em></td>
+    <td></td>
+    <td><span class="status-badge status-unreported">Unreported</span></td>
+    <td style="text-align:center;">${REPORT_PENDING_SVG}</td>
+    <td style="text-align:center;">${fileLink}</td>
+    <td></td>
+    <td></td>
+    <td></td>
+  `;
+  const viewBtn = tr.querySelector('.bill-view-btn');
+  if (viewBtn) viewBtn.addEventListener('click', () => openBillViewer(bill.id));
+  const link = tr.querySelector('.bill-file-link');
+  if (link) {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      openBillViewer(bill.id);
+    });
+  }
+  return tr;
+}
+
+async function downloadBillAttachment(id) {
+  const bill = billsToShow.find(b => b.id === id);
+  const name = (bill && bill.file_name) || 'bill';
+  try {
+    const res = await fetch(`${baseUrl}/api/institute-bills/${id}/download/`, {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    if (!res.ok) throw new Error('download failed');
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = name;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(objUrl), 2000);
+  } catch (err) {
+    alert('Unable to download the bill file');
+  }
+}
+
+function openBillFileChooser(bill, onPick) {
+  const existing = document.getElementById('bill-file-modal');
+  if (existing) existing.remove();
+  const files = bill.files || [];
+  const modal = document.createElement('div');
+  modal.id = 'bill-file-modal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  const linksHtml = files.map((f, i) => `<div style="margin:8px 0;"><a href="#" class="bill-chooser-link" data-index="${i}" style="color:#0066cc;font-size:15px;text-decoration:none;padding:8px 12px;background:#f0f7ff;border:1px solid #cce;border-radius:4px;display:inline-block;">📄 ${escapeReportText(f.name)}</a></div>`).join('');
+  modal.innerHTML = `<div style="background:#fff;border-radius:8px;padding:30px;min-width:360px;max-width:500px;box-shadow:0 4px 20px rgba(0,0,0,0.3);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><strong style="font-size:17px;">Bill Files (${files.length})</strong><button type="button" class="bill-chooser-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;">✕</button></div>${linksHtml}</div>`;
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+  modal.querySelector('.bill-chooser-close').addEventListener('click', function() { modal.remove(); });
+  modal.querySelectorAll('.bill-chooser-link').forEach(link => {
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      const picked = files[Number(this.dataset.index)];
+      modal.remove();
+      onPick(picked);
+    });
+  });
+  document.body.appendChild(modal);
+}
+
+function openBillViewer(id, openAll) {
+  const bill = billsToShow.find(b => b.id === id);
+  if (!bill) return;
+  const files = bill.files || [];
+  const ctx = { baseUrl, token };
+  if (files.length > 1) {
+    if (openAll) {
+      files.forEach(f => window.BillViewer.open(bill, ctx, f));
+    } else {
+      openBillFileChooser(bill, f => window.BillViewer.open(bill, ctx, f));
+    }
+    return;
+  }
+  window.BillViewer.open(bill, ctx, files[0]);
+}
+
 function formatReceiveDateTime(value) {
   if (!value) return '';
   const d = new Date(value);
   if (isNaN(d.getTime())) return '';
   const p = n => String(n).padStart(2, '0');
   return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+
+function clearSearch() {
+  const setValue = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  };
+  setValue('patient-name', '');
+  setValue('patient-id', '');
+  setValue('body-part', '');
+  setValue('status', 'All');
+  setValue('center', 'ALL');
+  setValue('center-search-input', '');
+  setValue('scan-start-date', '');
+  setValue('scan-end-date', '');
+  const emergency = document.getElementById('emergency');
+  if (emergency) emergency.checked = false;
+  document.querySelectorAll('.modality-checkbox').forEach(cb => { cb.checked = true; });
+  const all = document.getElementById('modality-all');
+  if (all) all.checked = true;
+  sessionStorage.removeItem('currentPage');
+  sessionStorage.removeItem('subadminFilters');
+  window.location.reload();
 }

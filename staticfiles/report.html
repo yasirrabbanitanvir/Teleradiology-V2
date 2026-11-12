@@ -2,7 +2,7 @@
 <html lang="bn">
 <head>
   <meta charset="utf-8" />
-<meta name="viewport" content="width=1280" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Medical Report</title>
   <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
   <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
@@ -14,19 +14,191 @@
       box-sizing: border-box;
     }
     body {
-      font-family: 'Calibri', Arial, Helvetica, sans-serif;
-      background: #f5f5f5;
+      font-family: 'Segoe UI', Tahoma, Arial, Helvetica, sans-serif;
+      background: #ffffff;
       color: #000000;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       height: 100vh;
+      height: 100dvh;
     }
-    .saved-reports-bar {
-      background: white;
-      border-bottom: 2px solid #c8a96e;
+
+    .top-bar {
+      background: #ffffff;
+      border-bottom: 1px solid #dddddd;
+      padding: 6px 12px 9px;
       flex-shrink: 0;
+    }
+    .patient-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px 22px;
+      font-size: 14px;
+      line-height: 20px;
+      padding-bottom: 4px;
+      margin-bottom: 5px;
+      border-bottom: 1px solid #eeeeee;
+    }
+    .patient-info span {
+      color: #000000;
+    }
+    .patient-info strong {
+      color: #000000;
+      margin-left: 5px;
+      font-weight: 700;
+    }
+    .controls-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: nowrap;
+      gap: 10px;
+      min-width: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
+    }
+    .template-controls {
       display: none;
+      align-items: center;
+      flex-wrap: nowrap;
+      gap: 10px;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .template-controls.visible {
+      display: flex;
+    }
+    .ctrl-group {
+      display: flex;
+      align-items: center;
+      flex-wrap: nowrap;
+      gap: 5px;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .controls-row label {
+      font-size: 14px;
+      font-weight: 400;
+      color: #000000;
+      white-space: nowrap;
+      flex: 0 0 auto;
+    }
+    .controls-row select,
+    .controls-row input[type="text"] {
+      height: 30px;
+      padding: 0 6px;
+      font: 16px Arial, Helvetica, sans-serif;
+      color: #000000;
+      background: #ffffff;
+      border: 1px solid #cccccc;
+      border-radius: 3px;
+      min-width: 0;
+      flex: 1 1 0;
+      width: 0;
+    }
+    .controls-row input[type="text"]::placeholder {
+      color: #9a9a9a;
+    }
+    #navBodyPart {
+      min-width: 60px;
+      max-width: 170px;
+    }
+    #navTemplateSearch {
+      min-width: 70px;
+      max-width: 190px;
+    }
+    #navTemplate {
+      min-width: 70px;
+      max-width: 240px;
+      text-overflow: ellipsis;
+    }
+    #navTemplate.searching {
+      position: fixed;
+      z-index: 10000;
+      height: auto;
+      max-width: none;
+      padding: 2px 0;
+      background: #ffffff;
+      border: 1px solid #b8b8b8;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+      overflow-y: auto;
+    }
+    #navTemplate.searching option[value=""] {
+      display: none;
+    }
+    #navTemplate.searching option {
+      padding: 4px 10px;
+      font-size: 15px;
+    }
+    .right-controls {
+      display: flex;
+      align-items: center;
+      flex-wrap: nowrap;
+      gap: 10px;
+      flex: 0 1 auto;
+      min-width: 0;
+    }
+    #statusSelect {
+      flex: 0 1 111px;
+      width: 111px;
+      min-width: 78px;
+    }
+    .submit-btn {
+      flex: 0 0 auto;
+      height: 30px;
+      padding: 0 18px;
+      font: 16px Arial, Helvetica, sans-serif;
+      background: #0066cc;
+      color: #ffffff;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .submit-btn:hover {
+      background: #0052a3;
+    }
+    .submit-btn:disabled {
+      background: #cccccc;
+      cursor: not-allowed;
+    }
+    .status-msg {
+      display: none;
+      flex: 0 10 auto;
+      width: fit-content;
+      max-width: 220px;
+      min-width: 0;
+      height: 28px;
+      line-height: 26px;
+      padding: 0 14px;
+      font-size: 14px;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-radius: 3px;
+    }
+    .status-msg.success {
+      display: block;
+      background: #d8efdc;
+      color: #478a53;
+      border: 1px solid #c5e6cb;
+    }
+    .status-msg.error {
+      display: block;
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .saved-reports-bar {
+      display: none;
+      flex-shrink: 0;
+      background: #f5e6c8;
+      border-bottom: 2px solid #c8a96e;
+      max-height: 104px;
+      overflow-y: auto;
     }
     .saved-reports-bar.visible {
       display: block;
@@ -34,46 +206,68 @@
     .saved-reports-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
+      table-layout: fixed;
+      font-size: 13.5px;
     }
     .saved-reports-table thead th {
+      position: sticky;
+      top: 0;
+      height: 23px;
+      padding: 3px 10px;
       background: #2c3e7a;
-      color: white;
-      padding: 7px 14px;
+      color: #ffffff;
       text-align: left;
-      font-weight: 600;
-      border-right: 1px solid #3a4f9a;
+      font-size: 13px;
+      font-weight: 700;
       white-space: nowrap;
+      border-right: 1px solid #3a4f9a;
     }
+    .saved-reports-table thead th:nth-child(1) { width: 33%; }
+    .saved-reports-table thead th:nth-child(2) { width: 25.5%; }
+    .saved-reports-table thead th:nth-child(3) { width: 17%; }
+    .saved-reports-table thead th:nth-child(4) { width: 13.5%; }
+    .saved-reports-table thead th:nth-child(5) { width: 11%; }
     .saved-reports-table thead th:last-child {
       border-right: none;
     }
     .saved-reports-table tbody tr {
       background: #f5e6c8;
       border-bottom: 1px solid #d4b87a;
-      cursor: pointer;
       transition: background 0.15s;
     }
-    .saved-reports-table tbody tr:hover {
-      background: #eddcb4;
-    }
     .saved-reports-table tbody td {
-      padding: 7px 14px;
-      color: #333;
-      border-right: 1px solid #d4b87a;
-      vertical-align: middle;
+      height: 24px;
+      padding: 3px 10px;
+      color: #222222;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: middle;
+      border-right: 1px solid #d4b87a;
     }
     .saved-reports-table tbody td:last-child {
       border-right: none;
+    }
+    .saved-reports-table tbody tr.active {
+      background: #cfe8cf;
+    }
+    .saved-reports-table tbody td.view-report-cell {
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .saved-reports-table tbody td.view-report-cell:hover {
+      background: #cfe0fa;
+    }
+    .saved-reports-table tbody tr.active td.view-report-cell:hover {
+      background: #b9dcb9;
     }
     .report-file-link {
       color: #0066cc;
       text-decoration: none;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      font-weight: 500;
+      gap: 7px;
+      font-weight: 400;
     }
     .report-file-link:hover {
       text-decoration: underline;
@@ -81,7 +275,7 @@
     .word-icon {
       display: inline-block;
       background: #1a56db;
-      color: white;
+      color: #ffffff;
       font-size: 9px;
       font-weight: bold;
       padding: 1px 4px;
@@ -94,111 +288,23 @@
       color: #c0392b;
       cursor: pointer;
       font-size: 14px;
-      padding: 2px 6px;
+      padding: 0 6px;
       border-radius: 3px;
     }
     .delete-report-btn:hover {
       background: #fdecea;
     }
-    .top-bar {
-      background: white;
-      border-bottom: 1px solid #ddd;
-      padding: 12px 20px;
-    }
-    .patient-info {
-      display: flex;
-      gap: 20px;
-      font-size: 14px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid #eee;
-      margin-bottom: 10px;
-    }
-    .patient-info span {
-      color: #000000;
-    }
-    .patient-info strong {
-      color: #000000;
-      margin-left: 5px;
-    }
-    .controls-row {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .template-controls {
-      display: none;
-      gap: 10px;
-      align-items: center;
-    }
-    .template-controls.visible {
-      display: flex;
-    }
-    .controls-row label {
-      font-size: 14px;
-      font-weight: 500;
-      color: #000000;
-    }
-    .controls-row select {
-      padding: 6px 12px;
-      font-size: 14px;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      background: white;
-      min-width: 150px;
-      color: #000000;
-    }
-    .right-controls {
-      margin-left: auto;
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-    .submit-btn {
-      background: #0066cc;
-      color: white;
-      border: none;
-      padding: 7px 18px;
-      cursor: pointer;
-      border-radius: 3px;
-      font-size: 14px;
-      font-weight: 500;
-    }
-    .submit-btn:hover {
-      background: #0052a3;
-    }
-    .submit-btn:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-    .status-msg {
-      padding: 6px 12px;
-      font-size: 14px;
-      border-radius: 3px;
-      display: none;
-    }
-    .status-msg.success {
-      display: inline-block;
-      background: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-    }
-    .status-msg.error {
-      display: inline-block;
-      background: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-    }
+
     .main-container {
       display: flex;
       flex: 1;
       min-height: 0;
-      background: #f5f5f5;
+      background: #ffffff;
     }
     .sidebar {
       width: 250px;
-      background: white;
-      border-right: 1px solid #ddd;
+      background: #ffffff;
+      border-right: 1px solid #dddddd;
       padding: 15px;
       overflow-y: auto;
     }
@@ -212,7 +318,7 @@
       width: 100%;
       padding: 8px;
       margin-bottom: 15px;
-      border: 1px solid #ccc;
+      border: 1px solid #cccccc;
       border-radius: 3px;
       font-size: 14px;
       color: #000000;
@@ -220,95 +326,234 @@
     .content-area {
       flex: 1;
       display: flex;
-      justify-content: flex-start;
-      align-items: flex-start;
-      padding: 6px 4px;
+      flex-direction: column;
+      min-width: 0;
+      padding: 0;
       overflow: auto;
     }
     .page-wrapper {
-      background: white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      width: 320mm;
-      min-height: 297mm;
-      flex-shrink: 0;
-      transform-origin: top left;
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+      background: #ffffff;
+      width: 100%;
+      margin: 0;
     }
     .page-content {
-      padding: 0.4in 0.7in;
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+      padding: 0;
     }
     .header-title {
       text-align: center;
-      font-size: 18.5px;
+      font-size: 13px;
+      line-height: 18px;
       font-weight: bold;
-      margin-bottom: 8px;
+      letter-spacing: 0.4px;
       color: #000000;
-      letter-spacing: 0.5px;
-      border-bottom: 2px solid #000000;
-      padding-bottom: 6px;
+    }
+    .doc-header {
+      padding: 10px 0 8px;
+      border-bottom: 1px dashed #b5b5b5;
+      cursor: default;
+    }
+    .doc-header .header-title {
+      margin: 0 16px;
     }
     .patient-table {
       width: 100%;
+      table-layout: fixed;
       border: 2px solid #000000;
       border-collapse: collapse;
-      margin: 10px 0;
-      font-size: 18.5px;
-      line-height: 1.3;
+      margin: 5px 16px 0;
+      width: calc(100% - 32px);
+      font-size: 13px;
+      line-height: 1.2;
     }
     .patient-table tr {
       border: 1px solid #000000;
     }
     .patient-table td {
-      padding: 6px 10px;
+      padding: 1px 8px;
       color: #000000;
       border: 1px solid #000000;
       vertical-align: middle;
-      font-size: 18.5px;
-      line-height: 1.3;
+      font-size: 13px;
+      line-height: 1.2;
     }
     .patient-table strong {
-      font-size: 18.5px;
+      font-size: 13px;
     }
     .label-col {
       font-weight: 700;
-      width: 120px;
       color: #000000;
-      font-size: 18.5px;
+      font-size: 13px;
     }
     .colon-col {
       font-weight: 700;
-      width: 25px;
       text-align: center;
       color: #000000;
-      font-size: 18.5px;
+      font-size: 13px;
+      padding: 1px 0 !important;
     }
     .value-col {
       color: #000000;
-      font-size: 18.5px;
+      font-size: 13px;
     }
 
+    .rte {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+      margin: 0;
+    }
+    .rte-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+      row-gap: 3px;
+      background: #f0f0f0;
+      padding: 3px 0;
+      min-height: 31px;
+    }
+    .rte-bar select {
+      height: 25px;
+      padding: 0 4px;
+      font: 13px Tahoma, Arial, sans-serif;
+      color: #333333;
+      background: #f7f7f7;
+      border: 1px solid #9a9a9a;
+      border-radius: 0;
+      flex: 0 0 auto;
+    }
+    #rteZoom {
+      width: 66px;
+    }
+    #rteFont {
+      width: 174px;
+      margin-left: 1px;
+    }
+    #rteSize {
+      width: 70px;
+      margin-left: 1px;
+    }
+    #editorToolbar.ql-toolbar.ql-snow {
+      display: flex;
+      align-items: center;
+      margin-left: 11px;
+      padding: 0;
+      border: none;
+      background: none;
+      font-family: Tahoma, Arial, sans-serif;
+    }
+    #editorToolbar.ql-toolbar.ql-snow:after {
+      display: none;
+    }
+    #editorToolbar .rte-grp {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      margin-right: 11px;
+    }
+    #editorToolbar .rte-grp.tight {
+      gap: 0;
+    }
+    #editorToolbar.ql-toolbar.ql-snow button {
+      float: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 25px;
+      height: 25px;
+      padding: 0;
+      color: #000000;
+      background: linear-gradient(#fdfdfd, #e2e2e2);
+      border: 1px solid #a0a0a0;
+      border-radius: 1px;
+      cursor: pointer;
+    }
+    #editorToolbar.ql-toolbar.ql-snow button:hover {
+      background: linear-gradient(#ffffff, #eeeeee);
+      color: #000000;
+    }
+    #editorToolbar.ql-toolbar.ql-snow button.ql-active {
+      background: #cfcfcf;
+      box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.35);
+      color: #000000;
+    }
+    #editorToolbar.ql-toolbar.ql-snow button svg {
+      float: none;
+      width: 16px;
+      height: 14px;
+    }
+    #editorToolbar .gl {
+      font: bold 14px Arial, sans-serif;
+      line-height: 1;
+      color: #000000;
+    }
+    #editorToolbar .gl-i {
+      font: italic bold 15px 'Times New Roman', serif;
+    }
+    #editorToolbar .gl-u {
+      text-decoration: underline;
+    }
+    #editorToolbar .gl-p {
+      font: bold 15px Arial, sans-serif;
+    }
+    .rte-ruler {
+      position: relative;
+      flex-shrink: 0;
+      height: 29px;
+      background: #efefef;
+      border-top: 1px solid #ffffff;
+      border-bottom: 1px solid #c9c9c9;
+    }
+    .rte-ruler:before {
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 5px;
+      width: 1px;
+      height: 17px;
+      background: #f3eab0;
+    }
+    .rte-viewport {
+      flex: 1 1 0;
+      min-height: 300px;
+      overflow-y: scroll;
+      overflow-x: auto;
+      background: #d9d9d9;
+      border: 1px solid #555555;
+      border-top: 2px solid #1b1b1b;
+      position: relative;
+    }
+    .rte-sheet {
+      background: #ffffff;
+      margin: 0 6% 0 6.7%;
+      min-height: 1100px;
+      box-shadow: -1px 0 0 #7a7a7a, 4px 0 6px rgba(0, 0, 0, 0.55);
+    }
     #editor {
-      background: white;
-      font-family: 'Calibri', Arial, sans-serif;
-      border: 1px solid #ddd;
-      margin-bottom: 15px;
-      min-height: 540px;
+      background: #ffffff;
+      border: none;
+      margin: 0;
     }
-    .ql-toolbar {
-      background: #fafafa;
-      border: 1px solid #ddd !important;
-      border-bottom: none !important;
-    }
-    .ql-container {
-      border: 1px solid #ddd !important;
-      font-family: 'Calibri', Arial, sans-serif;
+    #editor.ql-container.ql-snow {
+      border: none !important;
+      height: auto;
+      font-family: Tahoma, Arial, sans-serif;
       font-size: 14px;
     }
-    .ql-editor {
+    #editor .ql-editor {
+      height: auto;
+      min-height: 320px;
+      overflow-y: visible;
+      padding: 16px;
+      font-family: Tahoma, Arial, sans-serif;
       font-size: 14px;
       line-height: 1.6;
-      font-family: 'Calibri', Arial, sans-serif;
-      padding: 16px;
-      min-height: 400px;
       color: #000000;
     }
     .ql-editor p,
@@ -321,37 +566,16 @@
     .ql-editor li {
       font-size: 14px !important;
     }
-    .ql-snow .ql-picker.ql-size {
-      width: 62px;
-    }
-    .ql-snow .ql-picker.ql-size .ql-picker-label::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item::before {
-      content: '12pt';
-    }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="12.3px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="12.3px"]::before { content: '8pt'; }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="13.9px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="13.9px"]::before { content: '9pt'; }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="15.4px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="15.4px"]::before { content: '10pt'; }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="17px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="17px"]::before { content: '11pt'; }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="21.6px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="21.6px"]::before { content: '14pt'; }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="24.7px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="24.7px"]::before { content: '16pt'; }
-    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value="27.8px"]::before,
-    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value="27.8px"]::before { content: '18pt'; }
     .ql-editor ul,
     .ql-editor ol {
       font-size: 14px !important;
     }
     .doctor-signature {
-      margin-top: 25px;
+      margin: 0 16px 24px;
       text-align: left;
     }
     .sig-img {
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
     .sig-img img {
       max-width: 120px;
@@ -359,16 +583,127 @@
       display: block;
     }
     .signature-line {
-      margin: 1px 0;
-      font-size: 18px;
-      line-height: 1.2;
+      margin: 0;
+      font-size: 13px;
+      line-height: 18px;
       color: #000000;
     }
     .doctor-name {
       font-weight: bold;
-      font-size: 18px;
-      margin-bottom: 1px;
+      font-size: 14px;
+      line-height: 20px;
+      margin-top: 3px;
       color: #000000;
+    }
+
+    .report-viewer {
+      flex-shrink: 0;
+      display: none;
+      width: 100%;
+      margin: 0 auto;
+      background: #ffffff;
+    }
+    .report-viewer.visible {
+      display: block;
+    }
+    .report-viewer-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 4px 12px;
+      background: #f0f0f0;
+      border-bottom: 1px solid #c9c9c9;
+    }
+    .report-viewer-meta {
+      font-size: 14px;
+      color: #222222;
+    }
+    .report-viewer-meta strong {
+      margin-right: 6px;
+    }
+    .report-viewer-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .report-viewer-actions button {
+      padding: 3px 12px;
+      font-size: 14px;
+      border: 1px solid #2c3e7a;
+      border-radius: 3px;
+      background: #ffffff;
+      color: #2c3e7a;
+      cursor: pointer;
+    }
+    .report-viewer-actions button.primary {
+      background: #2c3e7a;
+      color: #ffffff;
+    }
+    .report-viewer-body {
+      padding: 6px 12px 10px;
+    }
+    .report-viewer-body .ql-container {
+      border: 1px solid #dddddd !important;
+      margin-top: 4px;
+    }
+    .report-viewer-body .ql-editor {
+      min-height: 300px;
+      cursor: default;
+      font-family: Tahoma, Arial, sans-serif;
+    }
+    .report-viewer-doctor {
+      margin-top: 18px;
+      font-size: 15px;
+      font-weight: bold;
+      color: #000000;
+    }
+
+    @media (max-width: 1000px) {
+      .rte-sheet {
+        margin: 0 2% 0 2.5%;
+      }
+      .patient-table,
+      .patient-table td,
+      .patient-table strong,
+      .label-col,
+      .colon-col,
+      .value-col {
+        font-size: 12px;
+      }
+      .doc-header .header-title {
+        font-size: 12px;
+      }
+    }
+    @media (max-width: 700px) {
+      .rte-sheet {
+        margin: 0;
+      }
+      .doc-header .header-title,
+      .patient-table,
+      .doctor-signature {
+        margin-left: 8px;
+        margin-right: 8px;
+      }
+      .patient-table {
+        width: calc(100% - 16px);
+      }
+    }
+    @media (max-width: 760px) {
+      .controls-row label,
+      .controls-row select,
+      .controls-row input[type="text"],
+      .submit-btn {
+        font-size: 13px;
+      }
+      .controls-row,
+      .template-controls,
+      .right-controls {
+        gap: 6px;
+      }
+      .submit-btn {
+        padding: 0 10px;
+      }
     }
     @media (max-width: 1400px) {
       .sidebar {
@@ -379,54 +714,12 @@
       }
     }
     @media print {
-      body { background: white; }
-      .top-bar, .sidebar { display: none; }
-      .content-area { padding: 0; }
-      .page-wrapper { box-shadow: none; transform: none !important; margin: 0 !important; }
-      .ql-toolbar { display: none; }
-    }
-  
-    @media (min-width: 768px) and (max-width: 1400px) {
-      .top-bar {
-        padding: 10px 16px;
-      }
-
-      .patient-info {
-        flex-wrap: wrap;
-        gap: 8px 20px;
-      }
-
-      .controls-row {
-        gap: 10px;
-      }
-
-      .template-controls {
-        flex-wrap: wrap;
-      }
-
-      .right-controls {
-        flex-wrap: wrap;
-      }
-
-      .saved-reports-bar {
-        overflow-x: auto;
-      }
-
-      .content-area {
-        padding: 6px 4px;
-        overflow-x: hidden;
-      }
-    }
-
-    @media (min-width: 768px) and (max-width: 1024px) {
-      .controls-row select {
-        min-width: 120px;
-      }
-
-      .saved-reports-table thead th,
-      .saved-reports-table tbody td {
-        padding: 6px 8px;
-      }
+      body { background: white; height: auto; overflow: visible; }
+      .top-bar, .sidebar, .saved-reports-bar, .rte-bar, .rte-ruler { display: none; }
+      .content-area { padding: 0; overflow: visible; }
+      .rte-viewport { height: auto; overflow: visible; border: none; background: #ffffff; }
+      .rte-sheet { margin: 0; box-shadow: none; }
+      .doc-header { border-bottom: none; }
     }
   </style>
 </head>
@@ -440,23 +733,29 @@
     </div>
     <div class="controls-row">
       <div class="template-controls" id="navbarTemplates">
-        <label>Body Part:</label>
-        <select id="navBodyPart">
-          <option value="">All</option>
-        </select>
-        <label>Template:</label>
-        <input type="text" id="navTemplateSearch" placeholder="Search template" autocomplete="off" style="padding:6px 10px;font-size:14px;border:1px solid #ccc;border-radius:3px;width:160px;" />
-        <select id="navTemplate">
-          <option value="">Select</option>
-        </select>
+        <div class="ctrl-group">
+          <label for="navBodyPart">Body Part:</label>
+          <select id="navBodyPart">
+            <option value="">All</option>
+          </select>
+        </div>
+        <div class="ctrl-group">
+          <label for="navTemplateSearch">Template:</label>
+          <input type="text" id="navTemplateSearch" placeholder="Search template" autocomplete="off" />
+          <select id="navTemplate">
+            <option value="">Select</option>
+          </select>
+        </div>
       </div>
       <div class="right-controls">
-        <label>Status:</label>
-        <select id="statusSelect">
-          <option value="Draft">Draft</option>
-          <option value="Reviewed">Reviewed</option>
-          <option value="Reported" selected>Reported</option>
-        </select>
+        <div class="ctrl-group" style="flex: 0 0 auto;">
+          <label for="statusSelect">Status:</label>
+          <select id="statusSelect">
+            <option value="Draft">Draft</option>
+            <option value="Reviewed">Reviewed</option>
+            <option value="Reported" selected>Reported</option>
+          </select>
+        </div>
         <button class="submit-btn" id="submitBtn">Submit Report</button>
         <div class="status-msg" id="statusMsg"></div>
       </div>
@@ -488,49 +787,129 @@
       </select>
     </div>
     <div class="content-area">
+      <div class="report-viewer" id="reportViewer">
+        <div class="report-viewer-bar">
+          <div class="report-viewer-meta" id="reportViewerMeta"></div>
+          <div class="report-viewer-actions">
+            <button type="button" class="primary" id="reportViewerBack">Back to Editor</button>
+          </div>
+        </div>
+        <div class="report-viewer-body" id="reportViewerBody"></div>
+      </div>
       <div class="page-wrapper" id="pageWrapper">
         <div class="page-content">
-          <div class="header-title">DEPARTMENT OF RADIOLOGY AND IMAGING</div>
-          <table class="patient-table">
-            <tr>
-              <td class="label-col"><strong>Name</strong></td>
-              <td class="colon-col"><strong>:</strong></td>
-              <td class="value-col" id="tName">-</td>
-              <td class="label-col"><strong>Patient ID</strong></td>
-              <td class="colon-col"><strong>:</strong></td>
-              <td class="value-col" id="tId">-</td>
-            </tr>
-            <tr>
-              <td class="label-col"><strong>Age</strong></td>
-              <td class="colon-col"><strong>:</strong></td>
-              <td class="value-col" id="tAge">-</td>
-              <td class="label-col"><strong>Exam date</strong></td>
-              <td class="colon-col"><strong>:</strong></td>
-              <td class="value-col" id="tExamDate">-</td>
-            </tr>
-            <tr>
-              <td class="label-col"><strong>Sex</strong></td>
-              <td class="colon-col"><strong>:</strong></td>
-              <td class="value-col" id="tSex">-</td>
-              <td class="label-col"><strong>Report date/Time</strong></td>
-              <td class="colon-col"><strong>:</strong></td>
-              <td class="value-col" id="tReportDateTime">-</td>
-            </tr>
-            <tr>
-              <td class="label-col"><strong>Refd By</strong></td>
-              <td class="colon-col"><strong>:</strong></td>
-              <td class="value-col" colspan="4" id="tDoctor">-</td>
-            </tr>
-          </table>
-          <div id="editor"></div>
-          <div class="doctor-signature">
-            <div class="sig-img" id="sigImg"></div>
-            <div class="signature-line doctor-name" id="sigName"></div>
-            <div class="signature-line" id="sigQual"></div>
-            <div class="signature-line" id="sigDesig"></div>
-            <div class="signature-line" id="sigInst"></div>
-            <div class="signature-line" id="sigBMDC"></div>
-            <div class="signature-line" id="sigMobile"></div>
+          <div class="rte">
+            <div class="rte-bar">
+              <select id="rteZoom">
+                <option value="50">50%</option>
+                <option value="75">75%</option>
+                <option value="100" selected>100%</option>
+                <option value="125">125%</option>
+                <option value="150">150%</option>
+                <option value="200">200%</option>
+              </select>
+              <select id="rteFont">
+                <option value="Tahoma" selected>Tahoma</option>
+                <option value="Calibri">Calibri</option>
+                <option value="Arial">Arial</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Courier New">Courier New</option>
+              </select>
+              <select id="rteSize">
+                <option value="10.5px">6</option>
+                <option value="12.25px">7</option>
+                <option value="" selected>8</option>
+                <option value="15.75px">9</option>
+                <option value="17.5px">10</option>
+                <option value="19.25px">11</option>
+                <option value="21px">12</option>
+                <option value="24.5px">14</option>
+                <option value="28px">16</option>
+              </select>
+              <div id="editorToolbar">
+                <span class="rte-grp">
+                  <button type="button" class="ql-bold" title="Bold"></button>
+                  <button type="button" class="ql-italic" title="Italic"></button>
+                  <button type="button" class="ql-underline" title="Underline"></button>
+                </span>
+                <span class="rte-grp">
+                  <button type="button" class="ql-align" value="" title="Align Left"></button>
+                  <button type="button" class="ql-align" value="right" title="Align Right"></button>
+                  <button type="button" class="ql-align" value="center" title="Center"></button>
+                  <button type="button" class="ql-align" value="justify" title="Justify"></button>
+                </span>
+                <span class="rte-grp tight">
+                  <button type="button" class="ql-list" value="ordered" title="Numbering"></button>
+                  <button type="button" class="ql-list" value="bullet" title="Bullets"></button>
+                </span>
+                <span class="rte-grp tight">
+                  <button type="button" class="ql-indent" value="+1" title="Increase Indent"></button>
+                  <button type="button" class="ql-indent" value="-1" title="Decrease Indent"></button>
+                </span>
+                <span class="rte-grp">
+                  <button type="button" class="ql-clean" title="Clear Formatting"></button>
+                </span>
+              </div>
+            </div>
+            <div class="rte-ruler"></div>
+            <div class="rte-viewport" id="editorViewport">
+              <div class="rte-sheet" id="editorSheet">
+                <div class="doc-header">
+                  <div class="header-title">DEPARTMENT OF RADIOLOGY AND IMAGING</div>
+                  <table class="patient-table">
+                    <colgroup>
+                      <col style="width:13%">
+                      <col style="width:2.7%">
+                      <col style="width:26.2%">
+                      <col style="width:13%">
+                      <col style="width:2.7%">
+                      <col style="width:42.4%">
+                    </colgroup>
+                    <tr>
+                      <td class="label-col"><strong>Name</strong></td>
+                      <td class="colon-col"><strong>:</strong></td>
+                      <td class="value-col" id="tName">-</td>
+                      <td class="label-col"><strong>Patient ID</strong></td>
+                      <td class="colon-col"><strong>:</strong></td>
+                      <td class="value-col" id="tId">-</td>
+                    </tr>
+                    <tr>
+                      <td class="label-col"><strong>Age</strong></td>
+                      <td class="colon-col"><strong>:</strong></td>
+                      <td class="value-col" id="tAge">-</td>
+                      <td class="label-col"><strong>Exam date</strong></td>
+                      <td class="colon-col"><strong>:</strong></td>
+                      <td class="value-col" id="tExamDate">-</td>
+                    </tr>
+                    <tr>
+                      <td class="label-col"><strong>Sex</strong></td>
+                      <td class="colon-col"><strong>:</strong></td>
+                      <td class="value-col" id="tSex">-</td>
+                      <td class="label-col"><strong>Report date/Time</strong></td>
+                      <td class="colon-col"><strong>:</strong></td>
+                      <td class="value-col" id="tReportDateTime">-</td>
+                    </tr>
+                    <tr>
+                      <td class="label-col"><strong>Refd By</strong></td>
+                      <td class="colon-col"><strong>:</strong></td>
+                      <td class="value-col" colspan="4" id="tDoctor">-</td>
+                    </tr>
+                  </table>
+                </div>
+                <div id="editor"></div>
+                <div class="doctor-signature">
+                  <div class="sig-img" id="sigImg"></div>
+                  <div class="signature-line doctor-name" id="sigName"></div>
+                  <div class="signature-line" id="sigQual"></div>
+                  <div class="signature-line" id="sigDesig"></div>
+                  <div class="signature-line" id="sigInst"></div>
+                  <div class="signature-line" id="sigBMDC"></div>
+                  <div class="signature-line" id="sigMobile"></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -567,53 +946,229 @@
       renderSavedReports();
     }
 
+    let activeReportIdx = -1;
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function sanitizeReportHtml(html) {
+      const doc = new DOMParser().parseFromString(html || '', 'text/html');
+      doc.querySelectorAll('script, iframe, object, embed, link, meta, style, form').forEach(function(n) { n.remove(); });
+      doc.body.querySelectorAll('*').forEach(function(el) {
+        Array.from(el.attributes).forEach(function(a) {
+          const n = a.name.toLowerCase();
+          if (n.startsWith('on') || ((n === 'href' || n === 'src') && /^\s*javascript:/i.test(a.value))) {
+            el.removeAttribute(a.name);
+          }
+        });
+      });
+      return doc.body.innerHTML;
+    }
+
+    function myReportNames() {
+      const names = [];
+      if (doctorInfo) {
+        [doctorInfo.full_name, doctorInfo.doctor_name, doctorInfo.username].forEach(function(n) {
+          if (n && String(n).trim()) names.push(String(n).trim());
+        });
+      }
+      return names;
+    }
+
+    function isOwnReport(r) {
+      const names = myReportNames();
+      if (!names.length) return true;
+      return names.indexOf(String(r.reported_by || '').trim()) !== -1;
+    }
+
     function renderSavedReports() {
       const bar = document.getElementById('savedReportsBar');
       const tbody = document.getElementById('savedReportsBody');
       if (!savedReports.length) {
         bar.classList.remove('visible');
+        tbody.innerHTML = '';
+        closeReportViewer();
         return;
       }
       bar.classList.add('visible');
       tbody.innerHTML = '';
       savedReports.forEach(function(r, idx) {
         const tr = document.createElement('tr');
-        const doctorName = r.reported_by || (doctorInfo && doctorInfo.full_name) || '-';
-        const reportTime = r.updated_at || getNow();
-        const status = r.status || '-';
+        if (idx === activeReportIdx) tr.classList.add('active');
+        const doctorName = escapeHtml(r.reported_by || (doctorInfo && doctorInfo.full_name) || '-');
+        const reportTime = escapeHtml(r.updated_at || getNow());
+        const status = escapeHtml(r.status || '-');
         const reportFileUrl = r.report_file || '';
-        const dicomId = r.dicom_id || currentPatientId || '';
+        const dicomId = escapeHtml(r.dicom_id || currentPatientId || '');
         let viewReportHtml = '-';
-        if (reportFileUrl) {
-          viewReportHtml = `<a class="report-file-link" href="${reportFileUrl}" target="_blank" onclick="event.stopPropagation()"><span class="word-icon">W</span>${dicomId}</a>`;
+        if (reportFileUrl || r.report_content) {
+          viewReportHtml = `<a class="report-file-link" href="#"><span class="word-icon">W</span>${dicomId}</a>`;
         } else {
           viewReportHtml = `<span style="color:#999;">${dicomId}</span>`;
         }
+        const deleteHtml = (r.id && isOwnReport(r))
+          ? `<button class="delete-report-btn" title="Delete my report" onclick="event.stopPropagation();deleteSavedReport(${idx})">&#10005;</button>`
+          : '<span style="color:#bbb;">-</span>';
         tr.innerHTML = `
           <td>${doctorName}</td>
           <td>${reportTime}</td>
-          <td>${viewReportHtml}</td>
+          <td class="view-report-cell">${viewReportHtml}</td>
           <td>${status}</td>
-          <td><button class="delete-report-btn" title="Remove from list" onclick="event.stopPropagation();removeReportFromList(${idx})">&#10005;</button></td>
+          <td>${deleteHtml}</td>
         `;
-        if (r.report_content) {
-          tr.addEventListener('click', function() {
-            loadReportContentInEditor(r.report_content);
+        const viewCell = tr.querySelector('.view-report-cell');
+        if (viewCell && (reportFileUrl || r.report_content)) {
+          viewCell.addEventListener('click', function(e) {
+            e.preventDefault();
+            openReportViewer(idx);
           });
         }
         tbody.appendChild(tr);
       });
     }
 
-    function removeReportFromList(idx) {
-      savedReports.splice(idx, 1);
-      renderSavedReports();
+    function resolveReportContent(r) {
+      if (r.report_content && r.report_content.trim()) return r.report_content;
+      if (r.report_file) {
+        const twin = savedReports.find(function(o) {
+          return o !== r && o.report_file === r.report_file && o.report_content && o.report_content.trim();
+        });
+        if (twin) return twin.report_content;
+      }
+      return '';
+    }
+
+    function openReportViewer(idx) {
+      const r = savedReports[idx];
+      if (!r) return;
+      activeReportIdx = idx;
+      const table = document.querySelector('.patient-table').cloneNode(true);
+      const timeCell = table.querySelector('#tReportDateTime');
+      if (timeCell) timeCell.textContent = r.updated_at || '-';
+      const examCell = table.querySelector('#tExamDate');
+      if (examCell && r.exam_date) examCell.textContent = r.exam_date;
+      table.querySelectorAll('[id]').forEach(function(el) { el.removeAttribute('id'); });
+      const meta = document.getElementById('reportViewerMeta');
+      meta.innerHTML = `<strong>${escapeHtml(r.reported_by || '-')}</strong>${escapeHtml(r.updated_at || '')}${r.status ? ' &middot; ' + escapeHtml(r.status) : ''}${r.study_description ? ' &middot; ' + escapeHtml(r.study_description) : ''}`;
+      const body = document.getElementById('reportViewerBody');
+      body.innerHTML = '';
+      const title = document.createElement('div');
+      title.className = 'header-title';
+      title.textContent = 'DEPARTMENT OF RADIOLOGY AND IMAGING';
+      body.appendChild(title);
+      body.appendChild(table);
+      const container = document.createElement('div');
+      container.className = 'ql-container ql-snow';
+      const content = document.createElement('div');
+      content.className = 'ql-editor';
+      const reportHtml = resolveReportContent(r);
+      content.innerHTML = reportHtml
+        ? sanitizeReportHtml(reportHtml)
+        : '<p style="color:#777;">No report text was saved for this entry.</p>';
+      container.appendChild(content);
+      body.appendChild(container);
+      if (r.reported_by) {
+        const doc = document.createElement('div');
+        doc.className = 'report-viewer-doctor';
+        doc.textContent = r.reported_by;
+        body.appendChild(doc);
+      }
+      document.getElementById('pageWrapper').style.display = 'none';
+      document.getElementById('reportViewer').classList.add('visible');
+      document.querySelector('.content-area').scrollTop = 0;
+      renderActiveRow();
+    }
+
+    function renderActiveRow() {
+      const rows = document.querySelectorAll('#savedReportsBody tr');
+      rows.forEach(function(tr, i) {
+        tr.classList.toggle('active', i === activeReportIdx);
+      });
+    }
+
+    function closeReportViewer() {
+      activeReportIdx = -1;
+      const viewer = document.getElementById('reportViewer');
+      if (viewer) viewer.classList.remove('visible');
+      const wrapper = document.getElementById('pageWrapper');
+      if (wrapper) wrapper.style.display = '';
+      renderActiveRow();
+    }
+
+    async function deleteSavedReport(idx) {
+      const r = savedReports[idx];
+      if (!r) return;
+      if (!r.id || !isOwnReport(r)) {
+        showMsg('You can only delete your own report', 'error');
+        return;
+      }
+      if (!confirm('Delete this report permanently? This cannot be undone.')) return;
+      try {
+        const res = await fetch(`${baseUrl}/api/delete-report-history/`, {
+          method: 'POST',
+          headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: r.id })
+        });
+        const data = await res.json().catch(function() { return {}; });
+        if (!res.ok || !data.success) {
+          showMsg(data.error || 'Could not delete report', 'error');
+          return;
+        }
+        const wasActive = idx === activeReportIdx;
+        savedReports.splice(idx, 1);
+        if (wasActive) {
+          closeReportViewer();
+        } else if (activeReportIdx > idx) {
+          activeReportIdx -= 1;
+        }
+        renderSavedReports();
+        showMsg('Report deleted', 'success');
+      } catch (e) {
+        console.error('Delete report failed:', e);
+        showMsg('Could not delete report', 'error');
+      }
+    }
+
+    async function refreshSavedReports() {
+      if (!currentPatientId) return;
+      try {
+        const res = await fetch(`${baseUrl}/api/dicom-images/${currentPatientId}/report-history/?scope=patient`, {
+          headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.success || !data.history) return;
+        savedReports = data.history.map(function(entry) {
+          return {
+            id: entry.id || null,
+            reported_by: entry.reported_by || '',
+            updated_at: entry.created_at || '',
+            created_at: entry.created_at || '',
+            status: entry.status || '',
+            report_file: entry.report_file || '',
+            report_content: entry.report_content || '',
+            dicom_id: entry.dicom_id || currentPatientId,
+            exam_date: entry.exam_date || '',
+            study_description: entry.study_description || ''
+          };
+        });
+        activeReportIdx = -1;
+        closeReportViewer();
+        renderSavedReports();
+      } catch (e) {
+        console.error('Could not refresh report list:', e);
+      }
     }
 
     function loadReportContentInEditor(content) {
       if (!quill) return;
       quill.root.innerHTML = content;
-      quill.scrollingContainer.scrollTop = 0;
+      scrollToReportBody();
     }
     
     function checkScreenSize() {
@@ -625,19 +1180,19 @@
       }
     }
     
+    function scrollToReportBody() {
+      const viewport = document.getElementById('editorViewport');
+      const body = document.getElementById('editor');
+      if (!viewport || !body) return;
+      const offset = body.getBoundingClientRect().top - viewport.getBoundingClientRect().top - viewport.clientTop + viewport.scrollTop;
+      viewport.scrollTop = Math.max(0, offset - 1);
+    }
+
     function scalePaper() {
       const paper = document.getElementById('pageWrapper');
       const viewArea = document.querySelector('.content-area');
-      const style = getComputedStyle(viewArea);
-      const availWidth = viewArea.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-      const paperWidth = 320 * 3.7795275591;
-      const scale = availWidth / paperWidth;
-      paper.style.transform = `scale(${scale})`;
-      paper.style.marginBottom = `${(scale - 1) * paper.offsetHeight}px`;
-    }
-
-    if (window.ResizeObserver) {
-      new ResizeObserver(() => scalePaper()).observe(document.getElementById('pageWrapper'));
+      paper.style.transform = 'none';
+      paper.style.marginBottom = '';
     }
     
     window.addEventListener('resize', () => {
@@ -648,6 +1203,7 @@
     window.addEventListener('load', () => {
       checkScreenSize();
       scalePaper();
+      document.getElementById('reportViewerBack').addEventListener('click', closeReportViewer);
     });
     
     async function checkAccess() {
@@ -704,26 +1260,312 @@
         sigImgDiv.innerHTML = `<img src="${fullUrl}" alt="Signature" onerror="console.error('Signature load failed'); this.style.display='none';">`;
       }
     }
+
+    function setSelectValue(id, value, fallback) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const has = Array.from(el.options).some(function(o) { return o.value === value; });
+      el.value = has ? value : fallback;
+    }
+
+    function syncFormatControls(range) {
+      if (!quill || !range) return;
+      const f = quill.getFormat(range);
+      setSelectValue('rteFont', f.font || 'Tahoma', 'Tahoma');
+      setSelectValue('rteSize', f.size || '', '');
+    }
     
+    function setupCleanPaste() {
+      const Delta = Quill.import('delta');
+      const blockTags = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TR', 'PRE', 'BLOCKQUOTE', 'UL', 'OL', 'TABLE', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'DT', 'DD', 'FIGURE', 'FIGCAPTION']);
+      const skipTags = new Set(['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'HEAD', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'SVG', 'IMG', 'CANVAS', 'VIDEO', 'AUDIO']);
+      const MAX_LEVEL = 3;
+
+      function lengthToLevel(value) {
+        const m = String(value || '').trim().match(/^(-?[\d.]+)(px|pt|in|cm|mm|em|rem)?$/i);
+        if (!m) return 0;
+        const n = parseFloat(m[1]);
+        if (!isFinite(n) || n <= 0) return 0;
+        switch ((m[2] || 'px').toLowerCase()) {
+          case 'pt': return n / 36;
+          case 'in': return n / 0.5;
+          case 'cm': return n / 1.27;
+          case 'mm': return n / 12.7;
+          case 'em':
+          case 'rem': return n / 3;
+          default: return n / 48;
+        }
+      }
+
+      function styleLevel(style) {
+        return lengthToLevel(style.marginLeft) + lengthToLevel(style.paddingLeft) + lengthToLevel(style.textIndent);
+      }
+
+      function htmlToLines(html) {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const lines = [];
+        let current = [];
+        let curLevel = 0;
+        function flush() {
+          lines.push({ runs: current, level: curLevel });
+          current = [];
+        }
+        function walk(node, fmt) {
+          if (node.nodeType === 3) {
+            current.push({ text: node.nodeValue, b: fmt.b, i: fmt.i, u: fmt.u, pre: fmt.pre });
+            return;
+          }
+          if (node.nodeType !== 1) return;
+          const tag = node.nodeName.toUpperCase();
+          if (skipTags.has(tag)) return;
+          const rawStyle = (node.getAttribute('style') || '').toLowerCase().replace(/\s+/g, '');
+          if (rawStyle.indexOf('mso-list:ignore') !== -1 || rawStyle.indexOf('display:none') !== -1) return;
+          if (tag === 'BR') {
+            flush();
+            return;
+          }
+          if (rawStyle.indexOf('mso-tab-count') !== -1) {
+            current.push({ text: '\t', b: false, i: false, u: false, pre: true });
+            return;
+          }
+          const style = node.style || {};
+          const next = { b: fmt.b, i: fmt.i, u: fmt.u, pre: fmt.pre, level: fmt.level };
+          if (tag === 'B' || tag === 'STRONG' || /^H[1-6]$/.test(tag)) next.b = true;
+          if (tag === 'I' || tag === 'EM') next.i = true;
+          if (tag === 'U' || tag === 'INS') next.u = true;
+          if (tag === 'PRE' || String(style.whiteSpace || '').toLowerCase().indexOf('pre') === 0) next.pre = true;
+          const weight = String(style.fontWeight || '').toLowerCase();
+          if (weight) next.b = weight === 'bold' || weight === 'bolder' || parseInt(weight, 10) >= 600;
+          const fontStyle = String(style.fontStyle || '').toLowerCase();
+          if (fontStyle) next.i = fontStyle === 'italic' || fontStyle === 'oblique';
+          const deco = String(style.textDecorationLine || style.textDecoration || '').toLowerCase();
+          if (deco) next.u = deco.indexOf('underline') !== -1;
+          const isBlock = blockTags.has(tag);
+          if (isBlock) {
+            next.level = fmt.level + styleLevel(style);
+            flush();
+            curLevel = next.level;
+          }
+          Array.from(node.childNodes).forEach(function(child) { walk(child, next); });
+          if (tag === 'TD' || tag === 'TH') current.push({ text: ' ', b: false, i: false, u: false, pre: false });
+          if (isBlock) {
+            flush();
+            curLevel = fmt.level;
+          }
+        }
+        walk(doc.body, { b: false, i: false, u: false, pre: false, level: 0 });
+        flush();
+        return lines.map(normalizeLine).filter(function(l) { return l.runs.length; });
+      }
+
+      function textToLines(text) {
+        return String(text || '').split(/\r\n|\r|\n/).map(function(l) {
+          return normalizeLine({ runs: [{ text: l, b: false, i: false, u: false, pre: true }], level: 0 });
+        }).filter(function(l) { return l.runs.length; });
+      }
+
+      function leadingWidth(runs) {
+        let width = 0;
+        for (let k = 0; k < runs.length; k++) {
+          const t = String(runs[k].text || '').replace(/[\u200b-\u200d\u2060\ufeff]/g, '');
+          const lead = (t.match(/^\s*/) || [''])[0];
+          const fromSource = !runs[k].pre && /[\r\n]/.test(lead);
+          if (!fromSource) {
+            for (let n = 0; n < lead.length; n++) {
+              const ch = lead.charAt(n);
+              if (/[\t\u000b\u000c\u2002\u2003]/.test(ch)) width += 4;
+              else if (ch === '\u00a0' || ch === '\u3000') width += 1;
+              else if (ch === ' ') width += runs[k].pre ? 1 : 0;
+            }
+          }
+          if (lead.length < t.length) break;
+        }
+        return width;
+      }
+
+      function normalizeLine(line) {
+        const width = leadingWidth(line.runs);
+        const out = [];
+        let lastSpace = true;
+        line.runs.forEach(function(r) {
+          let t = String(r.text || '').replace(/[\u200b-\u200d\u2060\ufeff]/g, '').replace(/\s+/g, ' ');
+          if (lastSpace && t.charAt(0) === ' ') t = t.slice(1);
+          if (!t) return;
+          lastSpace = t.charAt(t.length - 1) === ' ';
+          out.push({ text: t, b: r.b, i: r.i, u: r.u });
+        });
+        while (out.length) {
+          const last = out[out.length - 1];
+          last.text = last.text.replace(/ +$/, '');
+          if (last.text) break;
+          out.pop();
+        }
+        const wsLevel = width >= 3 ? Math.round(width / 4) : 0;
+        const level = Math.min(MAX_LEVEL, Math.max(0, Math.round(line.level + wsLevel)));
+        return { runs: out, level: level };
+      }
+
+      function lineIndentInfo(line) {
+        const start = quill.getIndex(line);
+        const txt = quill.getText(start, line.length());
+        if (!txt.replace(/\s+/g, '')) return null;
+        const lead = (txt.match(/^[ \t\u000b\u2002\u2003\u00a0\u3000]*/) || [''])[0];
+        const level = parseInt(quill.getFormat(start, 1).indent, 10) || 0;
+        return { lead: lead, level: level };
+      }
+
+      function currentIndent(index) {
+        let line = quill.getLine(index)[0];
+        while (line) {
+          const info = lineIndentInfo(line);
+          if (info) return info;
+          line = line.prev;
+        }
+        return { lead: '', level: 0 };
+      }
+
+      function indentReference(index) {
+        const origin = quill.getLine(index)[0];
+        let up = origin;
+        let down = origin;
+        for (let step = 0; step < 80 && (up || down); step++) {
+          if (up) {
+            const info = lineIndentInfo(up);
+            if (info && (info.lead || info.level)) return info;
+            up = up.prev;
+          }
+          if (down) {
+            const info = lineIndentInfo(down);
+            if (info && (info.lead || info.level)) return info;
+            down = down.next;
+          }
+        }
+        return null;
+      }
+
+      quill.container.addEventListener('paste', function(e) {
+        const cd = e.clipboardData || window.clipboardData;
+        if (!cd) return;
+        const html = cd.getData('text/html');
+        const text = cd.getData('text/plain');
+        if (!html && !text) return;
+        e.preventDefault();
+        e.stopPropagation();
+        let lines = html ? htmlToLines(html) : [];
+        if (!lines.length) lines = textToLines(text);
+        if (!lines.length) return;
+
+        const range = quill.getSelection(true);
+        if (!range) return;
+        if (range.length) quill.deleteText(range.index, range.length, 'api');
+
+        const ownIndent = lines.some(function(l) { return l.level > 0; });
+        let unit;
+        if (ownIndent) {
+          unit = indentReference(range.index) || { lead: '\t', level: 0 };
+        } else {
+          unit = currentIndent(range.index);
+        }
+        const caretLine = quill.getLine(range.index);
+        const lineStart = range.index - caretLine[1];
+        const caretLineText = quill.getText(lineStart, caretLine[0].length());
+        const existingLead = (caretLineText.match(/^[ \t\u000b\u2002\u2003\u00a0\u3000]*/) || [''])[0];
+        const prefixFirst = range.index === lineStart && existingLead.length === 0;
+
+        const ops = [];
+        const lineMarks = [];
+        let total = 0;
+        lines.forEach(function(line, idx) {
+          const times = ownIndent ? line.level : 1;
+          const lead = unit.lead.repeat(times);
+          const blockLevel = Math.min(8, unit.level * times);
+          const startsLine = idx > 0 || prefixFirst;
+          const startPos = range.index + total;
+          if (lead && startsLine) {
+            ops.push({ insert: lead });
+            total += lead.length;
+          }
+          line.runs.forEach(function(r) {
+            const attrs = {};
+            if (r.b) attrs.bold = true;
+            if (r.i) attrs.italic = true;
+            if (r.u) attrs.underline = true;
+            ops.push(Object.keys(attrs).length ? { insert: r.text, attributes: attrs } : { insert: r.text });
+            total += r.text.length;
+          });
+          if (startsLine) lineMarks.push({ pos: startPos, level: blockLevel });
+          if (idx < lines.length - 1) {
+            ops.push({ insert: '\n' });
+            total += 1;
+          }
+        });
+
+        quill.updateContents(new Delta().retain(range.index).concat(new Delta(ops)), 'api');
+        lineMarks.forEach(function(m) {
+          quill.formatLine(m.pos, 0, 'indent', m.level || false, 'api');
+        });
+        quill.setSelection(range.index + total, 0, 'user');
+      }, true);
+    }
+
     function initQuill() {
       const SizeStyle = Quill.import('attributors/style/size');
-      SizeStyle.whitelist = ['12.3px', '13.9px', '15.4px', '17px', '21.6px', '24.7px', '27.8px'];
+      SizeStyle.whitelist = ['10.5px', '11px', '12px', '12.25px', '13px', '15.75px', '16px', '17.5px', '18px', '19.25px', '20px', '21px', '24px', '24.5px', '28px', '12.3px', '13.9px', '15.4px', '17px', '21.6px', '24.7px', '27.8px'];
       Quill.register(SizeStyle, true);
+      const FontStyle = Quill.import('attributors/style/font');
+      FontStyle.whitelist = ['Tahoma', 'Calibri', 'Arial', 'Times New Roman', 'Verdana', 'Georgia', 'Courier New'];
+      Quill.register(FontStyle, true);
+
+      const svg = function(body) {
+        return '<svg viewBox="0 0 16 14" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#222" stroke-width="1.4" shape-rendering="crispEdges">' + body + '</svg>';
+      };
+      const icons = Quill.import('ui/icons');
+      icons['bold'] = '<span class="gl">B</span>';
+      icons['italic'] = '<span class="gl gl-i">I</span>';
+      icons['underline'] = '<span class="gl gl-u">U</span>';
+      icons['align'] = {
+        '': svg('<path d="M2 2.5h12M2 5.5h8M2 8.5h12M2 11.5h8"/>'),
+        'right': svg('<path d="M2 2.5h12M6 5.5h8M2 8.5h12M6 11.5h8"/>'),
+        'center': svg('<path d="M2 2.5h12M4 5.5h8M2 8.5h12M4 11.5h8"/>'),
+        'justify': svg('<path d="M2 2.5h12M2 5.5h12M2 8.5h12M2 11.5h12"/>')
+      };
+      icons['list'] = {
+        'ordered': svg('<text x="0" y="4" font-size="4.5" fill="#222" stroke="none">1</text><text x="0" y="8" font-size="4.5" fill="#222" stroke="none">2</text><text x="0" y="12" font-size="4.5" fill="#222" stroke="none">3</text><path d="M5 2.5h10M5 6.5h10M5 10.5h10"/>'),
+        'bullet': svg('<rect x="1" y="1.5" width="2" height="2" fill="#222" stroke="none"/><rect x="1" y="5.5" width="2" height="2" fill="#222" stroke="none"/><rect x="1" y="9.5" width="2" height="2" fill="#222" stroke="none"/><path d="M5 2.5h10M5 6.5h10M5 10.5h10"/>')
+      };
+      icons['indent'] = {
+        '+1': '<span class="gl gl-p">&para;</span>',
+        '-1': svg('<path d="M2 2.5h12M7 5.5h7M7 8.5h7M2 11.5h12"/><path d="M5 4.5l-3 2 3 2z" fill="#222"/>')
+      };
+      icons['clean'] = svg('<rect x="1.5" y="1.5" width="13" height="11"/><path d="M5 4v5h5" stroke-width="1.8"/>');
+
       quill = new Quill('#editor', {
         theme: 'snow',
+        scrollingContainer: '#editorViewport',
         modules: {
-          toolbar: [
-            [{ 'size': ['12.3px', '13.9px', '15.4px', '17px', false, '21.6px', '24.7px', '27.8px'] }],
-            ['bold', 'italic', 'underline'],
-            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-            [{ 'align': '' }, { 'align': 'center' }, { 'align': 'right' }, { 'align': 'justify' }],
-            ['clean']
-          ]
+          toolbar: '#editorToolbar'
         },
         placeholder: 'Start typing your report here or select a template...'
       });
       quill.setText('');
-      setTimeout(() => quill.focus(), 200);
+      setupCleanPaste();
+
+      document.getElementById('rteZoom').addEventListener('change', function() {
+        document.getElementById('editorSheet').style.zoom = parseInt(this.value, 10) / 100;
+      });
+      document.getElementById('rteFont').addEventListener('change', function() {
+        quill.format('font', this.value, 'user');
+        quill.focus();
+      });
+      document.getElementById('rteSize').addEventListener('change', function() {
+        quill.format('size', this.value || false, 'user');
+        quill.focus();
+      });
+      quill.on('selection-change', function(range) {
+        syncFormatControls(range);
+      });
+
+      setTimeout(() => { quill.focus(); scrollToReportBody(); }, 200);
     }
     
     async function loadTemplates() {
@@ -864,31 +1706,131 @@
     (function () {
       const searchInput = document.getElementById('navTemplateSearch');
       const navSelect = document.getElementById('navTemplate');
+      let rafId = 0;
+
+      function visibleOptions() {
+        return Array.from(navSelect.options).filter(opt => opt.value && !opt.hidden);
+      }
+
+      function placeList() {
+        const rect = searchInput.getBoundingClientRect();
+        const count = visibleOptions().length;
+        const rows = Math.max(1, Math.min(count, 10));
+        const width = Math.max(rect.width, 260);
+        navSelect.size = rows;
+        navSelect.style.top = (rect.bottom + 2) + 'px';
+        navSelect.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - width - 4)) + 'px';
+        navSelect.style.width = width + 'px';
+        navSelect.style.maxHeight = Math.max(80, window.innerHeight - rect.bottom - 12) + 'px';
+      }
+
+      function openList() {
+        navSelect.classList.add('searching');
+        placeList();
+      }
+
+      function closeList() {
+        navSelect.classList.remove('searching');
+        navSelect.size = 1;
+        navSelect.style.top = '';
+        navSelect.style.left = '';
+        navSelect.style.width = '';
+        navSelect.style.maxHeight = '';
+      }
 
       function applyNavTemplateFilter() {
-        const q = searchInput.value.trim().toLowerCase();
+        const words = searchInput.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
         Array.from(navSelect.options).forEach(opt => {
-          if (!opt.value) return;
-          const match = !q || opt.textContent.toLowerCase().includes(q);
+          if (!opt.value) {
+            opt.hidden = false;
+            return;
+          }
+          if (opt.dataset.search === undefined) {
+            opt.dataset.search = ((opt.textContent || '') + ' ' + (opt.dataset.bodypart || '')).toLowerCase();
+          }
+          const hay = opt.dataset.search;
+          const match = words.every(w => hay.includes(w));
           opt.hidden = !match;
           opt.style.display = match ? '' : 'none';
         });
+        if (words.length && document.activeElement === searchInput) {
+          openList();
+        } else if (!words.length) {
+          closeList();
+        }
       }
 
-      searchInput.addEventListener('input', applyNavTemplateFilter);
+      function schedule() {
+        cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(applyNavTemplateFilter);
+      }
+
+      function pick(value) {
+        if (!value) return;
+        navSelect.value = value;
+        navSelect.dispatchEvent(new Event('change'));
+        closeList();
+      }
+
+      searchInput.addEventListener('input', schedule);
+      searchInput.addEventListener('focus', () => {
+        if (searchInput.value.trim()) schedule();
+      });
 
       searchInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          closeList();
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          const first = visibleOptions()[0];
+          if (first) {
+            e.preventDefault();
+            navSelect.value = first.value;
+            navSelect.focus();
+          }
+          return;
+        }
         if (e.key !== 'Enter') return;
         e.preventDefault();
-        const first = Array.from(navSelect.options).find(opt => opt.value && !opt.hidden);
-        if (first) {
-          navSelect.value = first.value;
-          navSelect.dispatchEvent(new Event('change'));
+        const first = visibleOptions()[0];
+        if (first) pick(first.value);
+      });
+
+      searchInput.addEventListener('blur', () => {
+        setTimeout(() => {
+          if (document.activeElement !== navSelect) closeList();
+        }, 120);
+      });
+
+      navSelect.addEventListener('blur', () => {
+        setTimeout(() => {
+          if (document.activeElement !== searchInput) closeList();
+        }, 120);
+      });
+
+      navSelect.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          pick(navSelect.value);
+        } else if (e.key === 'Escape') {
+          closeList();
+          searchInput.focus();
         }
       });
 
+      navSelect.addEventListener('mouseup', function (e) {
+        if (navSelect.classList.contains('searching') && e.target.tagName === 'OPTION' && e.target.value) {
+          pick(e.target.value);
+        }
+      });
+
+      window.addEventListener('resize', () => {
+        if (navSelect.classList.contains('searching')) placeList();
+      });
+
       new MutationObserver(() => {
-        if (searchInput.value.trim()) applyNavTemplateFilter();
+        if (searchInput.value.trim()) schedule();
       }).observe(navSelect, { childList: true });
     })();
     
@@ -899,11 +1841,9 @@
       const sex = (data.patientGender || 'U').toString().charAt(0).toUpperCase();
       const doctor = (data.referringPhysician && data.referringPhysician.trim() !== '') ? data.referringPhysician : 'N/A';
       const now = new Date();
-      
-  
+
       let examDate;
       if (data.examDate && data.examDate.trim() !== '') {
-        
         const parts = data.examDate.split('/');
         if (parts.length === 3) {
           examDate = `${parts[1]}-${parts[0]}-${parts[2]}`;
@@ -911,7 +1851,6 @@
           examDate = data.examDate;
         }
       } else {
-    
         examDate = `${String(now.getDate()).padStart(2,'0')}-${String(now.getMonth()+1).padStart(2,'0')}-${now.getFullYear()}`;
       }
       
@@ -990,13 +1929,14 @@
       updatePatientInfo(data);
       applyStudyModalityFilter(data.modality || '');
       await loadExistingReport();
+      scrollToReportBody();
     }
 
     async function loadExistingReport() {
       if (!currentPatientId) return;
       let historyLoaded = false;
       try {
-        const res = await fetch(`${baseUrl}/api/dicom-images/${currentPatientId}/report-history/`, {
+        const res = await fetch(`${baseUrl}/api/dicom-images/${currentPatientId}/report-history/?scope=patient`, {
           headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
         });
         if (res.ok) {
@@ -1006,23 +1946,30 @@
             savedReports = [];
             data.history.forEach(function(entry) {
               savedReports.push({
+                id: entry.id || null,
                 reported_by: entry.reported_by || '',
                 updated_at: entry.created_at || '',
+                created_at: entry.created_at || '',
                 status: entry.status || '',
                 report_file: entry.report_file || '',
                 report_content: entry.report_content || '',
-                dicom_id: entry.dicom_id || currentPatientId
+                dicom_id: entry.dicom_id || currentPatientId,
+                exam_date: entry.exam_date || '',
+                study_description: entry.study_description || ''
               });
             });
             renderSavedReports();
-            const latest = data.history[0];
-            if (latest.report_content && latest.report_content.trim()) {
+            const latest = data.history.find(function(e) {
+              return e.report_content && e.report_content.trim();
+            });
+            if (latest) {
               const applyContent = () => {
                 if (quill) {
                   quill.root.innerHTML = latest.report_content;
                   const statusSel = document.getElementById('statusSelect');
                   if (statusSel && latest.status) statusSel.value = latest.status;
-                  showMsg('Previously saved report loaded', 'success');
+                  scrollToReportBody();
+                  showMsg('Saved loaded', 'success');
                 } else {
                   setTimeout(applyContent, 100);
                 }
@@ -1034,7 +1981,6 @@
       } catch (e) {
         console.error('Could not load report history:', e);
       }
-      // Fallback: if history endpoint returned nothing, load from single-report endpoint
       if (!historyLoaded) {
         try {
           const fallback = await fetch(`${baseUrl}/api/dicom-images/${currentPatientId}/report/`, {
@@ -1046,6 +1992,7 @@
               savedReports = [{
                 reported_by: reportData.reported_by || '',
                 updated_at: reportData.updated_at || '',
+                created_at: reportData.updated_at || '',
                 status: reportData.status || '',
                 report_file: reportData.report_file || '',
                 report_content: reportData.report_content,
@@ -1057,7 +2004,8 @@
                   quill.root.innerHTML = reportData.report_content;
                   const statusSel = document.getElementById('statusSelect');
                   if (statusSel && reportData.status) statusSel.value = reportData.status;
-                  showMsg('Previously saved report loaded', 'success');
+                  scrollToReportBody();
+                  showMsg('Saved loaded', 'success');
                 } else {
                   setTimeout(applyContent, 100);
                 }
@@ -1266,6 +2214,7 @@
         
         const fd = new FormData();
         fd.append('file', docxBlob, filename);
+        fd.append('report_content', reportHTML);
         
         console.log('Uploading report to:', `${baseUrl}/api/dicom-images/${currentPatientId}/upload_report/`);
         const upRes = await fetch(`${baseUrl}/api/dicom-images/${currentPatientId}/upload_report/`, {
@@ -1329,6 +2278,7 @@
         } catch (e) {}
 
         addReportToList(savedReportEntry);
+        refreshSavedReports();
         btn.disabled = false;
         reportSubmitting = false;
         
@@ -1399,7 +2349,7 @@
       sugg.style.display = 'none';
       sugg.style.maxHeight = '220px';
       sugg.style.overflowY = 'auto';
-      sugg.style.fontFamily = 'Calibri, Arial, sans-serif';
+      sugg.style.fontFamily = 'Tahoma, Arial, sans-serif';
       sugg.style.fontSize = '15px';
       sugg.style.padding = '4px 0';
       document.body.appendChild(sugg);
@@ -1599,6 +2549,7 @@
         setTimeout(() => {
           checkScreenSize();
           scalePaper();
+          scrollToReportBody();
         }, 100);
         window.addEventListener('message', (e) => {
           if (e.data?.type === 'patientData' && e.data?.data) {

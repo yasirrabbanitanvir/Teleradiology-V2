@@ -3,7 +3,7 @@ let allPatients = [];
 let filteredPatients = []; 
 let token = sessionStorage.getItem('token') || localStorage.getItem('token');
 let currentPage = parseInt(sessionStorage.getItem('doctorCurrentPage')) || 1;
-let itemsPerPage = 10;
+let itemsPerPage = 20;
 let totalPages = 1;
 let totalCount = 0;
 let loggedInDoctorName = '';
@@ -295,6 +295,7 @@ function collectFilters() {
   return {
     name: val('patient-name').trim(),
     id: val('patient-id').trim(),
+    bodyPart: val('body-part').trim(),
     status: val('status') || 'All',
     center: val('center') || 'ALL',
     emergency: !!(document.getElementById('emergency') && document.getElementById('emergency').checked),
@@ -308,6 +309,7 @@ function persistFilters(f) {
   sessionStorage.setItem('doctorStatusFilter', f.status);
   sessionStorage.setItem('doctorNameFilter', f.name);
   sessionStorage.setItem('doctorIdFilter', f.id);
+  sessionStorage.setItem('doctorBodyPartFilter', f.bodyPart || '');
   sessionStorage.setItem('doctorStartDate', f.start);
   sessionStorage.setItem('doctorEndDate', f.end);
   sessionStorage.setItem('doctorCenterFilter', f.center);
@@ -324,6 +326,7 @@ function restoreFilters() {
   set('status', 'doctorStatusFilter');
   set('patient-name', 'doctorNameFilter');
   set('patient-id', 'doctorIdFilter');
+  set('body-part', 'doctorBodyPartFilter');
   set('scan-start-date', 'doctorStartDate');
   set('scan-end-date', 'doctorEndDate');
   const emergency = document.getElementById('emergency');
@@ -355,6 +358,7 @@ function buildStudiesQuery(doctorName, page, withCenters) {
   params.set('page_size', String(itemsPerPage));
   if (f.name) params.set('patient_name', f.name);
   if (f.id) params.set('patient_id', f.id);
+  if (f.bodyPart) params.set('body_part', f.bodyPart);
   if (f.status && f.status !== 'All') params.set('status', f.status);
   if (f.center && f.center !== 'ALL') params.set('center_name', f.center);
   if (f.emergency) params.set('emergency', 'true');
@@ -362,8 +366,8 @@ function buildStudiesQuery(doctorName, page, withCenters) {
   if (f.modalities.length && f.modalities.length < totalModalities) {
     params.set('modality', f.modalities.join(','));
   }
-  if (f.start) params.set('start_date', f.start);
-  if (f.end) params.set('end_date', f.end);
+  if (f.start) params.set('server_start', f.start);
+  if (f.end) params.set('server_end', f.end);
   if (withCenters) params.set('centers', '1');
   return params.toString();
 }
@@ -612,7 +616,7 @@ document.querySelectorAll('.modality-checkbox').forEach(checkbox => {
   checkbox.addEventListener('change', syncModalityAll);
 });
 
-['patient-name', 'patient-id'].forEach(id => {
+['patient-name', 'patient-id', 'body-part'].forEach(id => {
   const el = document.getElementById(id);
   if (el) {
     el.addEventListener('keydown', (e) => {
@@ -626,12 +630,12 @@ document.querySelectorAll('.modality-checkbox').forEach(checkbox => {
 
 function isSearchPanelEmpty(f) {
   const totalModalities = document.querySelectorAll('.modality-checkbox').length;
-  return !f.name && !f.id && f.status === 'All' && f.center === 'ALL' && !f.emergency &&
+  return !f.name && !f.id && !f.bodyPart && f.status === 'All' && f.center === 'ALL' && !f.emergency &&
     !f.start && !f.end && f.modalities.length === totalModalities;
 }
 
 function clearSavedFilters() {
-  ['doctorStatusFilter', 'doctorNameFilter', 'doctorIdFilter', 'doctorStartDate',
+  ['doctorStatusFilter', 'doctorNameFilter', 'doctorIdFilter', 'doctorBodyPartFilter', 'doctorStartDate',
    'doctorEndDate', 'doctorCenterFilter', 'doctorEmergency', 'doctorModalities']
     .forEach(key => sessionStorage.removeItem(key));
 }
@@ -643,6 +647,7 @@ function resetPanelInputs() {
   };
   setValue('patient-name', '');
   setValue('patient-id', '');
+  setValue('body-part', '');
   setValue('status', 'All');
   setValue('center', 'ALL');
   setValue('scan-start-date', '');
@@ -684,6 +689,10 @@ async function searchPatients() {
 
 function refreshStudies() {
   reloadKeepingPage();
+}
+
+function refreshCurrentPage() {
+  return fetchAssignedStudies(loggedInDoctorName, currentPage, true);
 }
 
 function generateImageThumbnails(study) {
@@ -944,12 +953,18 @@ const REPORT_BAR_CSS = "body{padding-top:56px;font-family:'Segoe UI',Arial,sans-
 const REPORT_PRINT_ICON = '<svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>';
 const REPORT_DOWNLOAD_ICON = '<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
 
-function buildReportBar(d, win, onDownload) {
+function buildReportBar(d, win, onDownload, reportedAt) {
   const bar = d.createElement('div');
   bar.className = 'report-bar';
   const title = d.createElement('div');
   title.className = 'title';
   title.textContent = 'Report';
+  if (reportedAt) {
+    const stamp = d.createElement('span');
+    stamp.style.cssText = 'font-size:13px;font-weight:400;margin-left:8px;opacity:0.95;';
+    stamp.textContent = `/ ${reportedAt}`;
+    title.appendChild(stamp);
+  }
   const actions = d.createElement('div');
   actions.className = 'actions';
   const printBtn = d.createElement('button');
@@ -1033,6 +1048,8 @@ function renderReportPopup(win, reports) {
     win.document.write(html);
     win.document.close();
     const fileUrl = (items.find(r => r.report_file) || {}).report_file;
+    const stampItem = items.find(r => r.report_file) || items[0];
+    const reportedAt = (stampItem && stampItem.created_at) || '';
     buildReportBar(win.document, win, fileUrl ? () => {
       const a = win.document.createElement('a');
       a.href = fileUrl;
@@ -1040,7 +1057,7 @@ function renderReportPopup(win, reports) {
       win.document.body.appendChild(a);
       a.click();
       a.remove();
-    } : null);
+    } : null, reportedAt);
     win.focus();
     return true;
   } catch (e) {
@@ -1222,6 +1239,8 @@ async function renderDocxPopup(win, reports) {
     d.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report</title><style>html,body{margin:0;background:#e9ecef;}.docx-wrapper{background:#e9ecef !important;padding:20px 0 !important;}${REPORT_BAR_CSS}@page{size:A4;margin:0;}@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}html,body{background:#fff !important;margin:0 !important;}.report-bar{display:none !important;}body{padding-top:0 !important;}.docx-wrapper{background:#fff !important;padding:0 !important;display:block !important;}.docx-wrapper > section.docx{box-shadow:none !important;margin:0 auto !important;min-height:0 !important;break-after:page;page-break-after:always;}.docx-wrapper > section.docx:last-child{break-after:auto;page-break-after:auto;}}</style></head><body></body></html>`);
     d.close();
     const first = prepared[0];
+    const firstDocxReport = reports.find(r => r.report_file && /\.docx(\?|$)/i.test(r.report_file));
+    const docxReportedAt = (firstDocxReport && firstDocxReport.created_at) || '';
     buildReportBar(d, win, () => {
       const a = d.createElement('a');
       a.href = URL.createObjectURL(new Blob([first.original], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
@@ -1230,7 +1249,7 @@ async function renderDocxPopup(win, reports) {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    });
+    }, docxReportedAt);
     for (const item of prepared) {
       const holder = d.createElement('div');
       d.body.appendChild(holder);
@@ -1417,6 +1436,45 @@ function bindRowActions(tr) {
   });
 }
 
+function paginationButtonsHtml() {
+  return `<div class="pagination-buttons">
+    <button onclick="goToPage(1)" ${currentPage === 1 ? 'disabled' : ''} class="pagination-btn">⟪</button>
+    <button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="pagination-btn">⟨</button>
+    <div class="page-numbers"></div>
+    <button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="pagination-btn">⟩</button>
+    <button onclick="goToPage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''} class="pagination-btn">⟫</button>
+  </div>`;
+}
+
+function syncTopPagination(show) {
+  let top = document.getElementById('pagination-top');
+  const anchor = document.getElementById('load-studies-btn');
+  if (!anchor) return;
+  const host = anchor.closest('.load-bar-flex') || anchor.parentElement;
+  if (!host) return;
+  if (!top) {
+    top = document.createElement('div');
+    top.id = 'pagination-top';
+    top.className = 'pagination-top';
+  }
+  if (top.parentElement !== host) {
+    host.appendChild(top);
+  }
+  if (getComputedStyle(host).display !== 'flex') {
+    host.style.display = 'flex';
+    host.style.alignItems = 'center';
+    host.style.justifyContent = 'space-between';
+    host.style.flexWrap = 'wrap';
+    host.style.gap = '6px 12px';
+  }
+  if (!show) {
+    top.style.display = 'none';
+    return;
+  }
+  top.style.display = 'flex';
+  top.innerHTML = '<span class="pagination-info-text"></span>' + paginationButtonsHtml();
+}
+
 function createPaginationControls() {
   let paginationContainer = document.getElementById('pagination-container');
   
@@ -1434,6 +1492,7 @@ function createPaginationControls() {
   if (totalCount === 0) {
     paginationContainer.style.display = 'none';
     paginationContainer.dataset.sig = '';
+    syncTopPagination(false);
     return;
   }
   
@@ -1444,20 +1503,15 @@ function createPaginationControls() {
     return;
   }
   paginationContainer.dataset.sig = paginationSig;
+  syncTopPagination(true);
   
   paginationContainer.innerHTML = `
     <div class="pagination-wrapper">
       <div class="pagination-info">
-        <span id="pagination-info-text"></span>
+        <span class="pagination-info-text"></span>
       </div>
       
-      <div class="pagination-buttons">
-        <button onclick="goToPage(1)" ${currentPage === 1 ? 'disabled' : ''} class="pagination-btn">⟪</button>
-        <button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="pagination-btn">⟨</button>
-        <div class="page-numbers" id="page-numbers"></div>
-        <button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="pagination-btn">⟩</button>
-        <button onclick="goToPage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''} class="pagination-btn">⟫</button>
-      </div>
+      ${paginationButtonsHtml()}
     </div>
   `;
 
@@ -1466,10 +1520,10 @@ function createPaginationControls() {
 }
 
 function generatePageNumbers() {
-  const pageNumbersContainer = document.getElementById('page-numbers');
-  if (!pageNumbersContainer) return;
+  const pageNumbersContainers = document.querySelectorAll('.page-numbers');
+  if (!pageNumbersContainers.length) return;
   
-  pageNumbersContainer.innerHTML = '';
+  pageNumbersContainers.forEach(c => { c.innerHTML = ''; });
   
   let startPage = Math.max(1, currentPage - 2);
   let endPage = Math.min(totalPages, currentPage + 2);
@@ -1481,27 +1535,31 @@ function generatePageNumbers() {
     startPage = Math.max(totalPages - 4, 1);
   }
   
-  for (let i = startPage; i <= endPage; i++) {
-    const button = document.createElement('button');
-    button.textContent = i;
-    button.className = `pagination-btn page-btn ${i === currentPage ? 'active' : ''}`;
-    button.onclick = () => goToPage(i);
-    pageNumbersContainer.appendChild(button);
-  }
+  pageNumbersContainers.forEach(container => {
+    for (let i = startPage; i <= endPage; i++) {
+      const button = document.createElement('button');
+      button.textContent = i;
+      button.className = `pagination-btn page-btn ${i === currentPage ? 'active' : ''}`;
+      button.onclick = () => goToPage(i);
+      container.appendChild(button);
+    }
+  });
 }
 
 function updatePaginationInfo() {
-  const infoElement = document.getElementById('pagination-info-text');
-  if (!infoElement) return;
+  const infoElements = document.querySelectorAll('.pagination-info-text');
+  if (!infoElements.length) return;
   
   const startPatient = Math.min((currentPage - 1) * itemsPerPage + 1, totalCount);
   const endPatient = Math.min(currentPage * itemsPerPage, totalCount);
   
-  if (totalCount === 0) {
-    infoElement.textContent = 'No studies to show';
-  } else {
-    infoElement.textContent = `Showing ${startPatient}-${endPatient} of ${totalCount} studies`;
-  }
+  infoElements.forEach(infoElement => {
+    if (totalCount === 0) {
+      infoElement.textContent = 'No studies to show';
+    } else {
+      infoElement.textContent = `Showing ${startPatient}-${endPatient} of ${totalCount} studies`;
+    }
+  });
 }
 
 function goToPage(page) {
@@ -1921,4 +1979,14 @@ function formatReceiveDateTime(value) {
   if (isNaN(d.getTime())) return '';
   const p = n => String(n).padStart(2, '0');
   return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+
+function clearSearch() {
+  clearSavedFilters();
+  sessionStorage.removeItem('doctorCurrentPage');
+  resetPanelInputs();
+  const centerInput = document.getElementById('center-search-input');
+  if (centerInput) centerInput.value = '';
+  window.location.reload();
 }

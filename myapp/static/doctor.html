@@ -165,14 +165,16 @@
     </div>
 
     <section class="search-panel">
+      <div class="search-inputs-col">
       <div class="search-inputs">
         <input type="text" id="patient-name" placeholder="Patient Name" />
         <input type="text" id="patient-id" placeholder="Patient ID" />
+        <input type="text" id="body-part" placeholder="Body Part" />
         <input type="date" id="scan-start-date" />
         <input type="date" id="scan-end-date" />
         <select id="status">
+          <option value="All" selected hidden>Status</option>
           <option value="All">All</option>
-          <option value="Not Assigned">Not Assigned</option>
           <option value="Unreported">Unreported</option>
           <option value="Draft">Draft</option>
           <option value="Reviewed">Reviewed</option>
@@ -189,6 +191,8 @@
           <input type="checkbox" id="emergency" />
           Show only Emergency Cases
         </label>
+      </div>
+        <button type="button" class="clear-search-btn" onclick="clearSearch()">Clear Search</button>
       </div>
       <div class="modality-filter">
         <label>
@@ -216,7 +220,7 @@
       </div>
       <div class="search-actions">
         <button onclick="searchPatients()">Search</button>
-        <button id="refresh-btn" onclick="refreshStudies()">Refresh</button>
+        <button id="refresh-btn" onclick="refreshCurrentPage()">Refresh</button>
       </div>
     </section>
     
@@ -265,8 +269,8 @@
   </footer>
 
   <script src="./script/queryBar.js?v=1"></script>
-  <script src="./script/seriesPanel.js?v=5"></script>
-  <script src="./script/doctor.js?v=4"></script>
+  <script src="./script/seriesPanel.js?v=6"></script>
+  <script src="./script/doctor.js?v=5"></script>
   <script src="./script/extraViewers.js"></script>
 </body>
 </html>

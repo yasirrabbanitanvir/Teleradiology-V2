@@ -100,6 +100,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
     else if (page === 'sessions') loadSessions();
     else if (page === 'server') loadServerInfo();
     else if (page === 'mgmt-reports') initMgmtReports();
+    else if (page === 'billing') initBilling();
   });
 });
 
@@ -109,7 +110,7 @@ async function loadDashboard() {
       api('/api/users/'),
       api('/api/centers/'),
       api('/api/dicom-list/?page=1&page_size=1'),
-      api('/api/manage-templates/')
+      api('/api/manage-templates/?page=1&page_size=1')
     ]);
     if (usersRes.ok) {
       const users = await usersRes.json();
@@ -125,7 +126,7 @@ async function loadDashboard() {
     }
     if (templatesRes.ok) {
       const templates = await templatesRes.json();
-      document.getElementById('total-templates').textContent = (templates.templates || []).length;
+      document.getElementById('total-templates').textContent = templates.count || 0;
     }
   } catch (e) {
     console.error('Failed to load dashboard stats:', e);
@@ -885,6 +886,86 @@ function openEditCenterModal(id) {
   openModal('edit-center-modal');
 }
 
+function openRtfFormatModal() {
+  const id = parseInt(document.getElementById('edit-center-id').value);
+  const center = allCenters.find(c => c.id === id);
+  document.getElementById('rtf-center-id').value = id;
+  document.getElementById('rtf-format-error').style.display = 'none';
+  fillRtfFormat((center && center.report_format) || {});
+  openModal('rtf-format-modal');
+}
+
+function toggleRtfSection(id) {
+  const body = document.getElementById(id);
+  const open = body.classList.toggle('open');
+  document.getElementById(id + '-icon').textContent = open ? '−' : '+';
+}
+
+function fillRtfFormat(fmt) {
+  const val = v => (v === undefined || v === null) ? '' : v;
+  document.getElementById('rtf-top-margin').value = val(fmt.top_margin);
+  document.getElementById('rtf-bottom-margin').value = val(fmt.bottom_margin);
+  document.getElementById('rtf-font-name').value = val(fmt.font_name);
+  document.getElementById('rtf-font-size').value = val(fmt.font_size);
+  ['rtf-margins', 'rtf-fonts'].forEach(id => {
+    document.getElementById(id).classList.remove('open');
+    document.getElementById(id + '-icon').textContent = '+';
+  });
+}
+
+function resetRtfFormat() {
+  fillRtfFormat({});
+}
+
+function collectRtfFormat() {
+  const fmt = {};
+  const top = document.getElementById('rtf-top-margin').value.trim();
+  const bottom = document.getElementById('rtf-bottom-margin').value.trim();
+  const fontName = document.getElementById('rtf-font-name').value;
+  const fontSize = document.getElementById('rtf-font-size').value.trim();
+  if (top !== '') fmt.top_margin = parseFloat(top);
+  if (bottom !== '') fmt.bottom_margin = parseFloat(bottom);
+  if (fontName) fmt.font_name = fontName;
+  if (fontSize !== '') fmt.font_size = parseFloat(fontSize);
+  return fmt;
+}
+
+async function saveRtfFormat() {
+  const id = parseInt(document.getElementById('rtf-center-id').value);
+  const errEl = document.getElementById('rtf-format-error');
+  const fmt = collectRtfFormat();
+
+  for (const key of ['top_margin', 'bottom_margin']) {
+    if (fmt[key] !== undefined && (isNaN(fmt[key]) || fmt[key] < 0 || fmt[key] > 5)) {
+      errEl.textContent = 'Margins must be between 0 and 5 inches.';
+      errEl.style.display = 'inline-flex';
+      return;
+    }
+  }
+  if (fmt.font_size !== undefined && (isNaN(fmt.font_size) || fmt.font_size < 6 || fmt.font_size > 24)) {
+    errEl.textContent = 'Font size must be between 6 and 24.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+
+  const res = await api(`/api/centers/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ report_format: fmt })
+  });
+
+  if (!res.ok) {
+    errEl.textContent = 'Failed to save report format.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+
+  const idx = allCenters.findIndex(c => c.id === id);
+  if (idx !== -1) allCenters[idx].report_format = fmt;
+
+  toast('Report format saved successfully!', 'success');
+  closeModal('rtf-format-modal');
+}
+
 async function updateCenter() {
   const id = document.getElementById('edit-center-id').value;
   const institute_name = document.getElementById('edit-institute-name').value.trim();
@@ -1100,29 +1181,40 @@ function populateDicomInstituteFilter(centers) {
     institutes.map(i => `<option value="${i}"${i === current ? ' selected' : ''}>${i}</option>`).join('');
 }
 
-async function filterDicom() {
-  const q = (document.getElementById('dicom-search').value || '').trim();
-  const idQ = (document.getElementById('dicom-id-filter').value || '').trim();
-  const st = document.getElementById('dicom-status-filter').value;
-  const inst = document.getElementById('dicom-institute-filter').value;
-  const mod = document.getElementById('dicom-modality-filter').value;
-  const fromDate = document.getElementById('dicom-date-from').value;
-  const toDate = document.getElementById('dicom-date-to').value;
-  const emergencyOnly = document.getElementById('dicom-emergency-filter').checked;
+let dicomQuery = null;
+let dicomTotal = 0;
+let dicomTotalPages = 1;
+let dicomFetchSeq = 0;
 
+function collectDicomQuery() {
+  const val = id => (document.getElementById(id).value || '').trim();
   const params = new URLSearchParams();
-  if (q) params.set('patient_name__icontains', q);
-  if (idQ) params.set('patient_id__icontains', idQ);
-  if (st) params.set('status', st);
-  if (mod) params.set('modality__in', mod);
-  if (emergencyOnly) params.set('is_emergency', 'true');
-  if (inst) params.set('institute_name', inst);
-  if (fromDate) params.set('date_from', fromDate.replace(/-/g, ''));
-  if (toDate) params.set('date_to', toDate.replace(/-/g, ''));
-  params.set('page', '1');
-  params.set('page_size', '2000');
+  const fields = [
+    ['patient_name', 'dicom-search'],
+    ['patient_id', 'dicom-id-filter'],
+    ['status', 'dicom-status-filter'],
+    ['modality', 'dicom-modality-filter'],
+    ['institute_name', 'dicom-institute-filter'],
+    ['server_start', 'dicom-date-from'],
+    ['server_end', 'dicom-date-to']
+  ];
+  fields.forEach(([key, id]) => {
+    const v = val(id);
+    if (v) params.set(key, v);
+  });
+  if (document.getElementById('dicom-emergency-filter').checked) params.set('emergency', 'true');
+  return params;
+}
+
+async function loadDicomPage() {
+  if (!dicomQuery) return;
+  const seq = ++dicomFetchSeq;
+  const params = new URLSearchParams(dicomQuery);
+  params.set('page', String(dicomCurrentPage));
+  params.set('page_size', String(dicomRowsPerPage));
 
   document.getElementById('dicom-results-card').style.display = 'block';
+  window.QueryBar?.start('dicom', '#dicom-results-card .card-header', 'afterend');
   document.getElementById('dicom-count').textContent = 'Loading...';
   document.getElementById('dicom-table-body').innerHTML = '<tr><td colspan="9" class="loading">Loading...</td></tr>';
 
@@ -1130,14 +1222,40 @@ async function filterDicom() {
     const res = await api(`/api/dicom-list/?${params.toString()}`);
     if (!res.ok) throw new Error();
     const data = await res.json();
+    if (seq !== dicomFetchSeq) return;
 
     allDicom = data.results || [];
-    dicomCurrentPage = 1;
+    dicomTotal = data.count || 0;
+    dicomTotalPages = data.total_pages || 0;
+    dicomCurrentPage = data.current_page || dicomCurrentPage;
     renderDicom();
   } catch {
+    if (seq !== dicomFetchSeq) return;
     document.getElementById('dicom-count').textContent = 'Failed to load.';
     document.getElementById('dicom-table-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--red);">Failed to load results</td></tr>';
+  } finally {
+    window.QueryBar?.end('dicom');
   }
+}
+
+async function filterDicom() {
+  const fromDate = document.getElementById('dicom-date-from').value;
+  const toDate = document.getElementById('dicom-date-to').value;
+  if (fromDate && toDate && fromDate > toDate) {
+    toast('From date cannot be after To date.', 'error');
+    return;
+  }
+  dicomQuery = collectDicomQuery();
+  dicomCurrentPage = 1;
+  await loadDicomPage();
+}
+
+async function reloadDicom() {
+  if (!dicomQuery) {
+    await filterDicom();
+    return;
+  }
+  await loadDicomPage();
 }
 
 function clearDicomFilters() {
@@ -1150,6 +1268,10 @@ function clearDicomFilters() {
   document.getElementById('dicom-modality-filter').value = '';
   document.getElementById('dicom-emergency-filter').checked = false;
   allDicom = [];
+  dicomQuery = null;
+  dicomTotal = 0;
+  dicomTotalPages = 1;
+  dicomFetchSeq++;
   dicomCurrentPage = 1;
   document.getElementById('dicom-results-card').style.display = 'none';
   document.getElementById('dicom-count').textContent = '';
@@ -1198,7 +1320,7 @@ async function bulkDeleteDicom() {
       const deleted = results.filter(Boolean).length;
       const failed = ids.length - deleted;
       toast(`Deleted ${deleted} stud${deleted !== 1 ? 'ies' : 'y'}${failed ? `, ${failed} failed` : ''}.`, failed ? 'error' : 'success');
-      filterDicom();
+      reloadDicom();
     }
   );
 }
@@ -1225,7 +1347,7 @@ async function bulkApplyDicomEdit() {
   toast(`Updated ${ids.length} stud${ids.length > 1 ? 'ies' : 'y'}${failCount ? `, ${failCount} operations failed` : ''}.`, failCount ? 'error' : 'success');
   document.getElementById('dicom-bulk-modality').value = '';
   document.getElementById('dicom-bulk-status').value = '';
-  filterDicom();
+  reloadDicom();
 }
 
 async function assignSelectedStudies() {
@@ -1283,7 +1405,7 @@ async function assignSelectedStudies() {
     });
     if (res.ok) {
       toast(`Assigned ${ids.length} stud${ids.length > 1 ? 'ies' : 'y'} to group "${assignLabel}".`, 'success');
-      filterDicom();
+      reloadDicom();
     } else {
       const err = await res.json().catch(() => ({}));
       toast(err.error || 'Failed to assign studies.', 'error');
@@ -1297,7 +1419,7 @@ async function assignSelectedStudies() {
   });
   if (res.ok) {
     toast(`Assigned ${ids.length} stud${ids.length > 1 ? 'ies' : 'y'} to ${assignLabel}.`, 'success');
-    filterDicom();
+    reloadDicom();
   } else {
     const err = await res.json().catch(() => ({}));
     toast(err.error || 'Failed to assign studies.', 'error');
@@ -1307,12 +1429,9 @@ async function assignSelectedStudies() {
 async function renderDicom() {
   const statusColors = { 'Not Assigned': 'gray', 'Unreported': 'yellow', 'Draft': 'blue', 'Reviewed': 'purple', 'Reported': 'green' };
   const tbody = document.getElementById('dicom-table-body');
-  const total = allDicom.length;
-  const totalPages = Math.max(1, Math.ceil(total / dicomRowsPerPage));
-  if (dicomCurrentPage > totalPages) dicomCurrentPage = totalPages;
-
-  const start = (dicomCurrentPage - 1) * dicomRowsPerPage;
-  const pageData = allDicom.slice(start, start + dicomRowsPerPage);
+  const total = dicomTotal;
+  const totalPages = Math.max(1, dicomTotalPages);
+  const pageData = allDicom;
 
   const masterCb = document.getElementById('dicom-select-all');
   if (masterCb) masterCb.checked = false;
@@ -1386,7 +1505,7 @@ function renderDicomPagination(total, totalPages) {
   html += `<div class="pagination-info"><span id="dicom-pagination-info">Showing ${startIndex + 1}-${endIndex} of ${total} records</span></div>`;
   html += '<div class="pagination-controls">';
   html += '<div class="items-per-page"><label>Items per page:</label>';
-  html += `<select onchange="dicomRowsPerPage=parseInt(this.value);dicomCurrentPage=1;renderDicom();">`;
+  html += `<select onchange="dicomRowsPerPage=parseInt(this.value);dicomCurrentPage=1;loadDicomPage();">`;
   html += [25, 50, 100, 200].map(n => `<option value="${n}"${n === dicomRowsPerPage ? ' selected' : ''}>${n}</option>`).join('');
   html += '</select></div>';
   html += '<div class="pagination-buttons" id="dicom-pagination-buttons"></div>';
@@ -1437,10 +1556,9 @@ function renderDicomPaginationButtons(totalPages) {
 }
 
 function goToDicomPage(page) {
-  const totalPages = Math.ceil(allDicom.length / dicomRowsPerPage);
-  if (page < 1 || page > totalPages) return;
+  if (page < 1 || page > dicomTotalPages) return;
   dicomCurrentPage = page;
-  renderDicom();
+  loadDicomPage();
 }
 
 let currentDicomId = null;
@@ -1465,7 +1583,7 @@ async function submitStatusUpdate() {
   if (res.ok) {
     toast('Status updated successfully.', 'success');
     closeModal('update-status-modal');
-    filterDicom();
+    reloadDicom();
   } else {
     errEl.textContent = data.error || data.detail || 'Failed to update status.';
     errEl.style.display = 'inline-flex';
@@ -1543,7 +1661,7 @@ async function submitEditStudy() {
     if (failed === 0) {
       toast(`Updated ${allIds.length} image(s) successfully.`, 'success');
       closeModal('edit-study-modal');
-      filterDicom();
+      reloadDicom();
     } else {
       const data = await api(`/api/dicom-images/${dicomId}/`, { method: 'PATCH', body: JSON.stringify(payload) }).then(r => r.json()).catch(() => ({}));
       errEl.textContent = data.detail || data.error || `Failed to update ${failed} image(s).`;
@@ -1596,7 +1714,7 @@ async function deleteStudyAllImages(patientId, patientName) {
         } else {
           toast(`Deleted ${deleted}, failed ${failed} image(s).`, 'error');
         }
-        filterDicom();
+        reloadDicom();
         loadDashboard();
       } catch (e) {
         toast('An error occurred during deletion.', 'error');
@@ -1605,7 +1723,7 @@ async function deleteStudyAllImages(patientId, patientName) {
   );
 }
 
-let allTemplates = [], editingTemplateId = null;
+let allTemplates = [], editingTemplateId = null, currentTemplatesPage = 1, templatesPerPage = 25, tplEditor = null;
 
 const TEMPLATE_MODALITY_OPTIONS = {
   'CT TEMPLATES': ['CT'],
@@ -1631,17 +1749,106 @@ document.getElementById('tpl-body-part').addEventListener('change', function() {
   fillTemplateModalityOptions(this.value, '');
 });
 
-async function loadTemplates() {
+let templatesTotal = 0, templatesTotalPages = 1, templatesFetchSeq = 0, templatesSearchTimer = null;
+
+async function loadTemplates(keepState = false) {
+  if (!keepState) {
+    const searchInput = document.getElementById('template-search-input');
+    if (searchInput) searchInput.value = '';
+    currentTemplatesPage = 1;
+  }
+  await fetchTemplatesPage();
+}
+
+async function fetchTemplatesPage() {
+  const seq = ++templatesFetchSeq;
   document.getElementById('templates-table-body').innerHTML = '<tr><td colspan="7" class="loading">Loading templates</td></tr>';
+  const params = new URLSearchParams();
+  params.set('page', String(currentTemplatesPage));
+  params.set('page_size', String(templatesPerPage));
+  const query = (document.getElementById('template-search-input')?.value || '').trim();
+  if (query) params.set('search', query);
   try {
-    const res = await api('/api/manage-templates/');
+    const res = await api(`/api/manage-templates/?${params.toString()}`);
     if (!res.ok) throw new Error();
     const data = await res.json();
+    if (seq !== templatesFetchSeq) return;
     allTemplates = data.templates || [];
-    renderTemplates(allTemplates);
+    templatesTotal = data.count || 0;
+    templatesTotalPages = data.total_pages || 1;
+    currentTemplatesPage = data.page || currentTemplatesPage;
+    renderTemplatesWithPagination();
   } catch {
+    if (seq !== templatesFetchSeq) return;
     document.getElementById('templates-table-body').innerHTML = '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--red);">Failed to load templates</td></tr>';
   }
+}
+
+function renderTemplatesWithPagination() {
+  const total = templatesTotal;
+  const totalPages = templatesTotalPages;
+  const startIndex = (currentTemplatesPage - 1) * templatesPerPage;
+  const endIndex = startIndex + allTemplates.length;
+
+  renderTemplates(allTemplates);
+
+  if (total > 10) {
+    document.getElementById('templates-pagination-container').style.display = 'block';
+    document.getElementById('templates-pagination-info').textContent = `Showing ${startIndex + 1}-${endIndex} of ${total} templates`;
+    renderTemplatesPaginationButtons(totalPages);
+  } else {
+    document.getElementById('templates-pagination-container').style.display = 'none';
+  }
+}
+
+function renderTemplatesPaginationButtons(totalPages) {
+  const container = document.getElementById('templates-pagination-buttons');
+  let html = '';
+
+  html += `<button class="pagination-btn" onclick="goToTemplatesPage(${currentTemplatesPage - 1})" ${currentTemplatesPage === 1 ? 'disabled' : ''}>‹</button>`;
+
+  const maxButtons = 7;
+  let startPage = Math.max(1, currentTemplatesPage - Math.floor(maxButtons / 2));
+  let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+  if (endPage - startPage < maxButtons - 1) startPage = Math.max(1, endPage - maxButtons + 1);
+
+  if (startPage > 1) {
+    html += `<button class="pagination-btn" onclick="goToTemplatesPage(1)">1</button>`;
+    if (startPage > 2) html += `<span class="pagination-ellipsis">...</span>`;
+  }
+
+  for (let i = startPage; i <= endPage; i++) {
+    html += `<button class="pagination-btn ${i === currentTemplatesPage ? 'active' : ''}" onclick="goToTemplatesPage(${i})">${i}</button>`;
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) html += `<span class="pagination-ellipsis">...</span>`;
+    html += `<button class="pagination-btn" onclick="goToTemplatesPage(${totalPages})">${totalPages}</button>`;
+  }
+
+  html += `<button class="pagination-btn" onclick="goToTemplatesPage(${currentTemplatesPage + 1})" ${currentTemplatesPage === totalPages ? 'disabled' : ''}>›</button>`;
+
+  container.innerHTML = html;
+}
+
+function goToTemplatesPage(page) {
+  if (page < 1 || page > templatesTotalPages) return;
+  currentTemplatesPage = page;
+  fetchTemplatesPage();
+}
+
+function changeTemplatesPerPage() {
+  templatesPerPage = parseInt(document.getElementById('templates-items-per-page').value);
+  currentTemplatesPage = 1;
+  fetchTemplatesPage();
+}
+
+function searchTemplates() {
+  clearTimeout(templatesSearchTimer);
+  templatesSearchTimer = setTimeout(() => {
+    currentTemplatesPage = 1;
+    fetchTemplatesPage();
+  }, 300);
 }
 
 function renderTemplates(templates) {
@@ -1668,6 +1875,76 @@ function renderTemplates(templates) {
 }
 
 
+    function setSelectValue(id, value, fallback) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const has = Array.from(el.options).some(function(o) { return o.value === value; });
+      el.value = has ? value : fallback;
+    }
+
+    function syncFormatControls(range) {
+      if (!tplEditor || !range) return;
+      const f = tplEditor.getFormat(range);
+      setSelectValue('rteFont', f.font || 'Tahoma', 'Tahoma');
+      setSelectValue('rteSize', f.size || '', '');
+    }
+
+function initTemplateEditor() {
+  if (tplEditor) return;
+      const SizeStyle = Quill.import('attributors/style/size');
+      SizeStyle.whitelist = ['10.5px', '11px', '12px', '12.25px', '13px', '15.75px', '16px', '17.5px', '18px', '19.25px', '20px', '21px', '24px', '24.5px', '28px', '12.3px', '13.9px', '15.4px', '17px', '21.6px', '24.7px', '27.8px'];
+      Quill.register(SizeStyle, true);
+      const FontStyle = Quill.import('attributors/style/font');
+      FontStyle.whitelist = ['Tahoma', 'Calibri', 'Arial', 'Times New Roman', 'Verdana', 'Georgia', 'Courier New'];
+      Quill.register(FontStyle, true);
+
+      const svg = function(body) {
+        return '<svg viewBox="0 0 16 14" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#222" stroke-width="1.4" shape-rendering="crispEdges">' + body + '</svg>';
+      };
+      const icons = Quill.import('ui/icons');
+      icons['bold'] = '<span class="gl">B</span>';
+      icons['italic'] = '<span class="gl gl-i">I</span>';
+      icons['underline'] = '<span class="gl gl-u">U</span>';
+      icons['align'] = {
+        '': svg('<path d="M2 2.5h12M2 5.5h8M2 8.5h12M2 11.5h8"/>'),
+        'right': svg('<path d="M2 2.5h12M6 5.5h8M2 8.5h12M6 11.5h8"/>'),
+        'center': svg('<path d="M2 2.5h12M4 5.5h8M2 8.5h12M4 11.5h8"/>'),
+        'justify': svg('<path d="M2 2.5h12M2 5.5h12M2 8.5h12M2 11.5h12"/>')
+      };
+      icons['list'] = {
+        'ordered': svg('<text x="0" y="4" font-size="4.5" fill="#222" stroke="none">1</text><text x="0" y="8" font-size="4.5" fill="#222" stroke="none">2</text><text x="0" y="12" font-size="4.5" fill="#222" stroke="none">3</text><path d="M5 2.5h10M5 6.5h10M5 10.5h10"/>'),
+        'bullet': svg('<rect x="1" y="1.5" width="2" height="2" fill="#222" stroke="none"/><rect x="1" y="5.5" width="2" height="2" fill="#222" stroke="none"/><rect x="1" y="9.5" width="2" height="2" fill="#222" stroke="none"/><path d="M5 2.5h10M5 6.5h10M5 10.5h10"/>')
+      };
+      icons['indent'] = {
+        '+1': '<span class="gl gl-p">&para;</span>',
+        '-1': svg('<path d="M2 2.5h12M7 5.5h7M7 8.5h7M2 11.5h12"/><path d="M5 4.5l-3 2 3 2z" fill="#222"/>')
+      };
+      icons['clean'] = svg('<rect x="1.5" y="1.5" width="13" height="11"/><path d="M5 4v5h5" stroke-width="1.8"/>');
+
+  tplEditor = new Quill('#tpl-editor', {
+    theme: 'snow',
+    scrollingContainer: '#editorViewport',
+    modules: {
+      toolbar: '#editorToolbar'
+    },
+    placeholder: 'Enter template content...'
+  });
+      document.getElementById('rteZoom').addEventListener('change', function() {
+        document.getElementById('editorSheet').style.zoom = parseInt(this.value, 10) / 100;
+      });
+      document.getElementById('rteFont').addEventListener('change', function() {
+        tplEditor.format('font', this.value, 'user');
+        tplEditor.focus();
+      });
+      document.getElementById('rteSize').addEventListener('change', function() {
+        tplEditor.format('size', this.value || false, 'user');
+        tplEditor.focus();
+      });
+      tplEditor.on('selection-change', function(range) {
+        syncFormatControls(range);
+      });
+}
+
 function goToCreateTemplate() {
   document.querySelectorAll(".nav-item").forEach(i => i.classList.remove("active"));
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
@@ -1684,10 +1961,11 @@ function openCreateTemplateModal() {
   document.getElementById('tpl-body-part').value = '';
   fillTemplateModalityOptions('', '');
   document.getElementById('tpl-name').value = '';
-  document.getElementById('tpl-content').value = '';
   document.getElementById('tpl-active').checked = true;
   document.getElementById('tpl-modal-error').style.display = 'none';
   openModal('template-modal');
+  initTemplateEditor();
+  tplEditor.setText('');
 }
 
 function openEditTemplate(id) {
@@ -1698,17 +1976,19 @@ function openEditTemplate(id) {
   document.getElementById('tpl-body-part').value = t.body_part || '';
   fillTemplateModalityOptions(t.body_part || '', t.modality || '');
   document.getElementById('tpl-name').value = t.template_name || '';
-  document.getElementById('tpl-content').value = t.content || '';
   document.getElementById('tpl-active').checked = t.is_active !== false;
   document.getElementById('tpl-modal-error').style.display = 'none';
   openModal('template-modal');
+  initTemplateEditor();
+  tplEditor.root.innerHTML = t.content || '';
 }
 
 async function saveTemplate() {
   const body_part = document.getElementById('tpl-body-part').value.trim();
   const modality = document.getElementById('tpl-modality').value.trim();
   const template_name = document.getElementById('tpl-name').value.trim();
-  const content = document.getElementById('tpl-content').value.trim();
+  const hasText = tplEditor && tplEditor.getText().trim().length > 0;
+  const content = hasText ? tplEditor.root.innerHTML : '';
   const is_active = document.getElementById('tpl-active').checked;
   const errEl = document.getElementById('tpl-modal-error');
   if (!body_part || !modality || !template_name || !content) { errEl.textContent = 'Body part, modality, name and content are required.'; errEl.style.display = 'inline-flex'; return; }
@@ -1723,7 +2003,7 @@ async function saveTemplate() {
   if (res.ok) {
     toast(editingTemplateId ? 'Template updated!' : 'Template created!', 'success');
     closeModal('template-modal');
-    loadTemplates();
+    loadTemplates(true);
     loadDashboard();
   } else {
     errEl.textContent = data.detail || data.error || 'Failed to save template.';
@@ -1734,7 +2014,7 @@ async function saveTemplate() {
 function deleteTemplate(id, name) {
   openConfirm('Delete Template?', `Delete "${name}"? This cannot be undone.`, async () => {
     const res = await api('/api/manage-templates/', { method: 'DELETE', body: JSON.stringify({ id }) });
-    if (res.ok || res.status === 204) { toast('Template deleted.', 'success'); loadTemplates(); loadDashboard(); }
+    if (res.ok || res.status === 204) { toast('Template deleted.', 'success'); loadTemplates(true); loadDashboard(); }
     else { toast('Failed to delete template.', 'error'); }
   });
 }
@@ -2031,6 +2311,9 @@ async function saveGroupMembers() {
 }
 
 let allSessions = [];
+let filteredSessions = [];
+let currentSessionsPage = 1;
+let sessionsPerPage = 25;
 
 async function loadSessions() {
   document.getElementById('sessions-table-body').innerHTML = '<tr><td colspan="6" class="loading">Loading sessions</td></tr>';
@@ -2039,10 +2322,99 @@ async function loadSessions() {
     if (!res.ok) throw new Error();
     const data = await res.json();
     allSessions = data.sessions || [];
-    renderSessions(allSessions);
+    applySessionFilter();
+    renderSessionsWithPagination();
   } catch {
     document.getElementById('sessions-table-body').innerHTML = '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--red);">Failed to load sessions</td></tr>';
   }
+}
+
+function applySessionFilter() {
+  const input = document.getElementById('session-search-input');
+  const query = input ? input.value.trim().toLowerCase() : '';
+
+  filteredSessions = allSessions.filter(s => {
+    return !query ||
+           (s.username || '').toLowerCase().includes(query) ||
+           (s.role || '').toLowerCase().includes(query) ||
+           (s.client_ip || '').toLowerCase().includes(query);
+  });
+}
+
+function searchSessions() {
+  applySessionFilter();
+  currentSessionsPage = 1;
+  renderSessionsWithPagination();
+}
+
+function renderSessionsWithPagination() {
+  const totalSessions = filteredSessions.length;
+  const totalPages = Math.ceil(totalSessions / sessionsPerPage);
+  if (currentSessionsPage > totalPages) currentSessionsPage = Math.max(1, totalPages);
+  const startIndex = (currentSessionsPage - 1) * sessionsPerPage;
+  const endIndex = Math.min(startIndex + sessionsPerPage, totalSessions);
+  const sessionsToShow = filteredSessions.slice(startIndex, endIndex);
+
+  renderSessions(sessionsToShow);
+
+  if (totalSessions > 10) {
+    document.getElementById('sessions-pagination-container').style.display = 'block';
+    document.getElementById('sessions-pagination-info').textContent = 
+      `Showing ${startIndex + 1}-${endIndex} of ${totalSessions} sessions`;
+    renderSessionsPaginationButtons(totalPages);
+  } else {
+    document.getElementById('sessions-pagination-container').style.display = 'none';
+  }
+}
+
+function renderSessionsPaginationButtons(totalPages) {
+  const container = document.getElementById('sessions-pagination-buttons');
+  let html = '';
+
+  html += `<button class="pagination-btn" onclick="goToSessionsPage(${currentSessionsPage - 1})" ${currentSessionsPage === 1 ? 'disabled' : ''}>‹</button>`;
+
+  const maxButtons = 7;
+  let startPage = Math.max(1, currentSessionsPage - Math.floor(maxButtons / 2));
+  let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+
+  if (endPage - startPage < maxButtons - 1) {
+    startPage = Math.max(1, endPage - maxButtons + 1);
+  }
+
+  if (startPage > 1) {
+    html += `<button class="pagination-btn" onclick="goToSessionsPage(1)">1</button>`;
+    if (startPage > 2) {
+      html += `<span class="pagination-ellipsis">...</span>`;
+    }
+  }
+
+  for (let i = startPage; i <= endPage; i++) {
+    html += `<button class="pagination-btn ${i === currentSessionsPage ? 'active' : ''}" onclick="goToSessionsPage(${i})">${i}</button>`;
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) {
+      html += `<span class="pagination-ellipsis">...</span>`;
+    }
+    html += `<button class="pagination-btn" onclick="goToSessionsPage(${totalPages})">${totalPages}</button>`;
+  }
+
+  html += `<button class="pagination-btn" onclick="goToSessionsPage(${currentSessionsPage + 1})" ${currentSessionsPage === totalPages ? 'disabled' : ''}>›</button>`;
+
+  container.innerHTML = html;
+}
+
+function goToSessionsPage(page) {
+  const totalPages = Math.ceil(filteredSessions.length / sessionsPerPage);
+  if (page < 1 || page > totalPages) return;
+  currentSessionsPage = page;
+  renderSessionsWithPagination();
+}
+
+function changeSessionsPerPage() {
+  sessionsPerPage = parseInt(document.getElementById('sessions-items-per-page').value);
+  currentSessionsPage = 1;
+  renderSessionsWithPagination();
 }
 
 function renderSessions(sessions) {
@@ -2754,6 +3126,10 @@ function changeUsersPerPage() {
 let mgmtReportsData = [];
 let mgmtCurrentPage = 1;
 let mgmtPerPage = 25;
+let mgmtQuery = null;
+let mgmtTotal = 0;
+let mgmtTotalPages = 0;
+let mgmtFetchSeq = 0;
 
 async function initMgmtReports() {
   await Promise.all([loadMgmtCentres(), loadMgmtDoctors()]);
@@ -2793,72 +3169,102 @@ async function loadMgmtDoctors() {
   } catch (e) {}
 }
 
-async function searchMgmtReports() {
-  const params = buildMgmtParams();
+function buildMgmtParams() {
+  const val = id => (document.getElementById(id).value || '').trim();
+  const params = new URLSearchParams();
+  const fields = [
+    ['server_start', 'mgmt-server-start'],
+    ['server_end', 'mgmt-server-end'],
+    ['report_start', 'mgmt-report-start'],
+    ['report_end', 'mgmt-report-end'],
+    ['institute_name', 'mgmt-centre-filter'],
+    ['reported_by', 'mgmt-doctor-filter'],
+    ['status', 'mgmt-status-filter'],
+    ['modality', 'mgmt-modality-filter']
+  ];
+  fields.forEach(([key, id]) => {
+    const v = val(id);
+    if (v) params.set(key, v);
+  });
+  return params;
+}
+
+async function loadMgmtPage() {
+  if (!mgmtQuery) return;
+  const seq = ++mgmtFetchSeq;
   const tbody = document.getElementById('mgmt-reports-table-body');
   tbody.innerHTML = '<tr><td colspan="12" class="loading">Loading...</td></tr>';
   document.getElementById('mgmt-pagination-container').style.display = 'none';
 
+  const params = new URLSearchParams(mgmtQuery);
+  params.set('page', String(mgmtCurrentPage));
+  params.set('page_size', String(mgmtPerPage));
+
+  window.QueryBar?.start('mgmt', tbody.closest('.table-container'), 'beforebegin');
+
   try {
-    const doctor = document.getElementById('mgmt-doctor-filter').value;
-    const reportStart = document.getElementById('mgmt-report-start').value;
-    const reportEnd = document.getElementById('mgmt-report-end').value;
-    const serverStart = document.getElementById('mgmt-server-start').value;
-    const serverEnd = document.getElementById('mgmt-server-end').value;
-
-    const qs = new URLSearchParams({ page: '1', page_size: '2000', ...params }).toString();
-    const res = await api(`/api/dicom-list/?${qs}`);
-    if (!res.ok) { showToast('Failed to load records', 'error'); return; }
+    const res = await api(`/api/dicom-list/?${params.toString()}`);
+    if (!res.ok) {
+      if (seq !== mgmtFetchSeq) return;
+      tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--red);">Failed to load records.</td></tr>';
+      showToast('Failed to load records', 'error');
+      return;
+    }
     const data = await res.json();
-    const allResults = data.results || [];
+    if (seq !== mgmtFetchSeq) return;
 
-    mgmtReportsData = allResults.filter(r => {
-      if (doctor && (r.reported_by || '').trim() !== doctor.trim()) return false;
-
-      if (reportStart || reportEnd) {
-        const reportedStatuses = ['Reported', 'Reviewed', 'Draft'];
-        if (!reportedStatuses.includes(r.status)) return false;
-        const rdt = r.updated_at ? new Date(r.updated_at) : null;
-        if (!rdt) return false;
-        if (reportStart && rdt < new Date(reportStart)) return false;
-        if (reportEnd && rdt > new Date(reportEnd + 'T23:59:59')) return false;
-      }
-
-      if (serverStart || serverEnd) {
-        const sdt = r.created_at ? new Date(r.created_at) : null;
-        if (serverStart && (!sdt || sdt < new Date(serverStart))) return false;
-        if (serverEnd && (!sdt || sdt > new Date(serverEnd + 'T23:59:59'))) return false;
-      }
-
-      return true;
-    });
-
-    mgmtCurrentPage = 1;
+    mgmtReportsData = data.results || [];
+    mgmtTotal = data.count || 0;
+    mgmtTotalPages = data.total_pages || 0;
+    mgmtCurrentPage = data.current_page || mgmtCurrentPage;
     renderMgmtReports();
   } catch (e) {
+    if (seq !== mgmtFetchSeq) return;
     console.error('Error fetching management records:', e);
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--red);">Error fetching records.</td></tr>';
     showToast('Error fetching records', 'error');
+  } finally {
+    window.QueryBar?.end('mgmt');
   }
 }
 
-function buildMgmtParams() {
-  const p = {};
-  const scanStart = document.getElementById('mgmt-scan-start').value;
-  const scanEnd = document.getElementById('mgmt-scan-end').value;
-  const centre = document.getElementById('mgmt-centre-filter').value;
-  const status = document.getElementById('mgmt-status-filter').value;
-  const modality = document.getElementById('mgmt-modality-filter').value;
-
-  if (scanStart) p.date_from = scanStart.replace(/-/g, '');
-  if (scanEnd) p.date_to = scanEnd.replace(/-/g, '');
-  if (centre) p.institute_name = centre;
-  if (status) p.status = status;
-  if (modality) p.modality__in = modality;
-  return p;
+async function searchMgmtReports() {
+  const val = id => (document.getElementById(id).value || '').trim();
+  const ranges = [
+    ['mgmt-server-start', 'mgmt-server-end', 'Server Receive'],
+    ['mgmt-report-start', 'mgmt-report-end', 'Report']
+  ];
+  for (const [startId, endId, label] of ranges) {
+    const startValue = val(startId);
+    const endValue = val(endId);
+    if (startValue && endValue && startValue > endValue) {
+      showToast(`${label} start date cannot be after end date`, 'error');
+      return;
+    }
+  }
+  mgmtQuery = buildMgmtParams();
+  mgmtCurrentPage = 1;
+  await loadMgmtPage();
 }
 
-
-
+async function fetchAllMgmtRecords() {
+  if (!mgmtQuery) return [];
+  const all = [];
+  let page = 1;
+  let pages = 1;
+  do {
+    const params = new URLSearchParams(mgmtQuery);
+    params.set('page', String(page));
+    params.set('page_size', '500');
+    const res = await api(`/api/dicom-list/?${params.toString()}`);
+    if (!res.ok) throw new Error('Failed to load records');
+    const data = await res.json();
+    all.push(...(data.results || []));
+    pages = data.total_pages || 0;
+    page++;
+  } while (page <= pages);
+  return all;
+}
 
 function formatMgmtDateTime(dateStr, timeStr) {
   if (!dateStr) return '';
@@ -2907,11 +3313,11 @@ function renderMgmtReports() {
     return;
   }
 
-  const total = mgmtReportsData.length;
-  const totalPages = Math.ceil(total / mgmtPerPage);
+  const total = mgmtTotal;
+  const totalPages = mgmtTotalPages;
   const start = (mgmtCurrentPage - 1) * mgmtPerPage;
-  const end = Math.min(start + mgmtPerPage, total);
-  const slice = mgmtReportsData.slice(start, end);
+  const end = start + mgmtReportsData.length;
+  const slice = mgmtReportsData;
 
   tbody.innerHTML = slice.map((r, i) => {
     const sno = start + i + 1;
@@ -2981,21 +3387,30 @@ function renderMgmtPaginationButtons(totalPages) {
 }
 
 function goToMgmtPage(page) {
-  const totalPages = Math.ceil(mgmtReportsData.length / mgmtPerPage);
-  if (page < 1 || page > totalPages) return;
+  if (page < 1 || page > mgmtTotalPages) return;
   mgmtCurrentPage = page;
-  renderMgmtReports();
+  loadMgmtPage();
 }
 
 function changeMgmtPerPage() {
   mgmtPerPage = parseInt(document.getElementById('mgmt-items-per-page').value);
   mgmtCurrentPage = 1;
-  renderMgmtReports();
+  loadMgmtPage();
 }
 
-function printMgmtReportHTML() {
-  if (!mgmtReportsData.length) { showToast('No data to print', 'error'); return; }
-  const rows = mgmtReportsData.map((r, i) => {
+async function printMgmtReportHTML() {
+  if (!mgmtQuery || !mgmtTotal) { showToast('No data to print', 'error'); return; }
+  const win = window.open('', '_blank');
+  let records;
+  try {
+    records = await fetchAllMgmtRecords();
+  } catch (e) {
+    if (win) win.close();
+    showToast('Failed to load records for printing', 'error');
+    return;
+  }
+  if (!win) { showToast('Allow pop-ups to print the report', 'error'); return; }
+  const rows = records.map((r, i) => {
     const sno = i + 1;
     const scanDt = formatMgmtDateTime(r.study_date, r.study_time);
     const serverDt = formatCreatedAt(r.created_at);
@@ -3011,7 +3426,6 @@ function printMgmtReportHTML() {
       <td>${statusLabel}</td><td>${reportDt}</td><td>${transmission}</td>
     </tr>`;
   }).join('');
-  const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html><html><head><title>Management Report</title>
   <style>body{font-family:Arial,sans-serif;font-size:11px;padding:20px;}
   h2{margin-bottom:12px;font-size:14px;}
@@ -3021,7 +3435,7 @@ function printMgmtReportHTML() {
   tr:nth-child(even){background:#f5f7fb;}
   @media print{button{display:none;}}
   </style></head><body>
-  <h2>Management Report &mdash; Total Records: ${mgmtReportsData.length}</h2>
+  <h2>Management Report &mdash; Total Records: ${records.length}</h2>
   <table><thead><tr>
     <th>S.No.</th><th>Radiologist</th><th>Reporting Center</th><th>Patient Name</th>
     <th>Patient ID</th><th>Body Part</th><th>Modality</th><th>Scan Date/Time</th>
@@ -3032,10 +3446,17 @@ function printMgmtReportHTML() {
   win.document.close();
 }
 
-function exportMgmtReportExcel() {
-  if (!mgmtReportsData.length) { showToast('No data to export', 'error'); return; }
+async function exportMgmtReportExcel() {
+  if (!mgmtQuery || !mgmtTotal) { showToast('No data to export', 'error'); return; }
+  let records;
+  try {
+    records = await fetchAllMgmtRecords();
+  } catch (e) {
+    showToast('Failed to load records for export', 'error');
+    return;
+  }
   const headers = ['S.No.','Radiologist','Reporting Center','Patient Name','Patient ID','Body Part','Modality','Scan Date/Time','Server Receive Date/Time','Report Status','Report Date/Time','Transmission Time'];
-  const rows = mgmtReportsData.map((r, i) => {
+  const rows = records.map((r, i) => {
     const centre = r.institute_name || r.center_name || '';
     return [
       i+1, r.reported_by||'', centre, r.patient_name||'', r.patient_id||'',
@@ -3058,4 +3479,214 @@ function exportMgmtReportExcel() {
 
 function openBillingInvoice() {
   showToast('Billing Invoice feature coming soon', 'info');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  ['dicom-search', 'dicom-id-filter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          filterDicom();
+        }
+      });
+    }
+  });
+});
+
+let allBills = [];
+let billFormReady = false;
+
+function billEsc(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function defaultBillTitle() {
+  const now = new Date();
+  return `Bill - ${now.toLocaleString('en-US', { month: 'long' })} ${now.getFullYear()}`;
+}
+
+function billNowLocalValue() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+function resetBillForm() {
+  const title = defaultBillTitle();
+  document.getElementById('bill-institute').value = '';
+  document.getElementById('bill-date').value = billNowLocalValue();
+  document.getElementById('bill-title').value = title;
+  document.getElementById('bill-description').value = title;
+  document.getElementById('bill-details').value = '';
+  document.getElementById('bill-file').value = '';
+}
+
+async function initBilling() {
+  if (!billFormReady) {
+    resetBillForm();
+    billFormReady = true;
+  }
+  await Promise.all([loadBillInstitutes(), loadBills()]);
+}
+
+async function loadBillInstitutes() {
+  try {
+    const res = await api('/api/centers/');
+    if (!res.ok) return;
+    const data = await res.json();
+    const arr = Array.isArray(data) ? data : (data.results || []);
+    const seen = {};
+    const names = [];
+    arr.forEach(c => {
+      const n = (c.institute_name || '').trim();
+      if (n && !seen[n]) {
+        seen[n] = true;
+        names.push(n);
+      }
+    });
+    names.sort((a, b) => a.localeCompare(b));
+    const select = document.getElementById('bill-institute');
+    const current = select.value;
+    select.innerHTML = '<option value="">Select Institute</option>' +
+      names.map(n => `<option value="${billEsc(n)}">${billEsc(n)}</option>`).join('');
+    if (current && names.includes(current)) select.value = current;
+  } catch (e) {
+    console.error('Failed to load institutes:', e);
+  }
+}
+
+async function loadBills() {
+  const tbody = document.getElementById('bills-table-body');
+  try {
+    const res = await api('/api/institute-bills-admin/');
+    if (!res.ok) throw new Error('failed');
+    const data = await res.json();
+    allBills = data.results || [];
+    renderBills();
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-title">Failed to load bills</div></div></td></tr>';
+  }
+}
+
+function renderBills() {
+  const tbody = document.getElementById('bills-table-body');
+  if (!allBills.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-title">No bills sent yet</div><div class="empty-text">Bills you send to an institute will appear here.</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = allBills.map(b => {
+    const fileCell = b.has_file
+      ? `<a href="#" onclick="downloadBillFile(${b.id}); return false;" style="color:var(--accent);">${billEsc(b.file_name)}</a>`
+      : '<span style="color:var(--text3);font-size:12px;">No file</span>';
+    const statusBadge = b.is_active
+      ? '<span class="badge badge-green">Active</span>'
+      : '<span class="badge badge-gray">Off</span>';
+    const action = b.is_active
+      ? `<button class="btn btn-danger btn-xs" onclick="turnOffBill(${b.id})">Turn Off</button>`
+      : `<button class="btn btn-success btn-xs" onclick="setBillActive(${b.id}, true)">Turn On</button>`;
+    return `<tr>
+      <td><span style="font-weight:500;color:var(--text);">${billEsc(b.institute_name)}</span></td>
+      <td>${billEsc(b.title)}</td>
+      <td style="font-size:12px;color:var(--text3);">${billEsc(b.bill_date)}</td>
+      <td>${fileCell}</td>
+      <td>${statusBadge}</td>
+      <td>${action}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function sendBill() {
+  const institute = document.getElementById('bill-institute').value;
+  const title = document.getElementById('bill-title').value.trim();
+  if (!institute) {
+    toast('Please select an institute', 'error');
+    return;
+  }
+  if (!title) {
+    toast('Please enter the bill title', 'error');
+    return;
+  }
+  const form = new FormData();
+  form.append('institute_name', institute);
+  form.append('title', title);
+  form.append('description', document.getElementById('bill-description').value.trim());
+  form.append('details', document.getElementById('bill-details').value.trim());
+  form.append('bill_date', document.getElementById('bill-date').value);
+  const file = document.getElementById('bill-file').files[0];
+  if (file) form.append('bill_file', file);
+
+  const btn = document.getElementById('bill-send-btn');
+  btn.disabled = true;
+  try {
+    const token = getToken();
+    const res = await fetch('/api/institute-bills-admin/', {
+      method: 'POST',
+      headers: token ? { 'Authorization': `Token ${token}` } : {},
+      body: form
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      toast(data.error || 'Failed to send bill', 'error');
+      return;
+    }
+    toast(`Bill sent to ${institute}`, 'success');
+    resetBillForm();
+    await loadBills();
+  } catch (e) {
+    toast('Failed to send bill', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function turnOffBill(id) {
+  const bill = allBills.find(b => b.id === id);
+  const label = bill ? `"${bill.title}" for ${bill.institute_name}` : 'this bill';
+  openConfirm('Turn Off Bill', `Turn off ${label}? It will stop showing at the top of the institute's study list.`, () => setBillActive(id, false));
+}
+
+async function setBillActive(id, isActive) {
+  try {
+    const res = await api('/api/institute-bills-admin/toggle/', {
+      method: 'POST',
+      body: JSON.stringify({ bill_id: id, is_active: isActive })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      toast(data.error || 'Failed to update bill', 'error');
+      return;
+    }
+    toast(isActive ? 'Bill turned on' : 'Bill turned off', 'success');
+    await loadBills();
+  } catch (e) {
+    toast('Failed to update bill', 'error');
+  }
+}
+
+async function downloadBillFile(id) {
+  const bill = allBills.find(b => b.id === id);
+  const name = bill && bill.file_name;
+  try {
+    const res = await api(`/api/institute-bills/${id}/download/`);
+    if (!res.ok) throw new Error('failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name || 'bill';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (e) {
+    toast('Failed to download file', 'error');
+  }
 }

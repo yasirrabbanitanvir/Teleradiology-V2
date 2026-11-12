@@ -53,6 +53,15 @@ urlpatterns = [
     path('template-manager/', template_manager_page, name='template_manager_page'),
     
     path('generate-report-docx/', views.generate_report_docx, name='generate_report_docx'),
+    path('billing-invoice/', views.billing_invoice, name='billing_invoice'),
+    path('billing-invoice-files/', views.billing_invoice_files, name='billing_invoice_files'),
+    path('billing-invoice-files/download/', views.billing_invoice_file_download, name='billing_invoice_file_download'),
+    path('institute-bills/', views.institute_active_bills, name='institute_active_bills'),
+    path('institute-bills/<int:bill_id>/download/', views.institute_bill_download, name='institute_bill_download'),
+    path('institute-bills-feed/', views.institute_bills_feed, name='institute_bills_feed'),
+    path('institute-bills-admin/', views.institute_bills_admin, name='institute_bills_admin'),
+    path('institute-bills-admin/toggle/', views.institute_bill_toggle, name='institute_bill_toggle'),
+    path('institute-bills-admin/delete/', views.institute_bill_delete, name='institute_bill_delete'),
     
     path('viewer/register/', register_viewer, name='register_viewer'),
     path('viewer/update/', update_viewer_activity, name='update_viewer_activity'),

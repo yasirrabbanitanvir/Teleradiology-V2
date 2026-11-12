@@ -1648,6 +1648,90 @@ ul { list-style: none; }
     padding: 14px;
   }
 }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-width: 0;
+}
+
+.main,
+.content,
+.page,
+.card,
+.card-body {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.topbar {
+  gap: 12px;
+}
+
+.topbar-left {
+  min-width: 0;
+}
+
+.topbar-right,
+.topbar-nav-links {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.card-header {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.card-actions {
+  flex-wrap: wrap;
+}
+
+.table-container {
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dashboard-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+}
+
+@media (max-width: 1100px) {
+  .topbar {
+    height: auto;
+    min-height: var(--header-h);
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --sidebar-w: 170px;
+  }
+
+  .content {
+    padding: 10px;
+  }
+
+  .topbar {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .nav-item {
+    font-size: 12.5px;
+    padding: 7px 8px;
+  }
+
+  .stat-value {
+    font-size: 24px;
+  }
+}
 </style>
   <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
   <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
@@ -1858,6 +1942,10 @@ ul { list-style: none; }
         <div class="nav-item" data-page="mgmt-reports">
           
           Management Reports
+        </div>
+        <div class="nav-item" data-page="billing">
+          
+          Billing Management
         </div>
         <div style="padding: 8px 10px 4px; font-size: 13.5px; font-weight: 500; color: rgba(255,255,255,0.65); margin-top: 2px;">
           Dicom
@@ -2071,20 +2159,12 @@ ul { list-style: none; }
                 <input type="date" class="input-text" id="mgmt-report-end" />
               </div>
               <div>
-                <label class="input-label" style="margin-bottom:4px;">Server Receive Start</label>
+                <label class="input-label" style="margin-bottom:4px;">Server Receive Start Date</label>
                 <input type="date" class="input-text" id="mgmt-server-start" />
               </div>
               <div>
-                <label class="input-label" style="margin-bottom:4px;">Server Receive End</label>
+                <label class="input-label" style="margin-bottom:4px;">Server Receive End Date</label>
                 <input type="date" class="input-text" id="mgmt-server-end" />
-              </div>
-              <div>
-                <label class="input-label" style="margin-bottom:4px;">Scan Start Date</label>
-                <input type="date" class="input-text" id="mgmt-scan-start" />
-              </div>
-              <div>
-                <label class="input-label" style="margin-bottom:4px;">Scan End Date</label>
-                <input type="date" class="input-text" id="mgmt-scan-end" />
               </div>
             </div>
 
@@ -2132,8 +2212,9 @@ ul { list-style: none; }
                   <option value="PX">PX</option>
                 </select>
               </div>
-              <div style="display:flex;align-items:center;padding-top:20px;">
+              <div style="display:flex;align-items:center;gap:8px;padding-top:20px;">
                 <button class="btn btn-primary btn-sm" onclick="searchMgmtReports()" style="padding:9px 16px;">Search</button>
+                <button class="btn btn-success btn-sm" onclick="openInvoiceModal()" style="padding:9px 16px;">Billing Invoice</button>
               </div>
             </div>
           </div>
@@ -2198,11 +2279,11 @@ ul { list-style: none; }
                 <input type="text" class="input-text" id="dicom-id-filter" placeholder="Search ID..." />
               </div>
               <div>
-                <label class="input-label" style="margin-bottom:4px;">From Date</label>
+                <label class="input-label" style="margin-bottom:4px;">Server Receive Start Date</label>
                 <input type="date" class="input-text" id="dicom-date-from" />
               </div>
               <div>
-                <label class="input-label" style="margin-bottom:4px;">To Date</label>
+                <label class="input-label" style="margin-bottom:4px;">Server Receive End Date</label>
                 <input type="date" class="input-text" id="dicom-date-to" />
               </div>
               <div>
@@ -2419,6 +2500,9 @@ ul { list-style: none; }
             </div>
           </div>
           <div class="card-body">
+            <div style="margin-bottom: 20px;">
+              <input type="text" id="session-search-input" class="input-text" placeholder="Search by username, role or IP..." style="max-width: 400px;" oninput="searchSessions()" />
+            </div>
             <div class="table-container">
               <table class="table">
                 <thead>
@@ -2433,6 +2517,104 @@ ul { list-style: none; }
                 </thead>
                 <tbody id="sessions-table-body"></tbody>
               </table>
+            </div>
+            <div class="pagination-container" id="sessions-pagination-container" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="sessions-pagination-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="sessions-items-per-page" onchange="changeSessionsPerPage()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="sessions-pagination-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="billing-page" class="page">
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-header">
+            <div class="card-title">Billing Management</div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:14px;">
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Institute Name</label>
+                <input type="text" class="input-text" id="bill-institute-search" placeholder="Search institute..." autocomplete="off" oninput="renderBillInstituteOptions()" style="margin-bottom:6px;" />
+                <select class="input-select" id="bill-institute">
+                  <option value="">Select Institute</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Patient ID (Bill Title)</label>
+                <input type="text" class="input-text" id="bill-title" maxlength="200" placeholder="Bill - October 2026" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Study Description/Body Part</label>
+                <input type="text" class="input-text" id="bill-description" maxlength="200" placeholder="Bill - October 2026" />
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:14px;">
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Attach File</label>
+                <input type="file" class="input-text" id="bill-file" multiple />
+                <div id="bill-file-list" style="margin-top:8px;"></div>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="bill-send-btn" onclick="sendBill()">Send Bill</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Sent Bills</div>
+          </div>
+          <div class="card-body">
+            <div style="margin-bottom: 20px;">
+              <input type="text" id="bill-search-input" class="input-text" placeholder="Search by institute, title or file..." style="max-width: 400px;" oninput="searchBills()" />
+            </div>
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Institute</th>
+                    <th>Bill Title</th>
+                    <th>Bill Date/Time</th>
+                    <th>Attached File</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="bills-table-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="bills-pagination-container" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="bills-pagination-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="bills-items-per-page" onchange="changeBillsPerPage()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="bills-pagination-buttons"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -3070,6 +3252,68 @@ ul { list-style: none; }
   </div>
 </div>
 
+<div class="modal-overlay" id="billing-invoice-modal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <div class="modal-title">Generate Invoice</div>
+      <button class="modal-close" onclick="closeModal('billing-invoice-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="inv-error"></div>
+      <style>
+        #inv-results { display:none; position:absolute; z-index:50; background:#fff; border:1px solid #b8b8b8; box-shadow:0 4px 12px rgba(0,0,0,0.18); padding:2px 0; max-height:260px; overflow-y:auto; }
+        #inv-results .inv-opt { padding:4px 10px; font-size:14px; line-height:1.5; cursor:pointer; color:#111; }
+        #inv-results .inv-opt.active, #inv-results .inv-opt:hover { background:#0062C2; color:#fff; }
+        #inv-results .inv-none { padding:4px 10px; font-size:14px; color:#888; }
+      </style>
+      <div class="input-group" style="position:relative;">
+        <label class="input-label">Institution</label>
+        <input type="text" class="input-text" id="inv-search" placeholder="Search institution" autocomplete="off" />
+        <div id="inv-results"></div>
+      </div>
+      <div class="input-group">
+        <select class="input-text" id="inv-institution">
+          <option value="">-Select-</option>
+          <option value="ALL">ALL</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="input-group">
+          <label class="input-label">Start Date</label>
+          <input type="date" class="input-text" id="inv-start" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">End Date</label>
+          <input type="date" class="input-text" id="inv-end" />
+        </div>
+      </div>
+      <div id="inv-status" style="font-size:12.5px;color:var(--text3);min-height:18px;"></div>
+      <div style="margin-top:14px;border-top:1px solid #ddd;padding-top:12px;">
+        <div style="font-weight:600;font-size:13.5px;margin-bottom:8px;">Generated Files (Latest 10)</div>
+        <div style="max-height:220px;overflow-y:auto;overflow-x:auto;border:1px solid #ddd;overscroll-behavior:contain;">
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+            <thead>
+              <tr>
+                <th style="text-align:left;padding:6px 8px;border:1px solid #ddd;background:#f3f5f8;position:sticky;top:0;z-index:1;box-shadow:0 1px 0 #ddd;">File Name</th>
+                <th style="text-align:left;padding:6px 8px;border:1px solid #ddd;background:#f3f5f8;position:sticky;top:0;z-index:1;box-shadow:0 1px 0 #ddd;white-space:nowrap;">Generated Time</th>
+                <th style="text-align:right;padding:6px 8px;border:1px solid #ddd;background:#f3f5f8;position:sticky;top:0;z-index:1;box-shadow:0 1px 0 #ddd;">Size</th>
+                <th style="text-align:center;padding:6px 8px;border:1px solid #ddd;background:#f3f5f8;position:sticky;top:0;z-index:1;box-shadow:0 1px 0 #ddd;">Download</th>
+              </tr>
+            </thead>
+            <tbody id="inv-files-body">
+              <tr><td colspan="4" style="padding:8px;text-align:center;color:#888;border:1px solid #ddd;">No files yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('billing-invoice-modal')">Cancel</button>
+      <button class="btn btn-primary" id="inv-generate" onclick="invGenerate()">Generate</button>
+    </div>
+  </div>
+</div>
+
 <div class="confirm-dialog" id="confirm-dialog">
   <div class="confirm-box">
     <div class="confirm-title" id="confirm-title"></div>
@@ -3222,6 +3466,7 @@ ul { list-style: none; }
   </div>
 </div>
 
+<script src="./script/jszip.min.js"></script>
 <script src="./script/queryBar.js"></script>
 <script src="./script/admin.js"></script>
 <script>
@@ -3803,6 +4048,350 @@ async function tpluStart() {
 document.getElementById('tplu-body-part').addEventListener('change', tpluFillModalities);
 document.getElementById('tplu-modality').addEventListener('change', tpluRenderSummary);
 document.getElementById('tplu-files').addEventListener('change', tpluOnFiles);
+</script>
+
+<script>
+var invCenters = [];
+var invBusy = false;
+
+function invEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function invPad(n) {
+  return n < 10 ? '0' + n : String(n);
+}
+
+function invIso(d) {
+  return d.getFullYear() + '-' + invPad(d.getMonth() + 1) + '-' + invPad(d.getDate());
+}
+
+function invShowError(msg) {
+  var el = document.getElementById('inv-error');
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+function invSetStatus(msg) {
+  document.getElementById('inv-status').textContent = msg || '';
+}
+
+var invActive = -1;
+
+function invFillSelect() {
+  var sel = document.getElementById('inv-institution');
+  var keep = sel.value;
+  var html = '<option value="">-Select-</option><option value="ALL">ALL</option>';
+  invCenters.forEach(function (n) {
+    html += '<option value="' + invEsc(n) + '">' + invEsc(n) + '</option>';
+  });
+  sel.innerHTML = html;
+  if (keep && (keep === 'ALL' || invCenters.indexOf(keep) !== -1)) sel.value = keep;
+  if (document.getElementById('inv-search').value.trim()) invShowResults();
+}
+
+function invMatches() {
+  var words = document.getElementById('inv-search').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  return ['ALL'].concat(invCenters).filter(function (n) {
+    var low = n.toLowerCase();
+    return words.every(function (w) {
+      return low.indexOf(w) !== -1;
+    });
+  });
+}
+
+function invCloseResults() {
+  var box = document.getElementById('inv-results');
+  box.style.display = 'none';
+  box.innerHTML = '';
+  invActive = -1;
+}
+
+function invShowResults() {
+  var inp = document.getElementById('inv-search');
+  var box = document.getElementById('inv-results');
+  if (!inp.value.trim()) {
+    invCloseResults();
+    return;
+  }
+  var list = invMatches();
+  var html = '';
+  list.forEach(function (n, i) {
+    html += '<div class="inv-opt' + (i === invActive ? ' active' : '') + '" data-v="' + invEsc(n) + '">' + invEsc(n) + '</div>';
+  });
+  if (!list.length) html = '<div class="inv-none">No institution found</div>';
+  box.innerHTML = html;
+  box.style.top = (inp.offsetTop + inp.offsetHeight + 2) + 'px';
+  box.style.left = inp.offsetLeft + 'px';
+  box.style.width = inp.offsetWidth + 'px';
+  box.style.display = 'block';
+  var act = box.querySelector('.inv-opt.active');
+  if (act) act.scrollIntoView({ block: 'nearest' });
+}
+
+function invPick(value) {
+  if (!value) return;
+  document.getElementById('inv-institution').value = value;
+  document.getElementById('inv-search').value = '';
+  invCloseResults();
+}
+
+async function invLoadCenters() {
+  try {
+    var res = await api('/api/centers/');
+    if (!res.ok) return;
+    var data = await res.json();
+    var arr = Array.isArray(data) ? data : (data.results || []);
+    var seen = {};
+    invCenters = [];
+    arr.forEach(function (c) {
+      var n = (c.institute_name || c.name || '').trim();
+      if (n && !seen[n]) {
+        seen[n] = true;
+        invCenters.push(n);
+      }
+    });
+    invCenters.sort(function (a, b) {
+      return a.localeCompare(b);
+    });
+    invFillSelect();
+  } catch (e) {}
+}
+
+function openInvoiceModal() {
+  invShowError('');
+  invSetStatus('');
+  var now = new Date();
+  var first = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (!document.getElementById('inv-start').value) document.getElementById('inv-start').value = invIso(first);
+  if (!document.getElementById('inv-end').value) document.getElementById('inv-end').value = invIso(now);
+  openModal('billing-invoice-modal');
+  if (!invCenters.length) invLoadCenters();
+  invLoadFiles();
+}
+
+function invFmtSize(n) {
+  if (n >= 1048576) return (n / 1048576).toFixed(2) + ' MB';
+  if (n >= 1024) return (n / 1024).toFixed(1) + ' KB';
+  return n + ' B';
+}
+
+async function invLoadFiles() {
+  var body = document.getElementById('inv-files-body');
+  try {
+    var res = await api('/api/billing-invoice-files/');
+    if (!res.ok) return;
+    var list = await res.json();
+    if (!list.length) {
+      body.innerHTML = '<tr><td colspan="4" style="padding:8px;text-align:center;color:#888;border:1px solid #ddd;">No files yet</td></tr>';
+      return;
+    }
+    var td = 'padding:6px 8px;border:1px solid #ddd;';
+    body.innerHTML = list.map(function (f) {
+      return '<tr>' +
+        '<td style="' + td + 'word-break:break-all;">' + invEsc(f.name) + '</td>' +
+        '<td style="' + td + 'white-space:nowrap;">' + invEsc(new Date(f.generated_at).toLocaleString()) + '</td>' +
+        '<td style="' + td + 'text-align:right;white-space:nowrap;">' + invFmtSize(f.size) + '</td>' +
+        '<td style="' + td + 'text-align:center;"><button class="btn btn-secondary btn-sm" onclick="invDownloadFile(\'' + invEsc(f.name) + '\')">Download</button></td>' +
+        '</tr>';
+    }).join('');
+  } catch (e) {}
+}
+
+async function invDownloadFile(name) {
+  try {
+    var res = await api('/api/billing-invoice-files/download/?name=' + encodeURIComponent(name));
+    if (!res.ok) {
+      invShowError('Failed to download file.');
+      return;
+    }
+    var blob = await res.blob();
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  } catch (e) {
+    invShowError('Failed to download file.');
+  }
+}
+
+var invCssSrc = window.location.origin + '/static/styles/styles.css';
+
+function invViewer() {
+  var op = window.opener;
+  var S = op && op.invSession;
+  var view = document.getElementById('inv-view');
+  var msg = document.getElementById('inv-msg');
+  if (!S) {
+    view.textContent = 'Invoice session expired. Please generate the invoice again.';
+    return;
+  }
+  function repeatHead() {
+    var tables = view.querySelectorAll('table');
+    var t = tables[tables.length - 1];
+    if (t && !t.tHead && t.rows.length) t.createTHead().appendChild(t.rows[0]);
+  }
+  async function render() {
+    msg.textContent = 'Loading...';
+    try {
+      var data = new Uint8Array(await S.blob.arrayBuffer());
+      view.innerHTML = '';
+      await docx.renderAsync(data, view, null, { className: 'docx', inWrapper: true, breakPages: true, ignoreWidth: false, ignoreHeight: false });
+      repeatHead();
+      msg.textContent = '';
+    } catch (e) {
+      msg.textContent = 'Could not render the invoice.';
+    }
+  }
+  document.getElementById('inv-dl').addEventListener('click', function () {
+    var url = URL.createObjectURL(S.blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = S.fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  });
+  document.getElementById('inv-pr').addEventListener('click', function () {
+    window.print();
+  });
+  render();
+}
+
+function invShell(inst) {
+  var o = window.location.origin;
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Billing Invoice - ' + invEsc(inst) + '</title>' +
+    '<link rel="stylesheet" href="' + invCssSrc + '"></head><body class="inv-body">' +
+    '<div class="inv-bar"><div class="inv-actions" style="margin-left:auto"><span id="inv-msg" class="inv-msg"></span><button id="inv-dl" type="button" class="inv-alt">Download</button><button id="inv-pr" type="button">Print</button></div></div>' +
+    '<div id="inv-view" class="inv-view"></div>' +
+    '<script src="' + o + '/static/script/jszip.min.js"><\/script>' +
+    '<script src="' + o + '/static/script/docx-preview.min.js"><\/script>' +
+    '<script>(' + invViewer.toString() + ')();<\/script></body></html>';
+}
+
+async function invGenerate() {
+  if (invBusy) return;
+  invShowError('');
+  var inst = document.getElementById('inv-institution').value;
+  var start = document.getElementById('inv-start').value;
+  var end = document.getElementById('inv-end').value;
+  if (!inst) {
+    invShowError('Please select an institution.');
+    return;
+  }
+  if (!start || !end) {
+    invShowError('Please select start and end date.');
+    return;
+  }
+  if (start > end) {
+    invShowError('Start date cannot be after end date.');
+    return;
+  }
+  var isAll = inst === 'ALL';
+  var win = isAll ? null : window.open('', '_blank');
+  if (!isAll && !win) {
+    invShowError('Popup blocked. Please allow popups for this site and try again.');
+    return;
+  }
+  if (win) win.document.write('<p style="font-family:Arial;padding:24px">Generating invoice...</p>');
+  var btn = document.getElementById('inv-generate');
+  invBusy = true;
+  btn.disabled = true;
+  try {
+    invSetStatus(isAll ? 'Generating invoices for all institutions...' : 'Generating invoice...');
+    var qs = 'institute_name=' + encodeURIComponent(inst) +
+      '&start=' + encodeURIComponent(start) +
+      '&end=' + encodeURIComponent(end);
+    var res = await api('/api/billing-invoice/?' + qs);
+    if (!res.ok) {
+      var text = 'Failed to generate invoice (' + res.status + ')';
+      try {
+        var err = await res.json();
+        if (err && err.error) text = err.error;
+      } catch (x) {}
+      if (win) win.close();
+      invShowError(text);
+      invSetStatus('');
+      return;
+    }
+    var blob = await res.blob();
+    var m = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
+    var count = res.headers.get('X-Case-Count');
+    var invCount = res.headers.get('X-Invoice-Count');
+    if (isAll) {
+      var zipName = m ? m[1] : 'invoices.zip';
+      var zipUrl = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = zipUrl;
+      link.download = zipName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function () { URL.revokeObjectURL(zipUrl); }, 4000);
+      invSetStatus('');
+      invLoadFiles();
+      closeModal('billing-invoice-modal');
+      toast('ZIP downloaded' + (invCount ? ' (' + invCount + ' invoices' + (count ? ', ' + count + ' cases' : '') + ')' : ''), 'success');
+      return;
+    }
+    window.invSession = { blob: blob, fileName: m ? m[1] : 'invoice.docx' };
+    win.document.open();
+    win.document.write(invShell(inst));
+    win.document.close();
+    invSetStatus('');
+    invLoadFiles();
+    closeModal('billing-invoice-modal');
+    toast('Invoice generated' + (count ? ' (' + count + ' cases)' : ''), 'success');
+  } catch (e) {
+    try { if (win) win.close(); } catch (x) {}
+    invShowError(e.message || 'Failed to generate invoice.');
+    invSetStatus('');
+  } finally {
+    invBusy = false;
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('inv-search').addEventListener('input', function () {
+  invActive = -1;
+  invShowResults();
+});
+document.getElementById('inv-search').addEventListener('focus', function () {
+  if (this.value.trim()) invShowResults();
+});
+document.getElementById('inv-search').addEventListener('blur', function () {
+  setTimeout(invCloseResults, 120);
+});
+document.getElementById('inv-search').addEventListener('keydown', function (e) {
+  var list = invMatches();
+  if (e.key === 'Escape') {
+    invCloseResults();
+  } else if (e.key === 'ArrowDown') {
+    if (!list.length) return;
+    e.preventDefault();
+    invActive = invActive + 1 >= list.length ? 0 : invActive + 1;
+    invShowResults();
+  } else if (e.key === 'ArrowUp') {
+    if (!list.length) return;
+    e.preventDefault();
+    invActive = invActive <= 0 ? list.length - 1 : invActive - 1;
+    invShowResults();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (list.length) invPick(list[invActive >= 0 ? invActive : 0]);
+  }
+});
+document.getElementById('inv-results').addEventListener('mousedown', function (e) {
+  e.preventDefault();
+  var t = e.target.closest ? e.target.closest('.inv-opt') : null;
+  if (t) invPick(t.getAttribute('data-v'));
+});
 </script>
 
 </body>

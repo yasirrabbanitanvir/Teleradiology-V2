@@ -1,3 +1,4 @@
+import os
 from django.db import models
 from django.contrib.auth.models import User, Group
 from django.utils import timezone
@@ -415,3 +416,35 @@ class UserSession(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.client_ip}"
+
+
+class InstituteBill(models.Model):
+    institute_name = models.CharField(max_length=100, db_index=True)
+    title = models.CharField(max_length=200)
+    description = models.CharField(max_length=200, blank=True, default='')
+    details = models.TextField(blank=True, default='')
+    bill_date = models.DateTimeField(default=timezone.now)
+    bill_file = models.FileField(upload_to='institute_bills/', max_length=500, null=True, blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_institute_bills')
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'institute_bills'
+        ordering = ['-bill_date', '-id']
+
+    def __str__(self):
+        return f"{self.institute_name} - {self.title}"
+
+
+class InstituteBillFile(models.Model):
+    bill = models.ForeignKey(InstituteBill, on_delete=models.CASCADE, related_name='files')
+    file = models.FileField(upload_to='institute_bills/', max_length=500)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'institute_bill_files'
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.bill_id} - {os.path.basename(self.file.name)}"

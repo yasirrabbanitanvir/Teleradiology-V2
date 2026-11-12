@@ -102,6 +102,10 @@
         var q = new URLSearchParams(window.location.search);
         var uid = q.get("study");
         var seriesParam = q.get("series");
+        var qrSig = q.get("qs");
+        if (uid && qrSig) {
+            try { document.cookie = "dicom_study_sig=" + uid + ":" + qrSig + "; path=/dicom/; max-age=86400; SameSite=Lax"; } catch (e) {}
+        }
         window.__trkT = Date.now();
         document.write('<link rel="preload" as="script" href="./script/tracking.js?t=' + window.__trkT + '">');
         if (!uid) return;

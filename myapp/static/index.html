@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=1280" />
   <title>Telesoft PACS System</title>
-  <link rel="stylesheet" href="./styles/styles.css" />
+  <link rel="stylesheet" href="./styles/styles.css?v=3" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
 </head>
 <body>
@@ -30,14 +30,16 @@
   </div>
 
   <section class="search-panel">
+    <div class="search-inputs-col">
     <div class="search-inputs">
       <input type="text" id="patient-name" placeholder="Patient Name" />
       <input type="text" id="patient-id" placeholder="Patient ID" />
+      <input type="text" id="body-part" placeholder="Body Part" />
       <input type="date" id="scan-start-date" />
       <input type="date" id="scan-end-date" />
       <select id="status">
+        <option value="All" selected hidden>Status</option>
         <option value="All">All</option>
-        <option value="Not Assigned">Not Assigned</option>
         <option value="Unreported">Unreported</option>
         <option value="Draft">Draft</option>
         <option value="Reviewed">Reviewed</option>
@@ -54,6 +56,8 @@
         <input type="checkbox" id="emergency" />
         Show only Emergency Cases
       </label>
+    </div>
+      <button type="button" class="clear-search-btn" onclick="clearSearch()">Clear Search</button>
     </div>
     <div class="modality-filter">
       <label>
@@ -81,7 +85,7 @@
     </div>
     <div class="search-actions">
       <button onclick="searchStudies()">Search</button>
-      <button id="refresh-btn" onclick="refreshStudies()">Refresh</button>
+      <button id="refresh-btn" onclick="refreshCurrentPage()">Refresh</button>
     </div>
   </section>
 
@@ -98,7 +102,7 @@
     <div style="padding:6px 8px;background:#4cb85c;">
       <button id="load-studies-btn" onclick="loadSelectedStudies()" style="background:#f5deb3;color:#000;font-weight:bold;border:1px solid #999;padding:3px 10px;cursor:pointer;">Load Studies</button>
     </div>
-    <table>
+    <table class="subadmin-table">
       <thead>
         <tr>
           <th><input type="checkbox" id="select-all" /></th>
@@ -119,7 +123,7 @@
           <th></th>
           <th>Reported By</th>
           <th>Group</th>
-          <th>Lock</th>
+          <th class="lock-th">Lock</th>
         </tr>
       </thead>
       <tbody id="study-table-body"></tbody>
@@ -135,8 +139,9 @@
   </footer>
 
   <script src="./script/queryBar.js"></script>
-  <script src="./script/seriesPanel.js?v=5"></script>
+  <script src="./script/seriesPanel.js?v=6"></script>
   <script src="./script/script.js"></script>
+  <script src="./script/billViewer.js"></script>
   <script src="./script/extraViewers.js"></script>
 </body>
 </html>
