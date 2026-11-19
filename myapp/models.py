@@ -448,3 +448,23 @@ class InstituteBillFile(models.Model):
 
     def __str__(self):
         return f"{self.bill_id} - {os.path.basename(self.file.name)}"
+
+
+class BillingRecord(models.Model):
+    collection = models.CharField(max_length=60, db_index=True)
+    record_id = models.CharField(max_length=120)
+    data = models.JSONField(default=dict, blank=True)
+    position = models.BigIntegerField(default=0)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='billing_records_created')
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='billing_records_updated')
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'billing_records'
+        ordering = ['collection', 'position', 'id']
+        unique_together = (('collection', 'record_id'),)
+        indexes = [models.Index(fields=['collection', 'position'], name='billing_coll_pos_idx')]
+
+    def __str__(self):
+        return f"{self.collection}:{self.record_id}"

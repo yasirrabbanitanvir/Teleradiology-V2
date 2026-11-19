@@ -1,0 +1,4084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1280" />
+<title>Telerad PACS Billing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f0f2f7;
+  --bg2: #ffffff;
+  --bg3: #f5f7fb;
+  --border: #e2e6f0;
+  --border2: #d0d7e8;
+  --text: #111827;
+  --text2: #4b5563;
+  --text3: #9ca3af;
+  --accent: #3d7eff;
+  --accent2: #2563d4;
+  --accent-glow: rgba(61,126,255,0.12);
+  --green: #16a34a;
+  --green-bg: rgba(22,163,74,0.10);
+  --yellow: #ca8a04;
+  --yellow-bg: rgba(202,138,4,0.10);
+  --red: #dc2626;
+  --red-bg: rgba(220,38,38,0.10);
+  --purple: #7c3aed;
+  --purple-bg: rgba(124,58,237,0.10);
+  --orange: #ea580c;
+  --orange-bg: rgba(234,88,12,0.10);
+  --sidebar-w: 240px;
+  --header-h: 58px;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  --transition: 0.15s ease;
+  --font: 'DM Sans', sans-serif;
+  --mono: 'DM Mono', monospace;
+}
+
+html, body { height: 100%; font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; overflow-x: hidden; }
+a { color: inherit; text-decoration: none; }
+button { font-family: var(--font); cursor: pointer; border: none; outline: none; }
+input, select, textarea { font-family: var(--font); outline: none; }
+ul { list-style: none; }
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: var(--sidebar-w);
+  background: #0062C2;
+  border-right: none;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  transition: transform var(--transition);
+  box-shadow: 2px 0 12px rgba(0,0,0,0.20);
+}
+
+.sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0L52 15L52 45L30 60L8 45L8 15Z' fill='none' stroke='rgba(255,255,255,0.06)' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 60px 60px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sidebar::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 180px;
+  background: linear-gradient(to top, rgba(0,0,0,0.18) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sidebar-logo,
+.sidebar-nav,
+.sidebar-footer {
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar-logo {
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+
+.logo-mark {
+  width: 32px; height: 32px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  display: flex; flex-direction: column;
+  gap: 0;
+}
+
+.logo-text span:first-child {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+}
+
+.logo-text span:last-child {
+  font-size: 10.5px;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 10px;
+  overflow-y: auto;
+}
+
+.nav-section {
+  margin-bottom: 20px;
+}
+
+.nav-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  padding: 0 8px 6px;
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+  margin-bottom: 1px;
+}
+
+.nav-item:hover {
+  background: rgba(255,255,255,0.12);
+  color: #ffffff;
+}
+
+.nav-item.active {
+  background: #4FBA5B;
+  color: #ffffff;
+  border: none;
+}
+
+.nav-fold {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition: grid-template-rows 0.38s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.28s ease 0.08s, visibility 0s linear 0s;
+}
+
+.nav-fold.collapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition-delay: 0s, 0s, 0.38s;
+}
+
+.nav-fold-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.nav-chevron {
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  opacity: 0.7;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+
+.nav-parent.expanded .nav-chevron {
+  transform: rotate(45deg);
+}
+
+.nav-chevron-left {
+  margin-left: 2px;
+  transform: rotate(135deg);
+}
+
+.nav-back {
+  margin-bottom: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.nav-sub {
+  padding-left: 18px;
+  font-size: 14px;
+  color: #ffffff;
+}
+.nav-sub::before {
+  content: "";
+  flex: none;
+  width: 15px;
+  height: 15px;
+  background-color: currentColor;
+  opacity: 0.7;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 1.5a10.5 10.5 0 100 21 10.5 10.5 0 000-21zM6.5 11h5.2L9.6 8.9l1.4-1.4 4.5 4.5-4.5 4.5-1.4-1.4 2.1-2.1H6.5z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 1.5a10.5 10.5 0 100 21 10.5 10.5 0 000-21zM6.5 11h5.2L9.6 8.9l1.4-1.4 4.5 4.5-4.5 4.5-1.4-1.4 2.1-2.1H6.5z'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: opacity 0.2s ease;
+}
+.nav-sub:hover::before,
+.nav-sub.active::before {
+  opacity: 1;
+}
+.nav-sub[onclick*="-child"]::after {
+  content: "";
+  margin-left: auto;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  opacity: 0.55;
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+.nav-sub[onclick*="-child"].open::after {
+  transform: rotate(45deg);
+}
+
+.nav-icon {
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.sidebar-footer {
+  padding: 14px 10px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+}
+
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.user-card:hover { background: rgba(255,255,255,0.08); }
+
+.user-avatar {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0062C2 0%, #4FBA5B 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.user-info { flex: 1; min-width: 0; }
+.user-name { font-size: 12.5px; font-weight: 600; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-role { font-size: 11px; color: rgba(255,255,255,0.45); }
+
+.logout-btn {
+  background: none;
+  color: var(--text3);
+  padding: 4px;
+  border-radius: 4px;
+  transition: color var(--transition);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.logout-btn:hover { color: var(--red); }
+
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.topbar {
+  height: var(--header-h);
+  background: #0062C2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.page-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.2px;
+}
+
+.page-subtitle {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+}
+
+.topbar-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.topbar-nav-link {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+  transition: all var(--transition);
+  background: none;
+  border: none;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.page {
+  display: none;
+}
+
+.page.active {
+  display: block;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+  margin-bottom: 26px;
+}
+
+.stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.stat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.stat-icon {
+  width: 36px; height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.stat-icon.blue { background: var(--accent-glow); color: var(--accent); }
+.stat-icon.green { background: var(--green-bg); color: var(--green); }
+.stat-icon.purple { background: var(--purple-bg); color: var(--purple); }
+.stat-icon.orange { background: var(--orange-bg); color: var(--orange); }
+
+.stat-label {
+  font-size: 12.5px;
+  color: var(--text3);
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
+
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.card-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.card-body {
+  padding: 20px;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table thead {
+  background: var(--bg3);
+}
+
+.table th {
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text2);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+}
+
+.table tbody tr {
+  transition: background var(--transition);
+}
+
+.table tbody tr:hover {
+  background: var(--bg3);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.badge-blue { background: var(--accent-glow); color: var(--accent); }
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-yellow { background: var(--yellow-bg); color: var(--yellow); }
+.badge-red { background: var(--red-bg); color: var(--red); }
+.badge-purple { background: var(--purple-bg); color: var(--purple); }
+.badge-gray { background: rgba(0,0,0,0.05); color: var(--text3); }
+
+.tag {
+  display: inline-block;
+  padding: 3px 8px;
+  background: var(--bg3);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text2);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all var(--transition);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--accent2);
+}
+
+.btn-secondary {
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+.btn-danger {
+  background: var(--red);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
+.btn-warning {
+  background: #d97706;
+  color: #fff;
+}
+
+.btn-warning:hover {
+  background: #b45309;
+}
+
+.btn-success {
+  background: var(--green);
+  color: #fff;
+}
+
+.btn-success:hover {
+  background: #15803d;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text2);
+}
+
+.btn-ghost:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.btn-xs {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.btn-sm {
+  padding: 7px 12px;
+  font-size: 12.5px;
+}
+
+.input-group {
+  margin-bottom: 16px;
+}
+
+.input-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.input-text, .input-select, .input-textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  color: var(--text);
+  background: var(--bg2);
+  transition: border-color var(--transition);
+}
+
+.input-text:focus, .input-select:focus, .input-textarea:focus {
+  border-color: var(--accent);
+}
+
+.input-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.input-file {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  font-size: 13px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.2);
+  max-width: 860px;
+  width: 92%;
+  max-height: 92vh;
+  overflow-y: auto;
+  transform: scale(0.95);
+  transition: transform 0.2s ease;
+}
+
+.modal-overlay.open .modal {
+  transform: scale(1);
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.modal-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text3);
+  transition: all var(--transition);
+  background: none;
+  border: none;
+  font-size: 20px;
+}
+
+.modal-close:hover {
+  background: rgba(0,0,0,0.05);
+  color: var(--text);
+}
+
+.rtf-link {
+  display: inline-block;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.rtf-link:hover {
+  color: var(--accent2);
+}
+
+#rtf-format-modal {
+  z-index: 210;
+}
+
+#rtf-format-modal .modal {
+  max-width: 520px;
+}
+
+.rtf-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  background: var(--bg2);
+}
+
+.rtf-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg3);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.rtf-head:hover {
+  background: var(--accent-glow);
+}
+
+.rtf-toggle {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--accent-glow);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  flex: none;
+}
+
+.rtf-body {
+  display: none;
+  padding: 16px 14px 4px;
+  border-top: 1px solid var(--border);
+}
+
+.rtf-body.open {
+  display: block;
+}
+
+.rtf-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.rtf-hint {
+  font-size: 12px;
+  color: var(--text3);
+  margin: -4px 0 12px;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.3;
+}
+
+.empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.empty-text {
+  font-size: 13px;
+  color: var(--text3);
+}
+
+.loading {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text3);
+}
+
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateX(100px);
+  animation: toastIn 0.3s ease forwards;
+}
+
+.toast.out {
+  animation: toastOut 0.3s ease forwards;
+}
+
+@keyframes toastIn {
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastOut {
+  to { opacity: 0; transform: translateX(100px); }
+}
+
+.toast-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.toast.success .toast-icon {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.toast.error .toast-icon {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.toast.info .toast-icon {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.actions-cell {
+  display: flex;
+  gap: 6px;
+}
+
+.confirm-dialog {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 250;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.confirm-dialog.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.confirm-box {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.2);
+  max-width: 440px;
+  width: 90%;
+  padding: 24px;
+  transform: scale(0.95);
+  transition: transform 0.2s ease;
+}
+
+.confirm-dialog.open .confirm-box {
+  transform: scale(1);
+}
+
+.confirm-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+.confirm-message {
+  font-size: 13.5px;
+  color: var(--text2);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.error-banner {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.search-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.multi-select-container {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  min-height: 100px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg2);
+}
+
+.multi-select-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.multi-select-item:hover {
+  background: var(--bg3);
+}
+
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.permission-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  transition: all var(--transition);
+}
+
+.permission-item:hover {
+  background: var(--bg2);
+  border-color: var(--accent);
+}
+
+.permission-checkbox {
+  width: 18px;
+  height: 18px;
+}
+
+.permission-label {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  cursor: pointer;
+  flex: 1;
+}
+
+.image-preview {
+  margin-top: 8px;
+  max-width: 200px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.alert-type-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.alert-type-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--bg3);
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.alert-type-header input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.alert-channel-panel {
+  display: none;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg2);
+}
+
+.alert-channel-panel.open {
+  display: block;
+}
+
+.alert-channel-section {
+  margin-bottom: 14px;
+}
+
+.alert-channel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg3);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 8px;
+}
+
+.alert-channel-header.alert-channel-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: rgba(0,0,0,0.03);
+}
+
+.alert-channel-header input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.alert-channel-header.alert-channel-disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
+.alert-channel-fields {
+  display: none;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg2);
+}
+
+.alert-channel-fields.open {
+  display: block;
+}
+
+.alert-recipient-row {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  align-items: start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.alert-recipient-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.alert-recipient-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 500;
+}
+
+.alert-recipient-label input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.alert-msg-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.alert-msg-col label {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 500;
+}
+
+.alert-msg-col textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg2);
+  resize: vertical;
+  min-height: 56px;
+  transition: border-color var(--transition);
+}
+
+.alert-msg-col textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.alert-msg-col textarea:disabled {
+  background: rgba(0,0,0,0.02);
+  color: var(--text3);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.alert-num-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 140px;
+}
+
+.alert-num-col label {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 500;
+}
+
+.alert-num-col textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg2);
+  resize: vertical;
+  min-height: 56px;
+  transition: border-color var(--transition);
+}
+
+.alert-num-col textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.alert-num-col textarea:disabled {
+  background: rgba(0,0,0,0.02);
+  color: var(--text3);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.alert-recipient-label input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.alert-recipient-label input[type="checkbox"]:disabled + label {
+  color: var(--text3);
+  opacity: 0.7;
+}
+
+.server-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.server-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+}
+
+.server-info-row:last-child {
+  border-bottom: none;
+}
+
+.server-info-label {
+  color: var(--text3);
+  font-weight: 500;
+}
+
+.server-info-value {
+  color: var(--text);
+  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  text-align: right;
+  max-width: 60%;
+  word-break: break-all;
+}
+
+.usage-bar-wrap {
+  margin-top: 6px;
+}
+
+.usage-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text3);
+  margin-bottom: 4px;
+}
+
+.usage-bar-track {
+  height: 8px;
+  background: var(--bg3);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.usage-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+.usage-bar-fill.cpu { background: linear-gradient(90deg, var(--accent), #7c3aed); }
+.usage-bar-fill.mem { background: linear-gradient(90deg, var(--green), #059669); }
+.usage-bar-fill.disk-used { background: linear-gradient(90deg, var(--orange), #f59e0b); }
+
+.history-canvas-wrap {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg3);
+}
+
+.history-canvas-wrap canvas {
+  display: block;
+  width: 100%;
+}
+
+.drive-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.drive-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+
+.drive-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.drive-letter {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--accent-glow);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.drive-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.drive-total {
+  font-size: 11.5px;
+  color: var(--text3);
+}
+
+.drive-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.drive-stat {
+  text-align: center;
+}
+
+.drive-stat-val {
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.drive-stat-lbl {
+  color: var(--text3);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.drive-pie-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 8px;
+}
+
+.drive-pie-wrap canvas {
+  display: block;
+}
+
+.server-refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.server-last-updated {
+  font-size: 12px;
+  color: var(--text3);
+}
+
+.admin-footer {
+  background: #0062C2;
+  color: #fff;
+  padding: 0;
+  margin-top: auto;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.admin-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 60px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 60' preserveAspectRatio='none'%3E%3Cpath fill='%234FBA5B' d='M0,32 C240,10 480,5 720,20 C960,35 1200,45 1440,32 L1440,0 L0,0 Z'/%3E%3C/svg%3E") no-repeat;
+  background-size: cover;
+  background-position: bottom;
+}
+
+.admin-footer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0L52 15L52 45L30 60L8 45L8 15Z' fill='none' stroke='rgba(255,255,255,0.05)' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 60px 60px;
+}
+
+.admin-footer-content {
+  width: 100%;
+  margin: 0;
+  padding: 80px 0 30px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+}
+
+.admin-footer-left {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.45);
+  padding-left: 40px;
+}
+
+.admin-footer-right {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.45);
+  padding-right: 40px;
+}
+
+.pagination-container {
+  margin-top: 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 15px 20px;
+}
+
+.pagination-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.pagination-info {
+  color: #666;
+  font-size: 14px;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.items-per-page {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #666;
+}
+
+.items-per-page select {
+  padding: 5px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pagination-btn {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  background: white;
+  color: #333;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  min-width: 40px;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #f5f5f5;
+  border-color: #ccc;
+}
+
+.pagination-btn:disabled {
+  background: #f9f9f9;
+  color: #ccc;
+  cursor: not-allowed;
+  border-color: #eee;
+}
+
+.pagination-btn.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.pagination-btn.active:hover {
+  background: #0056b3;
+  border-color: #0056b3;
+}
+
+.page-numbers {
+  display: flex;
+  gap: 2px;
+}
+
+.pagination-ellipsis {
+  padding: 8px 4px;
+  color: #999;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .pagination-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+  
+  .pagination-controls {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .pagination-buttons {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+.user-grid-search {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg2);
+  margin-bottom: 6px;
+  font-family: var(--font);
+  transition: border-color var(--transition);
+}
+
+.user-grid-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.user-grid-container {
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.user-grid-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border-bottom: 1px solid var(--border);
+}
+
+.user-grid-row:last-child {
+  border-bottom: none;
+}
+
+.user-grid-row:nth-child(odd) {
+  background: #ffffff;
+}
+
+.user-grid-row:nth-child(even) {
+  background: #f3f4f6;
+}
+
+.user-grid-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+
+.user-grid-cell:last-child {
+  border-right: none;
+}
+
+.user-grid-cell input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  accent-color: #17a2b8;
+  cursor: pointer;
+}
+
+.user-grid-cell label {
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+  font-family: var(--font);
+}
+
+
+@media (min-width: 768px) and (max-width: 1280px) {
+  .main {
+    min-width: 0;
+  }
+
+  .content {
+    padding: 18px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  :root {
+    --sidebar-w: 200px;
+  }
+
+  .content {
+    padding: 14px;
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-width: 0;
+}
+
+.main,
+.content,
+.page,
+.card,
+.card-body {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.topbar {
+  gap: 12px;
+}
+
+.topbar-left {
+  min-width: 0;
+}
+
+.topbar-right,
+.topbar-nav-links {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.card-header {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.card-actions {
+  flex-wrap: wrap;
+}
+
+.table-container {
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dashboard-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+}
+
+@media (max-width: 1100px) {
+  .topbar {
+    height: auto;
+    min-height: var(--header-h);
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --sidebar-w: 170px;
+  }
+
+  .content {
+    padding: 10px;
+  }
+
+  .topbar {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .nav-item {
+    font-size: 14px;
+    padding: 7px 8px;
+  }
+
+  .stat-value {
+    font-size: 24px;
+  }
+}
+select.ss-native { display: none !important; }
+.ss-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.ss-box:hover { border-color: var(--border2); }
+.ss-box:focus, .ss-box.ss-open { outline: none; border-color: var(--accent); }
+.ss-box .ss-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-box .ss-text.ss-placeholder { color: var(--text3); }
+.ss-box .ss-arrow {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--text3);
+}
+.ss-box.ss-disabled { opacity: 0.6; cursor: not-allowed; }
+#cbt-body .ss-box { padding: 7px 8px; font-size: 13px; min-height: 33px; }
+.ss-panel {
+  position: fixed;
+  z-index: 2147483000;
+  display: none;
+  flex-direction: column;
+  background: var(--bg2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.16);
+  overflow: hidden;
+}
+.ss-panel.ss-show { display: flex; }
+.ss-search {
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+  color: var(--text);
+  background: var(--bg2);
+  outline: none;
+}
+.ss-list { overflow-y: auto; max-height: 240px; padding: 4px 0; }
+.ss-opt {
+  padding: 7px 12px;
+  font-size: 13.5px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-opt.ss-active { background: var(--accent-glow); }
+.ss-opt.ss-selected { font-weight: 600; color: var(--accent); }
+.ss-empty { padding: 10px 12px; font-size: 13px; color: var(--text3); }
+#customer-bill-template-page table,
+#customer-bill-template-page table th,
+#customer-bill-template-page table td,
+#customers-page table,
+#customers-page table th,
+#customers-page table td,
+#trb-bill-history-page table,
+#trb-bill-history-page table th,
+#trb-bill-history-page table td,
+#trb-bill-due-page table,
+#trb-bill-due-page table th,
+#trb-bill-due-page table td,
+#trb-bill-list-page table,
+#trb-bill-list-page table th,
+#trb-bill-list-page table td,
+#bill-send-pending-page table,
+#bill-send-pending-page table th,
+#bill-send-pending-page table td,
+table:has(#tb-invoices-body),
+table:has(#tb-invoices-body) th,
+table:has(#tb-invoices-body) td {
+  border: 1px solid #000000;
+}
+#customer-bill-template-page table,
+#customers-page table,
+#trb-bill-history-page table,
+#trb-bill-due-page table,
+#trb-bill-list-page table,
+#bill-send-pending-page table,
+table:has(#tb-invoices-body) {
+  border-collapse: collapse;
+}
+#customer-bill-template-page table,
+#customers-page table,
+#trb-bill-history-page table,
+#trb-bill-due-page table,
+#trb-bill-list-page table,
+#bill-send-pending-page table,
+table:has(#tb-invoices-body) {
+  background: #FFFFFF;
+}
+#customer-bill-template-page table th,
+#customers-page table th,
+#trb-bill-history-page table th,
+#trb-bill-due-page table th,
+#trb-bill-list-page table th,
+#bill-send-pending-page table th,
+table:has(#tb-invoices-body) th {
+  background: #4FBA5B;
+  color: #FFFFFF;
+  border-bottom-color: #E0F2F1;
+}
+#customer-bill-template-page table td,
+#customers-page table td,
+#trb-bill-history-page table td,
+#trb-bill-due-page table td,
+#trb-bill-list-page table td,
+#bill-send-pending-page table td,
+table:has(#tb-invoices-body) td {
+  background-color: #ece3d0;
+  color: #004D40;
+}
+#customer-bill-template-page table tbody tr:hover td,
+#customers-page table tbody tr:hover td,
+#trb-bill-history-page table tbody tr:hover td,
+#trb-bill-due-page table tbody tr:hover td,
+#trb-bill-list-page table tbody tr:hover td,
+#bill-send-pending-page table tbody tr:hover td,
+table:has(#tb-invoices-body) tbody tr:hover td {
+  background-color: #E0F2F1;
+}
+</style>
+<style>
+    #customers-page .card-body,
+    #trb-bill-list-page .card-body,
+    #trb-bill-due-page .card-body {
+      padding: 16px;
+    }
+    .table.table-fit {
+      table-layout: fixed;
+      width: 100%;
+      font-size: clamp(10.5px, 0.66vw, 13px);
+      line-height: 1.35;
+    }
+    #customers-page .table.tf-customers {
+      table-layout: auto;
+      min-width: 1240px;
+      font-size: clamp(10.5px, 0.6vw, 13px);
+    }
+    #customers-page .table.tf-customers th {
+      padding: 10px 4px;
+      overflow-wrap: break-word;
+    }
+    #customers-page .table.tf-customers td {
+      padding: 9px 4px;
+      overflow-wrap: break-word;
+    }
+    #customers-page .table.tf-customers th:first-child,
+    #customers-page .table.tf-customers td:first-child {
+      padding-left: 10px;
+    }
+    #customers-page .table.tf-customers th:last-child,
+    #customers-page .table.tf-customers td:last-child {
+      padding-right: 10px;
+    }
+    #customers-page .table.tf-customers td:last-child {
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    #customers-page .table.tf-customers .btn {
+      overflow-wrap: break-word;
+      padding: 4px 6px;
+    }
+    #customers-page .table.tf-customers td:nth-child(9),
+    #customers-page .table.tf-customers td:nth-child(15) {
+      overflow-wrap: anywhere;
+    }
+    .table.tf-bills {
+      min-width: 1180px;
+    }
+    .table.table-fit th {
+      padding: 10px 6px;
+      font-size: 0.95em;
+      text-transform: none;
+      letter-spacing: 0;
+      vertical-align: middle;
+      overflow-wrap: break-word;
+    }
+    .table.table-fit td {
+      padding: 10px 6px;
+      vertical-align: middle;
+      overflow-wrap: anywhere;
+    }
+    .table.table-fit th:first-child,
+    .table.table-fit td:first-child {
+      padding-left: 12px;
+    }
+    .table.table-fit th:last-child,
+    .table.table-fit td:last-child {
+      padding-right: 12px;
+    }
+    .table.table-fit th.trb-r {
+      text-align: right;
+    }
+    .table.table-fit td.trb-r {
+      text-align: right;
+      white-space: nowrap;
+    }
+    .table.tf-bills th:last-child,
+    .table.tf-bills td:last-child,
+    .table.tf-customers th:last-child,
+    .table.tf-customers td:last-child {
+      text-align: center;
+    }
+    .table.tf-bills td:nth-child(n+4):nth-child(-n+6),
+    .table.tf-customers td:nth-child(12) {
+      white-space: nowrap;
+    }
+    .table.table-fit .btn {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      padding: 4px 3px;
+      font-size: 0.95em;
+      line-height: 1.25;
+      text-align: center;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    .tf-actions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+      gap: 4px;
+      align-items: stretch;
+    }
+    .table.table-fit .badge {
+      padding: 2px 5px;
+      font-size: 0.95em;
+      line-height: 1.3;
+      text-align: center;
+      white-space: normal;
+    }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark"><img src="/static/telesoftlogo.png" alt="Logo" height="25" width="25"></div>
+      <div class="logo-text">
+        <span>Telerad PACS</span>
+        <span>Admin Portal</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav" id="sidebar-nav">
+      <div class="nav-fold collapsed" data-fold="back">
+        <div class="nav-fold-inner">
+          <div class="nav-item nav-back" id="nav-back">
+            <span class="nav-chevron nav-chevron-left"></span>
+            Back to Menu
+          </div>
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-fold" data-fold="parent" data-group="billing">
+          <div class="nav-fold-inner">
+            <div class="nav-item nav-parent" data-page="billing" data-group="billing">
+              Billing Management
+              <span class="nav-chevron"></span>
+            </div>
+          </div>
+        </div>
+        <div class="nav-fold collapsed" data-fold="children" data-group="billing">
+          <div class="nav-fold-inner">
+            <div class="nav-item nav-sub" data-page="trb-home">
+              Home
+            </div>
+            <div class="nav-item nav-sub" data-page="trb-dashboard">
+              Dashboard
+            </div>
+            <div class="nav-item nav-sub" onclick="this.classList.toggle('open');document.querySelectorAll('.nav-trb-child').forEach(function(c){c.style.display=c.style.display==='none'?'flex':'none';});">
+              TRB
+            </div>
+            <div class="nav-item nav-sub nav-trb-child" data-page="trb-bill-entry" style="padding-left:42px;display:none;">
+              Bill Entry
+            </div>
+            <div class="nav-item nav-sub nav-trb-child" data-page="trb-bill-list" style="padding-left:42px;display:none;">
+              Bill List
+            </div>
+            <div class="nav-item nav-sub nav-trb-child" data-page="trb-bill-due" style="padding-left:42px;display:none;">
+              Bill Due Collection
+            </div>
+            <div class="nav-item nav-sub nav-trb-child" data-page="trb-bill-history" style="padding-left:42px;display:none;">
+              Bill Collection History
+            </div>
+            <div class="nav-item nav-sub" onclick="this.classList.toggle('open');document.querySelectorAll('.nav-msg-child').forEach(function(c){c.style.display=c.style.display==='none'?'flex':'none';});">
+              Message Hub
+            </div>
+            <div class="nav-item nav-sub nav-msg-child" data-page="compose-message" style="padding-left:42px;display:none;">
+              Compose Message
+            </div>
+            <div class="nav-item nav-sub" onclick="this.classList.toggle('open');document.querySelectorAll('.nav-essentials-child').forEach(function(c){c.style.display=c.style.display==='none'?'flex':'none';});">
+              Essentials
+            </div>
+            <div class="nav-item nav-sub nav-essentials-child" id="nav-customers" data-page="customers" style="padding-left:42px;display:none;">
+              Customers
+            </div>
+            <div class="nav-item nav-sub nav-essentials-child" id="nav-customer-bill-template" data-page="customer-bill-template" style="padding-left:42px;display:none;">
+              Customer Bill Template
+            </div>
+            <div class="nav-item nav-sub nav-essentials-child" id="nav-items" data-page="items" style="padding-left:42px;display:none;">
+              Items
+            </div>
+            <div class="nav-item nav-sub" onclick="this.classList.toggle('open');document.querySelectorAll('.nav-rep-child').forEach(function(c){c.style.display=c.style.display==='none'?'flex':'none';});">
+              Reports
+            </div>
+            <div class="nav-item nav-sub nav-rep-child" data-page="bill-send-pending" style="padding-left:42px;display:none;">
+              Bill Send Pending
+            </div>
+            <div class="nav-item nav-sub nav-rep-child" data-page="amount-wise-client" style="padding-left:42px;display:none;">
+              Amount Wise client Search
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-avatar" id="user-avatar">A</div>
+        <div class="user-info">
+          <div class="user-name" id="current-username">Admin</div>
+          <div class="user-role">Administrator</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-nav-links">
+          <button class="topbar-nav-link" onclick="logout()">Log Off</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div id="billing-page" class="page">
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-header">
+            <div class="card-title">Billing Management</div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:14px;">
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Institute Name</label>
+                <input type="text" class="input-text" id="bill-institute-search" placeholder="Search institute..." autocomplete="off" oninput="renderBillInstituteOptions()" style="margin-bottom:6px;" />
+                <select class="input-select" id="bill-institute">
+                  <option value="">Select Institute</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Patient ID (Bill Title)</label>
+                <input type="text" class="input-text" id="bill-title" maxlength="200" placeholder="Bill - October 2026" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Study Description/Body Part</label>
+                <input type="text" class="input-text" id="bill-description" maxlength="200" placeholder="Bill - October 2026" />
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:14px;">
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Attach File</label>
+                <input type="file" class="input-text" id="bill-file" multiple />
+                <div id="bill-file-list" style="margin-top:8px;"></div>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="bill-send-btn" onclick="sendBill()">Send Bill</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Sent Bills</div>
+          </div>
+          <div class="card-body">
+            <div style="margin-bottom: 20px;">
+              <input type="text" id="bill-search-input" class="input-text" placeholder="Search by institute, title or file..." style="max-width: 400px;" oninput="searchBills()" />
+            </div>
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Institute</th>
+                    <th>Bill Title</th>
+                    <th>Bill Date/Time</th>
+                    <th>Attached File</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="bills-table-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="bills-pagination-container" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="bills-pagination-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="bills-items-per-page" onchange="changeBillsPerPage()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="bills-pagination-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="bill-list-page" class="page">
+        <div class="dashboard-grid">
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-label">Total Bills</div>
+          </div>
+          <div class="stat-value" id="bl-stat-total">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-label">Due Bills</div>
+          </div>
+          <div class="stat-value" id="bl-stat-due">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-label">Paid Bills</div>
+          </div>
+          <div class="stat-value" id="bl-stat-paid">0</div>
+        </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              Bill List
+            </div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="loadBills()">Refresh</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Search</label>
+                <input type="text" class="input-text" id="bl-search" placeholder="Institute, title or file..." autocomplete="off" oninput="billViewFilter('list')" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Institute</label>
+                <select class="input-select" id="bl-institute" onchange="billViewFilter('list')">
+                  <option value="">All Institutes</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Status</label>
+                <select class="input-select" id="bl-status" onchange="billViewFilter('list')">
+                  <option value="">All Statuses</option>
+                  <option value="due">Due</option>
+                  <option value="paid">Paid</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">From Date</label>
+                <input type="date" class="input-text" id="bl-from" onchange="billViewFilter('list')" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">To Date</label>
+                <input type="date" class="input-text" id="bl-to" onchange="billViewFilter('list')" />
+              </div>
+              <div style="display:flex;align-items:flex-end;">
+                <button class="btn btn-secondary" onclick="billViewClear('list')">Clear</button>
+              </div>
+            </div>
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Institute</th>
+                    <th>Bill Title</th>
+                    <th>Bill Date/Time</th>
+                    <th>Attached File</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="bl-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="bl-pagination" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="bl-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="bl-per-page" onchange="billViewPerPage('list')">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="bl-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="bill-due-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              Bill Due List
+            </div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="loadBills()">Refresh</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Search</label>
+                <input type="text" class="input-text" id="bd-search" placeholder="Institute, title or file..." autocomplete="off" oninput="billViewFilter('due')" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Institute</label>
+                <select class="input-select" id="bd-institute" onchange="billViewFilter('due')">
+                  <option value="">All Institutes</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">From Date</label>
+                <input type="date" class="input-text" id="bd-from" onchange="billViewFilter('due')" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">To Date</label>
+                <input type="date" class="input-text" id="bd-to" onchange="billViewFilter('due')" />
+              </div>
+              <div style="display:flex;align-items:flex-end;">
+                <button class="btn btn-secondary" onclick="billViewClear('due')">Clear</button>
+              </div>
+            </div>
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Institute</th>
+                    <th>Bill Title</th>
+                    <th>Bill Date/Time</th>
+                    <th>Attached File</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="bd-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="bd-pagination" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="bd-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="bd-per-page" onchange="billViewPerPage('due')">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="bd-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="bill-paid-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              Bill Paid List
+            </div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="loadBills()">Refresh</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Search</label>
+                <input type="text" class="input-text" id="bp-search" placeholder="Institute, title or file..." autocomplete="off" oninput="billViewFilter('paid')" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">Institute</label>
+                <select class="input-select" id="bp-institute" onchange="billViewFilter('paid')">
+                  <option value="">All Institutes</option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">From Date</label>
+                <input type="date" class="input-text" id="bp-from" onchange="billViewFilter('paid')" />
+              </div>
+              <div>
+                <label class="input-label" style="margin-bottom:4px;">To Date</label>
+                <input type="date" class="input-text" id="bp-to" onchange="billViewFilter('paid')" />
+              </div>
+              <div style="display:flex;align-items:flex-end;">
+                <button class="btn btn-secondary" onclick="billViewClear('paid')">Clear</button>
+              </div>
+            </div>
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Institute</th>
+                    <th>Bill Title</th>
+                    <th>Bill Date/Time</th>
+                    <th>Attached File</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="bp-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="bp-pagination" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="bp-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="bp-per-page" onchange="billViewPerPage('paid')">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="bp-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="customers-page" class="page">
+        <style>
+          #customers-page .cs-chip { display:inline-flex; align-items:center; gap:8px; padding:4px 6px 4px 12px; border:1px solid var(--border); border-radius:999px; font-size:12.5px; color:var(--text2); background:var(--bg2); cursor:pointer; }
+          #customers-page .cs-chip.active { background:var(--accent-glow); color:var(--accent); border-color:var(--accent); }
+          #customers-page .cs-chip-x { width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; }
+          #customers-page .cs-chip-x:hover { background:rgba(0,0,0,0.08); }
+        </style>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Customers</div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="customerDownload()">Download CSV</button>
+              <button class="btn btn-primary btn-sm" onclick="openCustomerModal()">+ Add Customer</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+              <select class="input-select" id="cs-search-field" style="width:190px;" onchange="customerSearch()">
+                <option value="all">All Columns</option>
+                <option value="code">Customer Code</option>
+                <option value="name">Customer Name</option>
+                <option value="type">Customer Type</option>
+                <option value="username">Username</option>
+                <option value="division">Division</option>
+                <option value="district">District</option>
+                <option value="thana">Thana</option>
+                <option value="address">Address</option>
+                <option value="instructedBy">Instructed By</option>
+                <option value="connectionBy">Connection By</option>
+                <option value="connectionStatus">Connection Status</option>
+                <option value="serverStatus">Server Status</option>
+                <option value="remarks">Remarks</option>
+              </select>
+              <input type="text" id="cs-search-input" class="input-text" placeholder="Search customers..." autocomplete="off" style="max-width:360px;" oninput="customerSearch()" />
+              <button class="btn btn-secondary btn-sm" onclick="customerClearSearch()">Clear</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+              <span style="font-size:12.5px;color:var(--text3);">Saved searches:</span>
+              <div id="cs-tpl-list" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+              <button class="btn btn-ghost btn-xs" onclick="customerSaveTemplate()">+ Save current search</button>
+            </div>
+            <div class="table-container">
+              <table class="table table-fit tf-customers">
+                <thead>
+                  <tr>
+                    <th>Customer Code</th>
+                    <th>Customer Name</th>
+                    <th>Customer Type</th>
+                    <th>Username</th>
+                    <th>Password</th>
+                    <th>Division</th>
+                    <th>District</th>
+                    <th>Thana</th>
+                    <th>Address</th>
+                    <th>Instructed By</th>
+                    <th>Connection By</th>
+                    <th>Connection Date</th>
+                    <th>Connection Status</th>
+                    <th>Server Status</th>
+                    <th>Remarks</th>
+                    <th>Due</th>
+                    <th>Edit</th>
+                    <th>Contact List</th>
+                    <th>Template</th>
+                    <th>Contact Info</th>
+                    <th>Customer ID</th>
+                  </tr>
+                </thead>
+                <tbody id="customers-table-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="cs-pagination-container" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="cs-pagination-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="cs-items-per-page" onchange="customerPerPageChanged()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="cs-pagination-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="customer-bill-template-page" class="page">
+        <style>
+          #cbt-body td { padding:6px 8px; }
+          #cbt-body input[type=text], #cbt-body input[type=number] { width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; color:var(--text); background:var(--bg2); }
+          #cbt-body input.cbt-num { text-align:right; }
+          #cbt-body tr.cbt-sel td { background:var(--accent-glow); }
+          #cbt-body .cbt-handle { cursor:grab; font-size:16px; color:var(--text3); user-select:none; }
+          #cbt-body .cbt-totalcell { text-align:right; font-weight:600; color:var(--text); }
+          #cbt-body .cbt-empty { text-align:center; padding:24px; color:var(--text3); }
+          #cbt-body select { width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; color:var(--text); background:var(--bg2); }
+        </style>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Customer Bill Template</div>
+            <div class="card-actions">
+              <button class="btn btn-danger btn-sm" onclick="cbtDeleteSelected()">Delete Selected</button>
+              <button class="btn btn-secondary btn-sm" onclick="cbtAddRow()">Add Row</button>
+              <button class="btn btn-secondary btn-sm" onclick="cbtAddItem()">Add Item</button>
+              <button class="btn btn-secondary btn-sm" onclick="cbtDownload()">Download</button>
+              <button class="btn btn-primary btn-sm" onclick="cbtSave()">Save</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="input-group" style="max-width:360px;">
+              <label class="input-label">Customer</label>
+              <select class="input-select" id="cbt-customer" onchange="cbtCustomerChanged()"></select>
+            </div>
+            <div class="table-container">
+              <table class="table" style="min-width:1250px;">
+                <thead>
+                  <tr>
+                    <th style="width:40px;"><input type="checkbox" id="cbt-check-all" onchange="cbtSelectAll(this.checked)" /></th>
+                    <th style="width:40px;"></th>
+                    <th style="width:200px;">Item ID</th>
+                    <th style="width:260px;">Item Name</th>
+                    <th>Item Desc</th>
+                    <th style="width:110px;">Quantity</th>
+                    <th style="width:110px;">Price</th>
+                    <th style="width:110px;">Total</th>
+                    <th style="width:120px;">Priority Level</th>
+                    <th>Remarks</th>
+                  </tr>
+                </thead>
+                <tbody id="cbt-body"></tbody>
+              </table>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:13px;color:var(--text3);">
+              <span id="cbt-selected-count">0 rows selected</span>
+              <span id="cbt-row-total">Total 0</span>
+            </div>
+            <div class="pagination-container" id="cbt-pagination-container" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="cbt-pagination-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="cbt-items-per-page" onchange="cbtPerPageChanged()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="cbt-pagination-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="items-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Items</div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="itemsDownload()">Download CSV</button>
+              <button class="btn btn-primary btn-sm" onclick="openItemModal()">+ Add Item</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
+              <select class="input-select" id="it-search-field" style="width:190px;" onchange="itemsSearch()">
+                <option value="all">All Columns</option>
+                <option value="name">Item Name</option>
+                <option value="type">Item Type</option>
+                <option value="description">Item Description</option>
+                <option value="remarks">Remarks</option>
+              </select>
+              <input type="text" id="it-search-input" class="input-text" placeholder="Search items..." autocomplete="off" style="max-width:360px;" oninput="itemsSearch()" />
+              <button class="btn btn-secondary btn-sm" onclick="itemsClearSearch()">Clear</button>
+            </div>
+            <div class="table-container">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Item Name</th>
+                    <th>Item Type</th>
+                    <th>Item Description</th>
+                    <th>Price</th>
+                    <th>Remarks</th>
+                    <th>Edit</th>
+                  </tr>
+                </thead>
+                <tbody id="it-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="it-pagination-container" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="it-pagination-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="it-items-per-page" onchange="itemsPerPageChanged()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="it-pagination-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="trb-bill-entry-page" class="page">
+        <style>
+          .trb-chip { display:inline-flex; align-items:center; gap:8px; padding:4px 6px 4px 12px; border:1px solid var(--border); border-radius:999px; font-size:12.5px; color:var(--text2); background:var(--bg2); }
+          .trb-chip.active { background:var(--accent-glow); color:var(--accent); border-color:var(--accent); }
+          .trb-chip-x { width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; cursor:pointer; }
+          .trb-chip-x:hover { background:rgba(0,0,0,0.08); }
+          .trb-r { text-align:right; }
+          .trb-filter-row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; }
+          .trb-filter-row .input-group { margin-bottom:0; }
+          .trb-entry-grid { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:20px; align-items:start; }
+          .trb-info-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+          .trb-info-grid .input-group { margin-bottom:0; }
+          .trb-span-2 { grid-column:span 2; }
+          .trb-span-4 { grid-column:span 4; }
+          .trb-sum-row { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+          .trb-sum-row label { width:84px; font-size:12.5px; font-weight:600; color:var(--text); flex:none; }
+          .trb-sum-row input, .trb-sum-row select { text-align:right; }
+          #trb-rows-body td { padding:6px 8px; }
+          #trb-rows-body input[type=text], #trb-rows-body input[type=number] { width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; color:var(--text); background:var(--bg2); }
+          #trb-rows-body input.trb-num { text-align:right; }
+          #trb-rows-body tr.trb-sel td { background:var(--accent-glow); }
+          #trb-rows-body .trb-handle { cursor:grab; font-size:16px; color:var(--text3); user-select:none; }
+          #trb-rows-body .trb-totalcell { text-align:right; font-weight:600; color:var(--text); }
+          @media (max-width:1100px) { .trb-entry-grid { grid-template-columns:1fr; } .trb-info-grid { grid-template-columns:repeat(2,1fr); } }
+        </style>
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-header">
+            <div class="card-title">Bill Entry Form &mdash; Billing Info</div>
+          </div>
+          <div class="card-body">
+            <div class="trb-info-grid">
+              <div class="input-group">
+                <label class="input-label">Select Customer</label>
+                <select class="input-select" id="tb-customer" onchange="trbCustomerPicked()"></select>
+              </div>
+              <div class="input-group">
+                <label class="input-label">Invoice Date</label>
+                <input type="date" class="input-text" id="tb-invoice-date" />
+              </div>
+              <div class="input-group">
+                <label class="input-label">Billing from Date</label>
+                <input type="date" class="input-text" id="tb-from" onchange="trbAutoTitle()" />
+              </div>
+              <div class="input-group">
+                <label class="input-label">Billing to Date</label>
+                <input type="date" class="input-text" id="tb-to" onchange="trbAutoTitle()" />
+              </div>
+              <div class="input-group trb-span-2">
+                <label class="input-label">Invoice Title</label>
+                <input type="text" class="input-text" id="tb-title" maxlength="200" oninput="trbTitleDirty=true" />
+              </div>
+              <div class="input-group trb-span-2">
+                <label class="input-label">Contact</label>
+                <input type="text" class="input-text" id="tb-contact" style="background:var(--bg3);" readonly />
+              </div>
+              <div class="input-group trb-span-4">
+                <label class="input-label">Item name</label>
+                <div style="display:flex;gap:8px;">
+                  <select class="input-select" id="tb-item" onchange="trbPickItem(this.value)"></select>
+                  <button type="button" class="btn btn-secondary" onclick="trbOpenItemForm()">+ Add</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="trb-entry-grid">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Billing Details</div>
+              <div class="card-actions">
+                <button class="btn btn-secondary btn-sm" onclick="document.getElementById('tb-files').click()">File Upload</button>
+                <input type="file" id="tb-files" multiple style="display:none;" onchange="trbFilesPicked(this)" />
+                <button class="btn btn-secondary btn-sm" onclick="trbClearEntry()">Clear</button>
+                <button class="btn btn-primary btn-sm" id="tb-btn-save" onclick="trbSaveBill()">Save</button>
+                <button class="btn btn-primary btn-sm" id="tb-btn-save-print" onclick="trbSaveBill('print')">Save &amp; Print</button>
+                <button class="btn btn-primary btn-sm" id="tb-btn-save-download" onclick="trbSaveBill('download')">Save &amp; Download</button>
+                <button class="btn btn-primary btn-sm" id="tb-btn-update" style="display:none;" onclick="trbSaveBill()">Update</button>
+                <button class="btn btn-danger btn-sm" id="tb-btn-delete" style="display:none;" onclick="trbDeleteBill()">Delete</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+                <input type="text" id="tb-grid-search" class="input-text" placeholder="Search: All Text Columns" style="max-width:320px;" oninput="trbRenderRows()" />
+                <button class="btn btn-secondary btn-sm" style="margin-left:auto;" onclick="trbResetRows()">Reset</button>
+              </div>
+              <div class="table-container">
+                <table class="table" style="min-width:900px;">
+                  <thead>
+                    <tr>
+                      <th style="width:40px;"><input type="checkbox" id="tb-check-all" onchange="trbSelectAll(this.checked)" /></th>
+                      <th style="width:40px;"></th>
+                      <th>Item Name</th>
+                      <th>Item Description</th>
+                      <th style="width:100px;">Quantity</th>
+                      <th style="width:100px;">Price</th>
+                      <th style="width:100px;">Total</th>
+                      <th style="width:110px;">Priority Level</th>
+                      <th>Remarks</th>
+                      <th style="width:90px;">Remove</th>
+                    </tr>
+                  </thead>
+                  <tbody id="trb-rows-body"></tbody>
+                </table>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:13px;color:var(--text3);">
+                <span id="tb-selected-count">0 rows selected</span>
+                <span id="tb-row-total">Total 0</span>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Bill Summary</div>
+            </div>
+            <div class="card-body">
+              <div class="trb-sum-row"><label>Pre Due</label><input type="text" class="input-text" id="tb-predue" style="color:var(--red);background:var(--bg3);" readonly /></div>
+              <div class="trb-sum-row"><label>Sub Total</label><input type="text" class="input-text" id="tb-subtotal" style="background:var(--bg3);" readonly /></div>
+              <div class="trb-sum-row"><label>Discount</label><input type="number" step="any" min="0" class="input-text" id="tb-discount" oninput="trbEntrySummary()" /></div>
+              <div class="trb-sum-row"><label>Net</label><input type="text" class="input-text" id="tb-net" style="background:var(--bg3);" readonly /></div>
+              <div class="trb-sum-row"><label>Paid</label><input type="number" step="any" min="0" class="input-text" id="tb-paid" oninput="trbEntrySummary()" /></div>
+              <div class="trb-sum-row"><label>Due</label><input type="text" class="input-text" id="tb-due" style="background:var(--bg3);" readonly /></div>
+              <div class="trb-sum-row"><label>PayMode</label><select class="input-select" id="tb-paymode" style="text-align:left;"></select></div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:20px;">
+          <div class="card-header">
+            <div class="card-title">Invoices</div>
+          </div>
+          <div class="card-body">
+            <div class="table-container" style="max-height:420px;overflow-y:auto;">
+              <table class="table" style="min-width:1200px;">
+                <thead>
+                  <tr>
+                    <th>Customer Name</th>
+                    <th>Invoice No</th>
+                    <th>Invoice Title</th>
+                    <th>Invoice Date</th>
+                    <th>Billing From Date</th>
+                    <th>Billing To Date</th>
+                    <th>Payment Mode</th>
+                    <th class="trb-r">Sub Total</th>
+                    <th class="trb-r">Discount</th>
+                    <th class="trb-r">Net Amount</th>
+                    <th class="trb-r">Paid</th>
+                    <th class="trb-r">Due</th>
+                    <th>Creator</th>
+                  </tr>
+                </thead>
+                <tbody id="tb-invoices-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="trb-bill-list-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Bill List</div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="trbListDownload()">Download CSV</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="trb-filter-row">
+              <div class="input-group" style="flex:1;min-width:260px;">
+                <label class="input-label">Search</label>
+                <input type="text" class="input-text" id="trbl-search" placeholder="Search here with Invoice No/Invoice Title/Creator/" autocomplete="off" oninput="trbListSearch()" />
+              </div>
+              <div class="input-group">
+                <label class="input-label">From Date</label>
+                <input type="date" class="input-text" id="trbl-from" />
+              </div>
+              <div class="input-group">
+                <label class="input-label">To Date</label>
+                <input type="date" class="input-text" id="trbl-to" />
+              </div>
+              <button class="btn btn-success btn-sm" onclick="trbListSearch()">Apply Filter</button>
+              <button class="btn btn-secondary btn-sm" onclick="trbListReset()">Reset</button>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
+              <select class="input-select" id="trbl-field" style="width:190px;" onchange="trbListSearch()">
+                <option value="all">All Columns</option>
+                <option value="no">Invoice No</option>
+                <option value="customerName">Customer Name</option>
+                <option value="title">Invoice Title</option>
+                <option value="creator">Creator</option>
+                <option value="contact">Responsible Contact</option>
+                <option value="remarks">Remarks</option>
+              </select>
+              <input type="text" class="input-text" id="trbl-grid" placeholder="Search..." autocomplete="off" style="max-width:360px;" oninput="trbListSearch()" />
+            </div>
+            <div class="table-container">
+              <table class="table table-fit tf-bills"><colgroup><col style="width:6.8%;"><col style="width:9.5%;"><col style="width:6.7%;"><col style="width:6.2%;"><col style="width:6.2%;"><col style="width:6.2%;"><col style="width:5.6%;"><col style="width:5.6%;"><col style="width:4.8%;"><col style="width:5.6%;"><col style="width:6.9%;"><col style="width:4.9%;"><col style="width:25%;"></colgroup>
+                <thead>
+                  <tr>
+                    <th>Invoice No</th>
+                    <th>Customer Name</th>
+                    <th>Invoice Title</th>
+                    <th>Invoice Date</th>
+                    <th>Bill From Date</th>
+                    <th>Bill To Date</th>
+                    <th class="trb-r">Sub Total</th>
+                    <th class="trb-r">Net Amount</th>
+                    <th class="trb-r">Paid</th>
+                    <th class="trb-r">DUE</th>
+                    <th>Responsible Contact</th>
+                    <th>Remarks</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="trbl-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="trbl-pagination-container" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="trbl-pagination-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="trbl-items-per-page" onchange="trbListPer()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="trbl-pagination-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="trb-bill-due-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Bill Due Collection</div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="trbDueDownload()">Download CSV</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="trb-filter-row">
+              <div class="input-group" style="flex:1;min-width:260px;">
+                <label class="input-label">Search</label>
+                <input type="text" class="input-text" id="trbd-search" placeholder="Search here with Invoice No/Invoice Title/Creator/" autocomplete="off" oninput="trbDueSearch()" />
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+              <select class="input-select" id="trbd-field" style="width:190px;" onchange="trbDueSearch()">
+                <option value="all">All Columns</option>
+                <option value="customerName">Customer Name</option>
+                <option value="no">Invoice No</option>
+                <option value="title">Invoice Title</option>
+                <option value="creator">Creator</option>
+                <option value="contact">Responsible Contact</option>
+                <option value="remarks">Remarks</option>
+              </select>
+              <input type="text" class="input-text" id="trbd-grid" placeholder="Search..." autocomplete="off" style="max-width:360px;" oninput="trbDueSearch()" />
+            </div>
+            <div style="display:none;align-items:center;gap:10px;margin-bottom:16px;">
+              <span style="font-size:12.5px;color:var(--text3);">Filter:</span>
+              <div id="trbd-chip"></div>
+            </div>
+            <div class="table-container">
+              <table class="table table-fit tf-bills"><colgroup><col style="width:6.8%;"><col style="width:9.5%;"><col style="width:6.7%;"><col style="width:6.2%;"><col style="width:6.2%;"><col style="width:6.2%;"><col style="width:5.6%;"><col style="width:5.6%;"><col style="width:4.8%;"><col style="width:5.6%;"><col style="width:6.9%;"><col style="width:4.9%;"><col style="width:25%;"></colgroup>
+                <thead>
+                  <tr>
+                    <th>Invoice No</th>
+                    <th>Customer Name</th>
+                    <th>Invoice Title</th>
+                    <th>Invoice Date</th>
+                    <th>Bill From Date</th>
+                    <th>Bill To Date</th>
+                    <th class="trb-r">Sub Total</th>
+                    <th class="trb-r">Net Amount</th>
+                    <th class="trb-r">Paid</th>
+                    <th class="trb-r">DUE</th>
+                    <th>Responsible Contact</th>
+                    <th>Remarks</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="trbd-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="trbd-pagination-container" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="trbd-pagination-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="trbd-items-per-page" onchange="trbDuePer()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="trbd-pagination-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="trb-bill-history-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Bill Collection History</div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="trbHistDownload()">Download CSV</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+              <select class="input-select" id="trbh-field" style="width:190px;" onchange="trbHistSearch()">
+                <option value="all">All Columns</option>
+                <option value="customerName">Customer Name</option>
+                <option value="title">Invoice Title</option>
+                <option value="accountId">Account ID</option>
+                <option value="no">Invoice No</option>
+                <option value="type">Collection Type</option>
+                <option value="payMode">Payment Mode</option>
+                <option value="remarks">Remarks</option>
+                <option value="creator">Creator</option>
+              </select>
+              <input type="text" class="input-text" id="trbh-grid" placeholder="Search..." autocomplete="off" style="max-width:360px;" oninput="trbHistSearch()" />
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+              <span style="font-size:12.5px;color:var(--text3);">Filter:</span>
+              <div id="trbh-chip"></div>
+            </div>
+            <div class="table-container">
+              <table class="table" style="min-width:1500px;">
+                <thead>
+                  <tr>
+                    <th>#SL</th>
+                    <th>Customer Name</th>
+                    <th>Invoice Title</th>
+                    <th>Account ID</th>
+                    <th>Invoice No</th>
+                    <th>Collection Type</th>
+                    <th class="trb-r">Sub Total</th>
+                    <th class="trb-r">Discount</th>
+                    <th class="trb-r">Extra Discount</th>
+                    <th class="trb-r">Net Amount</th>
+                    <th class="trb-r">Paid</th>
+                    <th class="trb-r">Due</th>
+                    <th>Payment Mode</th>
+                    <th>Collection Date</th>
+                    <th>Remarks</th>
+                    <th>Creator</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="trbh-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="trbh-pagination-container" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="trbh-pagination-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="trbh-items-per-page" onchange="trbHistPer()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="trbh-pagination-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="trb-dashboard-page" class="page">
+        <style>
+          .dsh-row { display:flex; align-items:center; gap:14px; margin-bottom:12px; }
+          .dsh-row label { width:170px; flex:none; font-size:13px; color:var(--text2); text-align:right; }
+          .dsh-row input { width:260px; background:var(--bg3); text-align:left; }
+        </style>
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-header">
+            <div class="card-title">Last Month Update</div>
+          </div>
+          <div class="card-body" id="dsh-last"></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">This Month Update</div>
+          </div>
+          <div class="card-body" id="dsh-this"></div>
+        </div>
+      </div>
+
+      <div id="dash-report-page" class="page">
+        <style>
+          .dsr-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+          .dsr-actions { display:flex; justify-content:space-between; align-items:center; margin-top:16px; gap:10px; }
+          .dsr-actions-right { display:flex; gap:8px; }
+          .dsr-sheet { background:#fff; color:#000; padding:18px 12px 24px; font-family:'Times New Roman', serif; }
+          .dsr-head { text-align:center; font-size:14px; line-height:1.5; font-weight:700; }
+          .dsr-head .dsr-co { font-size:20px; }
+          .dsr-head u { text-decoration:underline; }
+          .dsr-printdate { text-align:right; font-size:12px; margin:6px 4px 14px; font-family:Arial, sans-serif; }
+          .dsr-scroll { overflow-x:hidden; }
+          .dsr-table { width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed; }
+          .dsr-table th, .dsr-table td { word-wrap:break-word; overflow-wrap:anywhere; }
+          .dsr-table th:nth-child(1) { width:3%; }
+          .dsr-table th:nth-child(2) { width:4%; }
+          .dsr-table th:nth-child(3) { width:11%; }
+          .dsr-table th:nth-child(4) { width:9%; }
+          .dsr-table th:nth-child(5) { width:5%; }
+          .dsr-table th:nth-child(6) { width:5%; }
+          .dsr-table th:nth-child(7) { width:5%; }
+          .dsr-table th:nth-child(8) { width:5%; }
+          .dsr-table th:nth-child(9) { width:11%; }
+          .dsr-table th:nth-child(10) { width:5%; }
+          .dsr-table th:nth-child(11) { width:5%; }
+          .dsr-table th:nth-child(12) { width:5%; }
+          .dsr-table th:nth-child(13) { width:4%; }
+          .dsr-table th:nth-child(14) { width:4%; }
+          .dsr-table th:nth-child(15) { width:5%; }
+          .dsr-table th:nth-child(16) { width:4%; }
+          .dsr-table th:nth-child(17) { width:6%; }
+          .dsr-table th:nth-child(18) { width:4%; }
+          .dsr-table th, .dsr-table td { border:1px solid #000; padding:3px 4px; text-align:center; vertical-align:middle; }
+          .dsr-table th { font-weight:700; }
+          .dsr-table td.dsr-left { text-align:left; }
+          .dsr-link { color:#e11d1d; cursor:pointer; text-decoration:none; }
+          .dsr-link:hover { text-decoration:underline; }
+          .dsr-sign { margin-top:26px; font-size:14px; font-weight:700; text-decoration:underline; }
+          .ir-sheet { background:#fff; color:#1a1a1a; max-width:760px; margin:0 auto; padding:26px 34px 34px; font-family:Arial, sans-serif; border:1px solid var(--border); }
+          .ir-title { text-align:center; font-weight:700; font-size:15px; margin-bottom:22px; }
+          .ir-field { margin-bottom:12px; }
+          .ir-field label { display:block; font-size:12px; font-weight:700; margin-bottom:4px; color:#1a1a1a; }
+          .ir-field input, .ir-field textarea { width:100%; border:1px solid #9a9a9a; border-radius:2px; padding:7px 8px; font-size:13px; font-family:inherit; background:#fff; color:#000; }
+          .ir-field textarea { resize:vertical; }
+          .ir-row { display:flex; gap:16px; }
+          .ir-row .ir-field { flex:1; }
+          .ir-sign-row { display:flex; justify-content:space-between; gap:26px; margin-top:70px; }
+          .ir-sign { flex:1; text-align:center; font-size:11px; }
+          .ir-sign-name { min-height:15px; font-size:11px; }
+          .ir-sign-line { border-top:1px dotted #000; padding-top:3px; }
+          .ir-sign-row.ir-second { margin-top:90px; }
+        </style>
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-header">
+            <div class="card-title">Select Date</div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="dashBackToDashboard()">Back to Dashboard</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="input-group">
+              <label class="input-label">Select Name</label>
+              <select class="input-select" id="dsr-name"></select>
+            </div>
+            <div class="dsr-grid">
+              <div class="input-group" style="margin-bottom:0;">
+                <label class="input-label">From Date</label>
+                <input type="date" class="input-text" id="dsr-from" />
+              </div>
+              <div class="input-group" style="margin-bottom:0;">
+                <label class="input-label">To Date</label>
+                <input type="date" class="input-text" id="dsr-to" />
+              </div>
+            </div>
+            <div class="dsr-actions">
+              <button class="btn btn-secondary btn-sm" onclick="dashRefreshReport()">Refresh</button>
+              <div class="dsr-actions-right">
+                <button class="btn btn-warning btn-sm" onclick="dashPrintReport()">Print</button>
+                <button class="btn btn-success btn-sm" onclick="dashShowReport()">Show Report</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">New Client List</div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="dsr-sheet" id="dsr-sheet">
+              <div class="dsr-head">
+                <div class="dsr-co">Telerad Bangladesh Ltd.</div>
+                <div>Afza Tower, Flat # 5/A, 27/F, Sangsad Avenue, Monipuri Para, Tejgaon,<br />Dhaka-1215</div>
+                <div>Govt. Reg. No . C-124093/2015</div>
+                <div>Hotline No- 01979797234-35; 01730716541-<br />42; Accounts Contact No-01940333381</div>
+                <div><u id="dsr-by">Bill/Income Statement By</u></div>
+                <div><u id="dsr-range">From : To :</u></div>
+              </div>
+              <div class="dsr-printdate" id="dsr-printdate"></div>
+              <div class="dsr-scroll">
+                <table class="dsr-table">
+                  <thead>
+                    <tr>
+                      <th>SL#</th>
+                      <th>Client Id</th>
+                      <th>Hospital Name</th>
+                      <th>Address</th>
+                      <th>District</th>
+                      <th>Division</th>
+                      <th>Thana</th>
+                      <th>Upazila</th>
+                      <th>Manager &amp; Technologist Name &amp; Number</th>
+                      <th>Modalities</th>
+                      <th>Server Details</th>
+                      <th>Pricing Details</th>
+                      <th>Setup Charge</th>
+                      <th>Receive By</th>
+                      <th>Instructed By</th>
+                      <th>Install By</th>
+                      <th>Connection Date</th>
+                      <th>Header</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dsr-body"></tbody>
+                </table>
+              </div>
+              <div class="dsr-sign">Authority Signature</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="dash-install-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Teleradiology Installation Report</div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="dashBackToReport()">Back</button>
+              <button class="btn btn-warning btn-sm" onclick="dashPrintInstall()">Print</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="ir-sheet">
+              <div class="ir-title">Teleradiology Installation Report</div>
+              <div class="ir-row">
+                <div class="ir-field"><label>1. Client ID:</label><input type="text" id="ir-id" /></div>
+                <div class="ir-field"><label>2. Date:</label><input type="text" id="ir-date" /></div>
+              </div>
+              <div class="ir-field"><label>3. Hospital Name:</label><input type="text" id="ir-hospital" /></div>
+              <div class="ir-field"><label>4. Full Address:</label><textarea id="ir-address" rows="3"></textarea></div>
+              <div class="ir-row">
+                <div class="ir-field"><label>5. P.O -</label><input type="text" id="ir-po" /></div>
+                <div class="ir-field"><label>Upazila:</label><input type="text" id="ir-upazila" /></div>
+                <div class="ir-field"><label>Dist:</label><input type="text" id="ir-dist" /></div>
+                <div class="ir-field"><label>Div:</label><input type="text" id="ir-div" /></div>
+              </div>
+              <div class="ir-field"><label>6. Manager &amp; Technologist Name &amp; Phone:</label><textarea id="ir-manager" rows="3"></textarea></div>
+              <div class="ir-row">
+                <div class="ir-field"><label>7. Modalities:</label><input type="text" id="ir-modalities" /></div>
+                <div class="ir-field"><label>8. Server Detail:</label><input type="text" id="ir-server" /></div>
+              </div>
+              <div class="ir-field"><label>9. Pricing Details:</label><input type="text" id="ir-pricing" /></div>
+              <div class="ir-row">
+                <div class="ir-field"><label>10. Setup Charge Amount:</label><input type="text" id="ir-setup" /></div>
+                <div class="ir-field"><label>11. Received By:</label><input type="text" id="ir-received" /></div>
+              </div>
+              <div class="ir-field"><label>12. Comments:</label><textarea id="ir-comments" rows="4"></textarea></div>
+              <div class="ir-sign-row">
+                <div class="ir-sign"><div class="ir-sign-name" id="ir-instructed"></div><div class="ir-sign-line">Instructed By</div></div>
+                <div class="ir-sign"><div class="ir-sign-name" id="ir-installed"></div><div class="ir-sign-line">Installed By</div></div>
+                <div class="ir-sign"><div class="ir-sign-name"></div><div class="ir-sign-line">Hospital Authority</div></div>
+              </div>
+              <div class="ir-sign-row ir-second">
+                <div class="ir-sign"><div class="ir-sign-line">Manager/Incharge<br />Telerad Bangladesh Ltd</div></div>
+                <div class="ir-sign"><div class="ir-sign-line">Authority<br />Telerad Bangladesh Ltd</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="compose-message-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Compose Message</div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
+              <div class="input-group" style="margin-bottom:0;">
+                <label class="input-label">Customer Name</label>
+                <select class="input-select" id="msg-customer" onchange="msgCustomerPicked()"></select>
+              </div>
+              <div class="input-group" style="margin-bottom:0;">
+                <label class="input-label">Invoice ID</label>
+                <select class="input-select" id="msg-invoice"></select>
+              </div>
+              <div class="input-group" style="margin-bottom:0;">
+                <label class="input-label">Contact Type</label>
+                <select class="input-select" id="msg-contact-type" onchange="msgContactTypeChanged()">
+                  <option value="Responsible Contact">Responsible Contact</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="input-group" style="margin-bottom:0;">
+                <label class="input-label">Sms To</label>
+                <input type="text" class="input-text" id="msg-to" list="msg-to-list" autocomplete="off" />
+                <datalist id="msg-to-list"></datalist>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;font-size:13px;color:var(--text2);">
+              <span>Attached Url?</span>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="msg-url" value="No" checked /> No</label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="msg-url" value="Yes" /> Yes</label>
+            </div>
+            <div class="input-group">
+              <label class="input-label">Write Message</label>
+              <textarea class="input-textarea" id="msg-text" rows="6" maxlength="640"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;">
+              <button class="btn btn-success" onclick="msgSend()">Send</button>
+              <button class="btn btn-secondary" onclick="msgClear()">Clear</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="bill-send-pending-page" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Bill Send Pending</div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="bspDownload()">Download CSV</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;">
+              <div class="input-group" style="margin-bottom:0;">
+                <label class="input-label">From Date</label>
+                <input type="date" class="input-text" id="bsp-from" />
+              </div>
+              <div class="input-group" style="margin-bottom:0;">
+                <label class="input-label">To Date</label>
+                <input type="date" class="input-text" id="bsp-to" />
+              </div>
+              <button class="btn btn-danger btn-sm" onclick="bspSearch()">Apply Filter</button>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
+              <select class="input-select" id="bsp-field" style="width:190px;" onchange="bspSearch()">
+                <option value="all">All Columns</option>
+                <option value="code">Customer Code</option>
+                <option value="name">Customer Name</option>
+                <option value="division">Division</option>
+                <option value="district">District</option>
+                <option value="thana">Thana</option>
+                <option value="instructedBy">Instructed By</option>
+                <option value="connectionBy">Connection By</option>
+                <option value="serverStatus">Server Status</option>
+                <option value="remarks">Remarks</option>
+              </select>
+              <input type="text" class="input-text" id="bsp-grid" placeholder="Search..." autocomplete="off" style="max-width:360px;" oninput="bspSearch()" />
+            </div>
+            <div class="table-container">
+              <table class="table" style="min-width:1500px;">
+                <thead>
+                  <tr>
+                    <th>Customer Id</th>
+                    <th>Customer Code</th>
+                    <th>Customer Name</th>
+                    <th>Reg Date</th>
+                    <th>Address</th>
+                    <th>Division</th>
+                    <th>District</th>
+                    <th>Thana</th>
+                    <th>Instructed By</th>
+                    <th>Connection By</th>
+                    <th>Connection Date</th>
+                    <th>Connection Status</th>
+                    <th>Server Status</th>
+                    <th>Remarks</th>
+                  </tr>
+                </thead>
+                <tbody id="bsp-body"></tbody>
+              </table>
+            </div>
+            <div class="pagination-container" id="bsp-pagination-container" style="display: none;">
+              <div class="pagination-wrapper">
+                <div class="pagination-info">
+                  <span id="bsp-pagination-info"></span>
+                </div>
+                <div class="pagination-controls">
+                  <div class="items-per-page">
+                    <label>Items per page:</label>
+                    <select id="bsp-items-per-page" onchange="bspPer()">
+                      <option value="10">10</option>
+                      <option value="25" selected>25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div class="pagination-buttons" id="bsp-pagination-buttons"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="amount-wise-client-page" class="page">
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-header">
+            <div class="card-title">Amount Wise client Search</div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="awRefresh()">Refresh</button>
+              <button class="btn btn-secondary btn-sm" onclick="awPrint()">Print</button>
+              <button class="btn btn-success btn-sm" onclick="awShow()">Show Report</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+              <div class="input-group" style="margin-bottom:0;">
+                <label class="input-label">Amount 1</label>
+                <input type="number" step="any" min="0" class="input-text" id="aw-amount1" />
+              </div>
+              <div class="input-group" style="margin-bottom:0;">
+                <label class="input-label">Amount 2</label>
+                <input type="number" step="any" min="0" class="input-text" id="aw-amount2" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">List</div>
+          </div>
+          <div class="card-body">
+            <div style="text-align:center;margin-bottom:18px;line-height:1.8;">
+              <div style="font-size:18px;font-weight:700;color:var(--text);">Telerad Bangladesh Ltd.</div>
+              <div style="font-size:13px;color:var(--text2);">Afza Tower, Flat # 5/A, 35/F, Sangsad Avenue, Monipuri Para, Tejgaon, Dhaka-1215</div>
+              <div style="font-size:13px;color:var(--text2);">Hotline No- 01979797234-35; Accounts Contact No-01940333381</div>
+              <div style="font-size:13px;font-weight:600;color:var(--text);" id="aw-range"></div>
+            </div>
+            <div class="table-container" style="max-height:520px;overflow-y:auto;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width:70px;">SL#</th>
+                    <th style="width:130px;">Customer ID</th>
+                    <th>Client Name</th>
+                    <th class="trb-r" style="width:180px;">Total Due</th>
+                  </tr>
+                </thead>
+                <tbody id="aw-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="trb-home-page" class="page">
+        <style>
+          .home-tiles { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+          .home-tile { border:none; border-radius:var(--radius); background:var(--accent); color:#fff; font-size:20px; font-weight:700; padding:22px 16px; cursor:pointer; transition:transform 0.15s ease, box-shadow 0.15s ease; }
+          .home-tile:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,0.15); }
+          .home-tile.active { box-shadow:0 0 0 3px var(--accent-glow), 0 6px 16px rgba(0,0,0,0.15); }
+          .home-hero { text-align:center; padding:34px 20px 10px; background:linear-gradient(180deg, #f2f7fd 0%, #dfeaf7 100%); }
+          .home-hero h1 { font-size:46px; font-weight:800; color:#2b62a8; margin:0 0 6px; letter-spacing:-1px; }
+          .home-hero p { font-size:18px; color:#4a5a70; margin:0 0 6px; }
+          .home-hero svg { width:100%; max-width:900px; height:clamp(260px, calc(100vh - 340px), 520px); display:block; margin:0 auto; overflow:visible; }
+          #trb-home-page .card { overflow:hidden; }
+          #trb-home-page .home-hero { padding:28px 20px 24px; }
+          #trb-home-page .home-hero h1 { font-size:42px; }
+        </style>
+        <div class="card">
+          <div class="home-hero">
+            <h1>Accounts &amp; Billing</h1>
+            <p>Manage your payments and invoices</p>
+            <svg viewBox="0 0 840 470" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Accounts and billing illustration">
+              <ellipse cx="420" cy="140" rx="330" ry="70" fill="#cfe0f3" opacity="0.6"></ellipse>
+              <ellipse cx="640" cy="120" rx="120" ry="38" fill="#e8f1fb"></ellipse>
+              <ellipse cx="210" cy="130" rx="110" ry="34" fill="#e8f1fb"></ellipse>
+
+              <rect x="30" y="110" width="310" height="205" rx="12" fill="#cfd9e8" stroke="#8fa5c4" stroke-width="3"></rect>
+              <rect x="42" y="122" width="286" height="181" rx="6" fill="#eef3fa"></rect>
+              <text x="62" y="148" font-size="17" font-weight="700" fill="#35609b">Invoices</text>
+              <circle cx="262" cy="144" r="3.5" fill="#9fb3cf"></circle><circle cx="278" cy="144" r="3.5" fill="#9fb3cf"></circle><circle cx="294" cy="144" r="3.5" fill="#9fb3cf"></circle>
+              <rect x="62" y="170" width="70" height="7" rx="3" fill="#b8c7dd"></rect>
+              <rect x="62" y="205" width="90" height="7" rx="3" fill="#b8c7dd"></rect>
+              <rect x="62" y="240" width="80" height="7" rx="3" fill="#b8c7dd"></rect>
+              <rect x="190" y="164" width="44" height="20" rx="10" fill="#5fae4e"></rect><text x="200" y="179" font-size="11" fill="#fff" font-weight="700">Paid</text>
+              <rect x="190" y="198" width="44" height="20" rx="10" fill="#5fae4e"></rect><text x="200" y="213" font-size="11" fill="#fff" font-weight="700">Paid</text>
+              <rect x="190" y="232" width="44" height="20" rx="10" fill="#d9483b"></rect><text x="201" y="247" font-size="11" fill="#fff" font-weight="700">Due</text>
+              <text x="266" y="180" font-size="14" font-weight="700" fill="#2b3a52">$1.00</text>
+              <text x="266" y="214" font-size="14" font-weight="700" fill="#2b3a52">$7.00</text>
+              <text x="266" y="248" font-size="14" font-weight="700" fill="#2b3a52">$3.00</text>
+              <rect x="170" y="315" width="40" height="22" fill="#9fb0c8"></rect>
+              <rect x="130" y="335" width="120" height="10" rx="5" fill="#8fa5c4"></rect>
+
+              <g transform="translate(70 170) rotate(-6)">
+                <rect width="120" height="215" rx="18" fill="#fff" stroke="#3e5a86" stroke-width="5"></rect>
+                <rect x="40" y="10" width="40" height="6" rx="3" fill="#3e5a86"></rect>
+                <text x="60" y="48" font-size="15" font-weight="700" fill="#35609b" text-anchor="middle">Payment</text>
+                <rect x="14" y="62" width="92" height="58" rx="8" fill="#3f6cb8"></rect>
+                <rect x="22" y="72" width="20" height="14" rx="3" fill="#f1c24b"></rect>
+                <text x="26" y="110" font-size="13" font-weight="700" fill="#fff">$250.00</text>
+                <rect x="14" y="132" width="92" height="8" rx="4" fill="#d6dfec"></rect>
+                <rect x="14" y="148" width="60" height="8" rx="4" fill="#d6dfec"></rect>
+                <rect x="14" y="170" width="92" height="30" rx="8" fill="#e04a3c"></rect>
+                <text x="60" y="190" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">Pay Now</text>
+              </g>
+
+              <rect x="330" y="70" width="240" height="310" rx="16" fill="#d9b673" stroke="#a98642" stroke-width="3"></rect>
+              <rect x="348" y="96" width="204" height="268" fill="#fff"></rect>
+              <path d="M410 70 q0 -30 40 -30 q40 0 40 30 z" fill="#c7ccd3" stroke="#8d949e" stroke-width="3"></path>
+              <rect x="400" y="66" width="100" height="22" rx="6" fill="#aeb4bd"></rect>
+              <text x="450" y="132" font-size="28" font-weight="800" fill="#2b3a52" text-anchor="middle">INVOICE</text>
+              <rect x="366" y="152" width="168" height="5" fill="#cfd6e2"></rect>
+              <rect x="366" y="176" width="110" height="5" fill="#cfd6e2"></rect>
+              <rect x="366" y="206" width="90" height="8" fill="#b8c4d6"></rect><rect x="490" y="206" width="40" height="8" fill="#b8c4d6"></rect>
+              <rect x="366" y="230" width="90" height="8" fill="#b8c4d6"></rect><rect x="490" y="230" width="40" height="8" fill="#b8c4d6"></rect>
+              <rect x="366" y="254" width="90" height="8" fill="#b8c4d6"></rect><rect x="490" y="254" width="40" height="8" fill="#b8c4d6"></rect>
+              <g transform="translate(372 300) rotate(-6)">
+                <rect width="82" height="40" fill="none" stroke="#d9483b" stroke-width="3"></rect>
+                <text x="41" y="30" font-size="28" font-weight="800" fill="#d9483b" text-anchor="middle">DUE</text>
+              </g>
+              <text x="530" y="330" font-size="24" font-weight="800" fill="#2b3a52" text-anchor="end">$450.00</text>
+
+              <rect x="580" y="90" width="170" height="135" rx="6" fill="#fff" stroke="#c4ccd8" stroke-width="2"></rect>
+              <rect x="580" y="90" width="170" height="26" rx="6" fill="#d94a3c"></rect>
+              <circle cx="640" cy="170" r="22" fill="#fff" stroke="#d94a3c" stroke-width="4"></circle>
+              <path d="M630 170 l8 9 l14 -18" fill="none" stroke="#d94a3c" stroke-width="4"></path>
+              <circle cx="765" cy="100" r="34" fill="#4fae3e"></circle>
+              <path d="M748 100 l12 13 l22 -26" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"></path>
+
+              <g transform="translate(640 215) rotate(6)">
+                <rect width="150" height="190" fill="#fff" stroke="#c4ccd8" stroke-width="2"></rect>
+                <text x="14" y="34" font-size="17" font-weight="700" fill="#2b3a52">Billing Statement</text>
+                <rect x="14" y="56" width="120" height="6" fill="#d6dfec"></rect>
+                <rect x="14" y="80" width="120" height="6" fill="#d6dfec"></rect>
+                <rect x="14" y="104" width="120" height="6" fill="#d6dfec"></rect>
+                <rect x="14" y="128" width="120" height="6" fill="#d6dfec"></rect>
+              </g>
+
+              <circle cx="575" cy="285" r="58" fill="#fff" stroke="#2b5fb4" stroke-width="9"></circle>
+              <circle cx="575" cy="285" r="44" fill="#f7f9fc"></circle>
+              <line x1="575" y1="285" x2="575" y2="253" stroke="#2b3a52" stroke-width="4" stroke-linecap="round"></line>
+              <line x1="575" y1="285" x2="598" y2="300" stroke="#2b3a52" stroke-width="4" stroke-linecap="round"></line>
+              <circle cx="575" cy="285" r="4" fill="#2b3a52"></circle>
+              <circle cx="530" cy="232" r="12" fill="#2b5fb4"></circle><circle cx="620" cy="232" r="12" fill="#2b5fb4"></circle>
+
+              <g transform="translate(610 330) rotate(-12)">
+                <rect width="150" height="120" rx="12" fill="#e8edf4" stroke="#aeb8c8" stroke-width="3"></rect>
+                <rect x="12" y="12" width="126" height="26" rx="4" fill="#9fc3a3"></rect>
+                <text x="132" y="32" font-size="17" font-weight="700" fill="#2b3a52" text-anchor="end">1234</text>
+                <g fill="#c9d2e0">
+                  <rect x="12" y="50" width="26" height="16" rx="3"></rect><rect x="46" y="50" width="26" height="16" rx="3"></rect><rect x="80" y="50" width="26" height="16" rx="3"></rect><rect x="112" y="50" width="26" height="16" rx="3" fill="#e5a03a"></rect>
+                  <rect x="12" y="74" width="26" height="16" rx="3"></rect><rect x="46" y="74" width="26" height="16" rx="3"></rect><rect x="80" y="74" width="26" height="16" rx="3"></rect><rect x="112" y="74" width="26" height="40" rx="3" fill="#d9483b"></rect>
+                  <rect x="12" y="98" width="26" height="16" rx="3"></rect><rect x="46" y="98" width="26" height="16" rx="3"></rect><rect x="80" y="98" width="26" height="16" rx="3"></rect>
+                </g>
+              </g>
+
+              <g>
+                <ellipse cx="300" cy="400" rx="46" ry="12" fill="#c98f1f"></ellipse>
+                <rect x="254" y="378" width="92" height="22" fill="#e0aa2e"></rect>
+                <ellipse cx="300" cy="378" rx="46" ry="12" fill="#f1c24b"></ellipse>
+                <rect x="254" y="356" width="92" height="22" fill="#e0aa2e"></rect>
+                <ellipse cx="300" cy="356" rx="46" ry="12" fill="#f1c24b"></ellipse>
+                <rect x="254" y="334" width="92" height="22" fill="#e0aa2e"></rect>
+                <ellipse cx="300" cy="334" rx="46" ry="12" fill="#f5d36a"></ellipse>
+                <text x="300" y="339" font-size="14" font-weight="800" fill="#b57f12" text-anchor="middle">$</text>
+              </g>
+              <g transform="translate(20 340) rotate(-8)">
+                <rect width="180" height="70" rx="6" fill="#7cb86a" stroke="#4d8a42" stroke-width="3"></rect>
+                <circle cx="90" cy="35" r="18" fill="#a6d391" stroke="#4d8a42" stroke-width="2"></circle>
+                <text x="90" y="42" font-size="18" font-weight="800" fill="#4d8a42" text-anchor="middle">$</text>
+              </g>
+              <g transform="translate(400 410) rotate(8)">
+                <rect width="130" height="12" rx="6" fill="#2b3a52"></rect>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="admin-footer">
+      <div class="admin-footer-content">
+        <div class="admin-footer-left">© 2026 Telesoft. All rights reserved.</div>
+        <div class="admin-footer-right">Developed by Yasir | 01752822254</div>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<div class="modal-overlay" id="contact-info-modal">
+  <style>
+    #contact-info-modal .modal { max-width:1100px; }
+    #contact-info-modal .ci-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:14px 0; }
+    #contact-info-modal .ci-bar .input-text { width:240px; }
+    #contact-info-modal .ci-bar .input-select { width:140px; }
+    #contact-info-modal .input-group { margin-bottom:0; }
+    #ci-body td { padding:6px 8px; }
+    #ci-body input[type=text], #ci-body select { width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; color:var(--text); background:var(--bg2); }
+  </style>
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Contact Info</div>
+      <button class="modal-close" onclick="closeModal('contact-info-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="input-group">
+        <label class="input-label">Customer Name</label>
+        <input type="text" class="input-text" id="ci-customer" readonly style="background:var(--bg3);" />
+      </div>
+      <div class="ci-bar">
+        <input type="text" class="input-text" id="ci-search" placeholder="Search All Text Columns" autocomplete="off" onkeydown="if(event.key==='Enter')contactInfoGo()" />
+        <button class="btn btn-secondary btn-sm" onclick="contactInfoGo()">Go</button>
+        <select class="input-select" id="ci-actions" onchange="contactInfoAction(this.value)">
+          <option value="">Actions</option>
+          <option value="delete">Delete Selected</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="contactInfoSave()">Save</button>
+        <button class="btn btn-secondary btn-sm" onclick="contactInfoAddRow()">Add Row</button>
+        <button class="btn btn-secondary btn-sm" onclick="contactTypeOpen()">Add Contact Type</button>
+      </div>
+      <div class="table-container">
+        <table class="table" style="min-width:820px;">
+          <thead>
+            <tr>
+              <th style="width:40px;"><input type="checkbox" id="ci-check-all" onchange="contactInfoSelectAll(this.checked)" /></th>
+              <th>Contact Name</th>
+              <th>Contact Number</th>
+              <th style="width:200px;">Contact Type</th>
+              <th>Designation</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody id="ci-body"></tbody>
+        </table>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:13px;color:var(--text3);">
+        <span id="ci-selected-count">0 rows selected</span>
+        <span id="ci-total">Total 0</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="contact-type-modal">
+  <style>
+    #contact-type-modal .modal { max-width:620px; }
+    #contact-type-modal .input-group { margin-bottom:0; }
+  </style>
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Contact Type</div>
+      <button class="modal-close" onclick="closeModal('contact-type-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="input-group">
+        <label class="input-label">Contact Type Name</label>
+        <input type="text" class="input-text" id="ct-name" maxlength="100" autocomplete="off" onkeydown="if(event.key==='Enter')contactTypeSave()" />
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin:12px 0;">
+        <button class="btn btn-primary btn-sm" onclick="contactTypeSave()">Save</button>
+      </div>
+      <div style="font-weight:600;margin-bottom:8px;">Contact Type List</div>
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width:60px;">#</th>
+              <th>Contact Type Name</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody id="ct-body"></tbody>
+        </table>
+      </div>
+      <div style="text-align:right;margin-top:10px;font-size:13px;color:var(--text3);" id="ct-count"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="customer-modal">
+  <style>
+    #customer-modal .cu-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:14px; }
+    #customer-modal .cu-2 { grid-column:span 2; }
+    #customer-modal .cu-3 { grid-column:span 3; }
+    #customer-modal .cu-4 { grid-column:span 4; }
+    #customer-modal .cu-6 { grid-column:span 6; }
+    #customer-modal .input-group { margin-bottom:0; }
+  </style>
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Customer Entry Form</div>
+      <button class="modal-close" onclick="closeModal('customer-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="cu-error"></div>
+      <div class="cu-grid">
+        <div class="input-group cu-6">
+          <label class="input-label">Customer Code</label>
+          <input type="text" class="input-text" id="cu-code" maxlength="50" />
+        </div>
+        <div class="input-group cu-6">
+          <label class="input-label">Customer Name <span style="color: var(--red);">*</span></label>
+          <input type="text" class="input-text" id="cu-name" maxlength="150" />
+        </div>
+        <div class="input-group cu-3">
+          <label class="input-label">Username</label>
+          <input type="text" class="input-text" id="cu-username" maxlength="100" autocomplete="off" />
+        </div>
+        <div class="input-group cu-3">
+          <label class="input-label">Password</label>
+          <input type="password" class="input-text" id="cu-password" maxlength="100" autocomplete="new-password" />
+        </div>
+        <div class="input-group cu-2">
+          <label class="input-label">Division</label>
+          <select class="input-select" id="cu-division" onchange="customerDivisionChanged()"></select>
+        </div>
+        <div class="input-group cu-2">
+          <label class="input-label">District</label>
+          <select class="input-select" id="cu-district" onchange="customerDistrictChanged()"></select>
+        </div>
+        <div class="input-group cu-2">
+          <label class="input-label">Thana</label>
+          <select class="input-select" id="cu-thana"></select>
+        </div>
+        <div class="input-group cu-6">
+          <label class="input-label">Address</label>
+          <textarea class="input-textarea" id="cu-address" rows="3" maxlength="500"></textarea>
+        </div>
+        <div class="input-group cu-3">
+          <label class="input-label">Instructed By</label>
+          <input type="text" class="input-text" id="cu-instructed" maxlength="100" />
+        </div>
+        <div class="input-group cu-3">
+          <label class="input-label">Connection By</label>
+          <input type="text" class="input-text" id="cu-connection-by" maxlength="100" />
+        </div>
+        <div class="input-group cu-2">
+          <label class="input-label">Connection Date</label>
+          <input type="date" class="input-text" id="cu-conn-date" />
+        </div>
+        <div class="input-group cu-2">
+          <label class="input-label">Connection Status</label>
+          <select class="input-select" id="cu-conn-status">
+            <option value="">Select</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </div>
+        <div class="input-group cu-2">
+          <label class="input-label">Reg Date</label>
+          <input type="date" class="input-text" id="cu-reg-date" />
+        </div>
+        <div class="input-group cu-2">
+          <label class="input-label">Server Status</label>
+          <select class="input-select" id="cu-server-status">
+            <option value=""></option>
+            <option value=".com">.com</option>
+            <option value=".info">.info</option>
+            <option value=".net">.net</option>
+            <option value=".org">.org</option>
+            <option value="Teleradpacs">Teleradpacs</option>
+          </select>
+        </div>
+        <div class="input-group cu-2">
+          <label class="input-label">Customer Type</label>
+          <select class="input-select" id="cu-type">
+            <option value=""></option>
+            <option value="Pusher">Pusher</option>
+            <option value="Default">Default</option>
+            <option value="Off">Off</option>
+          </select>
+        </div>
+        <div class="input-group cu-2">
+          <label class="input-label">Remarks</label>
+          <textarea class="input-textarea" id="cu-remarks" rows="3" maxlength="500"></textarea>
+        </div>
+        <div class="input-group cu-6">
+          <label class="input-label">Responsible Contract</label>
+          <input type="text" class="input-text" id="cu-contact" maxlength="150" />
+        </div>
+        <div class="cu-6">
+          <button type="button" class="btn btn-secondary" style="width:100%;" onclick="openThanaEntry()">+ Thana Add</button>
+        </div>
+        <div class="input-group cu-6">
+          <label class="input-label">Pricing Details <span style="color: var(--red);">*</span></label>
+          <textarea class="input-textarea" id="cu-pricing" rows="3" maxlength="1000"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('customer-modal')">Cancel</button>
+      <button class="btn btn-primary" id="cu-save-btn" onclick="saveCustomer()">Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="thana-entry-modal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">Thana Entry</div>
+      <button class="modal-close" onclick="closeModal('thana-entry-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="te-error"></div>
+      <div class="input-group">
+        <label class="input-label">District Id</label>
+        <select class="input-select" id="te-district-id" onchange="thanaEntryDistrictChanged()"></select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">District Name</label>
+        <input type="text" class="input-text" id="te-district-name" style="background:var(--bg3);" readonly />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Thana Name <span style="color: var(--red);">*</span></label>
+        <input type="text" class="input-text" id="te-thana-name" maxlength="100" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" style="margin-right:auto;" onclick="refreshThanaEntry()">Refresh</button>
+      <button class="btn btn-secondary" onclick="closeModal('thana-entry-modal')">Back</button>
+      <button class="btn btn-primary" onclick="saveThanaEntry()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="item-modal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <div class="modal-title" id="it-modal-title">Add Item</div>
+      <button class="modal-close" onclick="closeModal('item-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="it-error"></div>
+      <div class="input-group">
+        <label class="input-label">Item Name <span style="color: var(--red);">*</span></label>
+        <input type="text" class="input-text" id="it-name" maxlength="300" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Item Type</label>
+        <select class="input-select" id="it-type"></select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Item Description</label>
+        <textarea class="input-textarea" id="it-description" rows="3" maxlength="500"></textarea>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Price <span style="color: var(--red);">*</span></label>
+        <input type="number" step="any" min="0" class="input-text" id="it-price" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Remarks</label>
+        <input type="text" class="input-text" id="it-remarks" maxlength="300" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="it-delete-btn" style="margin-right:auto;display:none;" onclick="deleteItem()">Delete</button>
+      <button class="btn btn-secondary" onclick="closeModal('item-modal')">Cancel</button>
+      <button class="btn btn-primary" id="it-save-btn" onclick="saveItem()">Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="cbt-item-modal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <div class="modal-title">Item Entry Form</div>
+      <button class="modal-close" onclick="closeModal('cbt-item-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="cbt-it-error"></div>
+      <div class="input-group">
+        <label class="input-label">Item Type <span style="color: var(--red);">*</span></label>
+        <div style="display:flex;gap:8px;">
+          <select class="input-select" id="cbt-it-type" style="flex:1;"></select>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="cbtToggleTypeEntry()" title="Add Item Type">+</button>
+        </div>
+        <div id="cbt-it-type-new" style="display:none;gap:8px;margin-top:8px;">
+          <input type="text" class="input-text" id="cbt-it-type-input" maxlength="100" placeholder="New item type" style="flex:1;" />
+          <button type="button" class="btn btn-primary btn-sm" onclick="cbtAddItemType()">Add</button>
+        </div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Item Name <span style="color: var(--red);">*</span></label>
+        <input type="text" class="input-text" id="cbt-it-name" maxlength="300" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Item Description</label>
+        <textarea class="input-textarea" id="cbt-it-description" rows="4" maxlength="500"></textarea>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Price</label>
+        <input type="number" step="any" min="0" class="input-text" id="cbt-it-price" />
+      </div>
+      <div class="input-group">
+        <label class="input-label">Remarks</label>
+        <textarea class="input-textarea" id="cbt-it-remarks" rows="3" maxlength="300"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('cbt-item-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="cbtSaveNewItem()">Create</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .trb-pf { display:grid; grid-template-columns:130px 1fr; gap:10px 12px; align-items:center; margin-bottom:10px; }
+  .trb-pf > label { font-size:12.5px; font-weight:600; color:var(--text); text-align:right; }
+  .trb-pf .input-text, .trb-pf .input-select, .trb-pf .input-textarea { width:100%; }
+</style>
+<div class="modal-overlay" id="trb-pay-modal">
+  <div class="modal" style="max-width:900px;">
+    <div class="modal-header">
+      <div class="modal-title" id="trb-pay-title">Due Collection Entry/Modify Form</div>
+      <button class="modal-close" onclick="closeModal('trb-pay-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="error-banner" id="trb-pay-error"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px;">
+        <div>
+          <div class="trb-pf"><label>Payment No:</label><input type="text" class="input-text" id="trb-pay-no" placeholder="Auto Increment" style="background:var(--bg3);" readonly /></div>
+          <div class="trb-pf"><label>Invoice No:</label><input type="text" class="input-text" id="trb-pay-invno" style="background:var(--bg3);" readonly /></div>
+          <div class="trb-pf"><label>Account ID:</label><input type="text" class="input-text" id="trb-pay-account" style="background:var(--bg3);" readonly /></div>
+          <div class="trb-pf"><label>Customer ID:</label><input type="text" class="input-text" id="trb-pay-custid" style="background:var(--bg3);" readonly /></div>
+          <div class="trb-pf"><label>Customer Name:</label><input type="text" class="input-text" id="trb-pay-customer" style="background:var(--bg3);" readonly /></div>
+          <div class="trb-pf"><label>Previous Due:</label><input type="text" class="input-text" id="trb-pay-prev" style="background:var(--bg3);color:var(--red);text-align:center;" readonly /></div>
+          <div class="trb-pf" style="align-items:start;"><label>Remarks :</label><textarea class="input-textarea" id="trb-pay-remarks" rows="4" maxlength="300"></textarea></div>
+          <div class="trb-pf"><label>Invoice Title</label><input type="text" class="input-text" id="trb-pay-invtitle" style="background:var(--bg3);" readonly /></div>
+        </div>
+        <div>
+          <div class="trb-pf"><label>Collection Date:</label><input type="date" class="input-text" id="trb-pay-date" /></div>
+          <div class="trb-pf"><label>Total Due:</label><input type="text" class="input-text" id="trb-pay-due" style="background:var(--bg3);color:var(--red);text-align:center;" readonly /></div>
+          <div class="trb-pf"><label>Extra Discount:</label><input type="number" step="any" min="0" class="input-text" id="trb-pay-extra" oninput="trbPayCalc()" /></div>
+          <div class="trb-pf"><label>Paid:</label><input type="number" step="any" min="0" class="input-text" id="trb-pay-paid" oninput="trbPayCalc()" /></div>
+          <div class="trb-pf"><label>Bank Charge:</label><input type="number" step="any" min="0" class="input-text" id="trb-pay-bank" /></div>
+          <div class="trb-pf"><label>Total Remaining Due:</label><input type="text" class="input-text" id="trb-pay-remaining" style="background:var(--bg3);text-align:center;" readonly /></div>
+          <div class="trb-pf"><label>Pay Mode:</label><select class="input-select" id="trb-pay-mode"></select></div>
+          <div class="trb-pf"><label>Connection Status:</label>
+            <select class="input-select" id="trb-pay-status">
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+          <div class="trb-pf"><label>Rev By:</label><span id="trb-pay-revby" style="color:var(--green);font-size:13px;"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('trb-pay-modal')">Cancel</button>
+      <button class="btn btn-ghost" id="trb-pay-delete" style="display:none;color:var(--red);border:1px solid var(--red);margin-right:auto;" onclick="trbDeletePay()">Delete</button>
+      <button class="btn btn-primary" id="trb-pay-save" onclick="trbSavePay()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="trb-preview-modal">
+  <div class="modal" style="max-width:1200px;width:96%;height:96vh;max-height:96vh;display:flex;flex-direction:column;overflow:hidden;">
+    <div class="modal-header">
+      <div class="modal-title" id="trb-prev-title">Bill</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-secondary btn-sm" onclick="trbPreviewDownload()">Download</button>
+        <button class="btn btn-success btn-sm" onclick="trbPreviewPrint()">Print</button>
+        <button class="modal-close" onclick="trbClosePreview()">×</button>
+      </div>
+    </div>
+    <div class="modal-body" style="padding:0;flex:1;min-height:0;">
+      <iframe id="trb-prev-frame" style="display:block;width:100%;height:100%;border:none;background:#525659;" src="about:blank"></iframe>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="trb-excel-modal">
+  <div class="modal" style="max-width:720px;">
+    <div class="modal-header">
+      <div class="modal-title">excel_sheet_upload</div>
+      <button class="modal-close" onclick="closeModal('trb-excel-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="card-title">Excel File upload</div></div>
+        <div class="card-body">
+          <div class="input-group">
+            <label class="input-label">Upload File</label>
+            <input type="file" class="input-text" id="trb-xl-file" accept=".xlsx,.xls,.csv" />
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button class="btn btn-success btn-sm" onclick="trbExcelUpload()">Upload</button>
+            <button class="btn btn-primary btn-sm" onclick="trbExcelProcess()">Process Data</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <input type="text" class="input-text" id="trb-xl-search" placeholder="Search" autocomplete="off" oninput="trbExcelRender()" style="flex:1;" />
+        <button class="btn btn-secondary btn-sm" onclick="trbExcelRender()">Go</button>
+        <select class="input-select" id="trb-xl-actions" style="width:140px;" onchange="trbExcelActions(this.value)">
+          <option value="">Actions</option>
+          <option value="csv">Download CSV</option>
+          <option value="clear">Clear Data</option>
+        </select>
+      </div>
+      <div id="trb-xl-grid"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="dash-details-modal">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <div class="modal-title" id="dash-details-title">New Clients</div>
+      <button class="modal-close" onclick="closeModal('dash-details-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="table-container" style="max-height:420px;overflow-y:auto;">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Customer Code</th>
+              <th>Customer Name</th>
+              <th>Reg Date</th>
+            </tr>
+          </thead>
+          <tbody id="dash-details-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('dash-details-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-dialog" id="confirm-dialog">
+  <div class="confirm-box">
+    <div class="confirm-title" id="confirm-title"></div>
+    <div class="confirm-message" id="confirm-message"></div>
+    <div class="confirm-actions">
+      <button class="btn btn-secondary" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-danger" id="confirm-btn" onclick="confirmAction()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script src="./script/billing.js"></script>
+</body>
+</html>

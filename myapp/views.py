@@ -26,6 +26,7 @@ from django.core.files.base import ContentFile
 from django.db.models import Q, Count, Sum, Max, Min, Case, When, Value, F, CharField, DateTimeField, OuterRef, Subquery
 from django.db.models.functions import Cast, Concat
 from django.core.cache import cache
+from django.db import transaction
 from django_filters import rest_framework as filters
 from pathlib import Path
 import os
@@ -67,6 +68,7 @@ from .models import (
     UserSession,
     InstituteBill,
     InstituteBillFile,
+    BillingRecord,
 )
 from .serializers import (
     PatientSerializer,
@@ -531,7 +533,7 @@ class RoleBasedPermission(BasePermission):
 
 
 class AdminPermission(RoleBasedPermission):
-    allowed_roles = ["Admin"]
+    allowed_roles = ["Admin", "Admin_acc"]
 
 
 class DoctorPermission(RoleBasedPermission):
@@ -547,7 +549,7 @@ class CenterPermission(RoleBasedPermission):
 
 
 class AdminOrSubAdminPermission(RoleBasedPermission):
-    allowed_roles = ["Admin", "SubAdmin"]
+    allowed_roles = ["Admin", "Admin_acc", "SubAdmin"]
 
 
 class PatientViewSet(viewsets.ModelViewSet):
@@ -627,7 +629,7 @@ class CustomLoginView(APIView):
             redirect_url = "/"
             center_name = None
             institute_name = None
-            if role == "Admin":
+            if role in ("Admin", "Admin_acc"):
                 redirect_url = "/admin/"
             elif role == "SubAdmin":
                 redirect_url = "/static/index.html"
@@ -688,7 +690,10 @@ class UserViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         user = User.objects.create(username=username, password=make_password(password))
-        group = Group.objects.get(name=role)
+        if role == "Admin_acc":
+            group, _ = Group.objects.get_or_create(name=role)
+        else:
+            group = Group.objects.get(name=role)
         profile = UserProfile.objects.create(user=user, role=group)
         if role == "Center" and center_id:
             center = Center.objects.get(id=center_id)
@@ -3436,7 +3441,7 @@ def get_report_templates(request):
         profile = UserProfile.objects.filter(user=user).first()
         is_admin = False
         if profile and profile.role:
-            is_admin = profile.role.name == "Admin"
+            is_admin = profile.role.name in ("Admin", "Admin_acc")
         elif user.is_superuser:
             is_admin = True
         
@@ -3446,8 +3451,7 @@ def get_report_templates(request):
             user_role = profile.role.name if profile and profile.role else None
             
             if user_role == 'Doctor':
-                admin_group = Group.objects.filter(name="Admin").first()
-                admin_profiles = UserProfile.objects.filter(role=admin_group) if admin_group else []
+                admin_profiles = UserProfile.objects.filter(role__name__in=["Admin", "Admin_acc"])
                 admin_user_ids = [p.user_id for p in admin_profiles]
                 superuser_ids = list(User.objects.filter(is_superuser=True).values_list("id", flat=True))
                 
@@ -3472,8 +3476,7 @@ def get_report_templates(request):
                     Q(created_by__isnull=True)
                 )
             else:
-                admin_group = Group.objects.filter(name="Admin").first()
-                admin_profiles = UserProfile.objects.filter(role=admin_group) if admin_group else []
+                admin_profiles = UserProfile.objects.filter(role__name__in=["Admin", "Admin_acc"])
                 admin_user_ids = [p.user_id for p in admin_profiles]
                 superuser_ids = list(User.objects.filter(is_superuser=True).values_list("id", flat=True))
                 all_admin_ids = list(set(admin_user_ids + superuser_ids))
@@ -3524,7 +3527,7 @@ def manage_templates(request):
     
     profile = UserProfile.objects.filter(user=user).first()
     is_admin = (
-        profile and profile.role and profile.role.name == "Admin"
+        profile and profile.role and profile.role.name in ("Admin", "Admin_acc")
     ) or user.is_superuser
     
     can_manage = check_user_permission(user, 'manage_templates')
@@ -3552,8 +3555,7 @@ def manage_templates(request):
                 user_role = profile.role.name if profile and profile.role else None
                 
                 if user_role == 'Doctor':
-                    admin_group = Group.objects.filter(name="Admin").first()
-                    admin_profiles = UserProfile.objects.filter(role=admin_group) if admin_group else []
+                    admin_profiles = UserProfile.objects.filter(role__name__in=["Admin", "Admin_acc"])
                     admin_user_ids = [p.user_id for p in admin_profiles]
                     superuser_ids = list(User.objects.filter(is_superuser=True).values_list("id", flat=True))
                     
@@ -3578,8 +3580,7 @@ def manage_templates(request):
                         Q(created_by__isnull=True)
                     )
                 else:
-                    admin_group = Group.objects.filter(name="Admin").first()
-                    admin_profiles = UserProfile.objects.filter(role=admin_group) if admin_group else []
+                    admin_profiles = UserProfile.objects.filter(role__name__in=["Admin", "Admin_acc"])
                     admin_user_ids = [p.user_id for p in admin_profiles]
                     superuser_ids = list(User.objects.filter(is_superuser=True).values_list("id", flat=True))
                     all_admin_ids = list(set(admin_user_ids + superuser_ids))
@@ -6281,7 +6282,7 @@ def institute_bill_download(request, bill_id):
         return Response({"error": "Bill not found."}, status=404)
     profile = UserProfile.objects.filter(user=request.user).first()
     role_name = profile.role.name if profile and profile.role else ""
-    if request.user.is_superuser or role_name == "Admin":
+    if request.user.is_superuser or role_name in ("Admin", "Admin_acc"):
         pass
     elif role_name == "SubAdmin":
         institutes = _bill_institutes_for_staff(request.user)
@@ -6311,3 +6312,186 @@ def institute_bill_download(request, bill_id):
     response["Cache-Control"] = "no-store"
     response["X-Content-Type-Options"] = "nosniff"
     return response
+
+
+BILLING_COLLECTIONS = {
+    'telerad_customers': 'list',
+    'telerad_customer_thanas': 'dict',
+    'telerad_customer_templates': 'list',
+    'telerad_customer_bill_templates': 'dict',
+    'telerad_item_types': 'list',
+    'telerad_items': 'list',
+    'telerad_bill_invoices': 'list',
+    'telerad_bill_collections': 'list',
+    'telerad_bill_seq': 'dict',
+    'telerad_messages': 'list',
+    'telerad_customer_contacts': 'dict',
+    'telerad_contact_types': 'list',
+}
+BILLING_MAX_COLLECTIONS = {'telerad_bill_seq'}
+BILLING_SYNC_LIMIT = 2000
+
+
+def _billing_role_name(user):
+    profile = UserProfile.objects.filter(user=user).first()
+    if profile and profile.role:
+        return profile.role.name
+    return 'Admin' if user.is_superuser else ''
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated, AdminPermission])
+def billing_data(request):
+    data = {}
+    for key, kind in BILLING_COLLECTIONS.items():
+        data[key] = {} if kind == 'dict' else []
+    rows = BillingRecord.objects.filter(collection__in=list(BILLING_COLLECTIONS)).order_by('collection', 'position', 'id').values_list('collection', 'record_id', 'data')
+    for collection, record_id, payload in rows.iterator(chunk_size=2000):
+        if BILLING_COLLECTIONS[collection] == 'dict':
+            data[collection][record_id] = payload
+        else:
+            data[collection].append(payload)
+    return Response({'success': True, 'data': data})
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated, AdminPermission])
+def billing_sync(request):
+    key = request.data.get('key')
+    kind = BILLING_COLLECTIONS.get(key)
+    if not kind:
+        return Response({'error': 'Unknown billing collection'}, status=400)
+
+    upserts = request.data.get('upserts') or []
+    deletes = request.data.get('deletes') or []
+    order = request.data.get('order')
+    if not isinstance(upserts, list) or not isinstance(deletes, list) or (order is not None and not isinstance(order, list)):
+        return Response({'error': 'Invalid payload'}, status=400)
+    if len(upserts) > BILLING_SYNC_LIMIT or len(deletes) > 50000 or (order is not None and len(order) > 200000):
+        return Response({'error': 'Payload too large'}, status=413)
+
+    clean = []
+    for item in upserts:
+        if not isinstance(item, dict) or item.get('id') in (None, '') or item.get('data') is None:
+            return Response({'error': 'Invalid record'}, status=400)
+        record_id = str(item['id'])
+        if len(record_id) > 120:
+            return Response({'error': 'Record id too long'}, status=400)
+        clean.append((record_id, item.get('data')))
+    delete_ids = [str(x) for x in deletes]
+
+    if _billing_role_name(request.user) == 'Admin':
+        if key == 'telerad_bill_seq':
+            return Response({'error': 'Only Admin_acc users can add bills'}, status=403)
+        if key == 'telerad_bill_invoices':
+            if delete_ids:
+                return Response({'error': 'Only Admin_acc users can delete bills'}, status=403)
+            if clean:
+                wanted_ids = [record_id for record_id, _ in clean]
+                known_ids = set()
+                for start in range(0, len(wanted_ids), 500):
+                    known_ids.update(
+                        BillingRecord.objects.filter(
+                            collection=key, record_id__in=wanted_ids[start:start + 500]
+                        ).values_list('record_id', flat=True)
+                    )
+                if any(record_id not in known_ids for record_id in wanted_ids):
+                    return Response({'error': 'Only Admin_acc users can add bills'}, status=403)
+
+    try:
+        with transaction.atomic():
+            if delete_ids:
+                for start in range(0, len(delete_ids), 500):
+                    BillingRecord.objects.filter(collection=key, record_id__in=delete_ids[start:start + 500]).delete()
+
+            if clean:
+                ids = [record_id for record_id, _ in clean]
+                existing = {}
+                for start in range(0, len(ids), 500):
+                    for row in BillingRecord.objects.select_for_update().filter(collection=key, record_id__in=ids[start:start + 500]):
+                        existing[row.record_id] = row
+                next_position = (BillingRecord.objects.filter(collection=key).aggregate(m=Max('position'))['m'] or 0) + 1
+                to_create = []
+                to_update = []
+                for record_id, payload in clean:
+                    row = existing.get(record_id)
+                    if row is None:
+                        to_create.append(BillingRecord(
+                            collection=key,
+                            record_id=record_id,
+                            data=payload,
+                            position=next_position,
+                            created_by=request.user,
+                            updated_by=request.user,
+                        ))
+                        next_position += 1
+                    else:
+                        if key in BILLING_MAX_COLLECTIONS and isinstance(row.data, (int, float)) and isinstance(payload, (int, float)):
+                            payload = max(row.data, payload)
+                        row.data = payload
+                        row.updated_by = request.user
+                        row.updated_at = dj_timezone.now()
+                        to_update.append(row)
+                if to_create:
+                    BillingRecord.objects.bulk_create(to_create, batch_size=500)
+                if to_update:
+                    BillingRecord.objects.bulk_update(to_update, ['data', 'updated_by', 'updated_at'], batch_size=500)
+
+            if order is not None and kind == 'list':
+                wanted = {}
+                for index, record_id in enumerate(order):
+                    wanted.setdefault(str(record_id), index)
+                rows = list(BillingRecord.objects.filter(collection=key).order_by('position', 'id').only('id', 'record_id', 'position'))
+                outside = len(wanted)
+                changed = []
+                for row in rows:
+                    if row.record_id in wanted:
+                        target = wanted[row.record_id]
+                    else:
+                        target = outside
+                        outside += 1
+                    if row.position != target:
+                        row.position = target
+                        changed.append(row)
+                if changed:
+                    BillingRecord.objects.bulk_update(changed, ['position'], batch_size=500)
+    except Exception as e:
+        logger.exception('billing_sync failed')
+        return Response({'error': str(e)}, status=500)
+
+    return Response({'success': True})
+
+
+PRINTED_COLLECTION = 'printed_files'
+
+
+def _printed_record_id(key):
+    return key if len(key) <= 120 else 'h:' + hashlib.sha1(key.encode('utf-8')).hexdigest()
+
+
+def _printed_map():
+    rows = BillingRecord.objects.filter(collection=PRINTED_COLLECTION).values_list('data', flat=True)
+    return {d['key']: {'by': d.get('by', ''), 'at': d.get('at', '')} for d in rows if isinstance(d, dict) and d.get('key')}
+
+
+@api_view(['GET', 'POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def printed_files(request):
+    if request.method == 'POST':
+        keys = request.data.get('keys')
+        if not isinstance(keys, list) or len(keys) > 50:
+            return Response({'error': 'Invalid payload'}, status=400)
+        keys = [k for k in keys if isinstance(k, str) and 0 < len(k) <= 500]
+        profile = UserProfile.objects.filter(user=request.user).first()
+        who = (profile.full_name if profile and profile.full_name else '') or request.user.username
+        now = dj_timezone.now().isoformat()
+        for key in keys:
+            BillingRecord.objects.get_or_create(
+                collection=PRINTED_COLLECTION,
+                record_id=_printed_record_id(key),
+                defaults={'data': {'key': key, 'by': who, 'at': now}, 'created_by': request.user},
+            )
+    return Response({'success': True, 'printed': _printed_map()})

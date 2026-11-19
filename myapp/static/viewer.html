@@ -3,6 +3,31 @@
 <head>
     <meta charset="UTF-8" />
 <meta name="viewport" content="width=1280" />
+<script>
+if (window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) <= 820) {
+    document.documentElement.classList.add('is-mobile');
+    (function () {
+        function sizeMobileToolbar() {
+            var land = window.matchMedia('(orientation: landscape)').matches;
+            var sw = Math.min(screen.width, screen.height);
+            var sh = Math.max(screen.width, screen.height);
+            var devW = land ? sh : sw;
+            var scale = Math.min(1, devW / 1280) || 0.3;
+            var btn = Math.round(44 / scale);
+            var pad = Math.round(8 / scale);
+            var root = document.documentElement.style;
+            root.setProperty('--mb-btn', btn + 'px');
+            root.setProperty('--mb-pad', pad + 'px');
+            root.setProperty('--mb-gap', Math.round(6 / scale) + 'px');
+            root.setProperty('--mb-font', Math.round(18 / scale) + 'px');
+            root.setProperty('--mb-bar', (btn + pad * 2 + Math.round(2 / scale)) + 'px');
+        }
+        sizeMobileToolbar();
+        window.addEventListener('resize', sizeMobileToolbar);
+        window.addEventListener('orientationchange', sizeMobileToolbar);
+    })();
+}
+</script>
     <title>DICOM Viewer</title>
     <style>
     #loadingOverlay {
@@ -462,7 +487,7 @@
     }
 
     .series-container {
-    max-height: 40vh;
+    min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
@@ -492,7 +517,7 @@
     background: #fff;
     border: 1px solid #ccc;
     overflow: hidden;
-    height: fit-content;
+    height: calc(100vh - 24px);
     max-height: calc(100vh - 24px);
     display: flex;
     flex-direction: column;
@@ -683,11 +708,101 @@
     width: 100%;
     }
 
+    .is-mobile .toolbar {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--mb-pad, 10px);
+    padding: var(--mb-pad, 6px);
+    border-left: none;
+    border-top: 1px solid #ccc;
+    overflow-x: auto;
+    overflow-y: hidden;
+    }
+
+    .is-mobile .toolbar .tool-group {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--mb-gap, 5px);
+    flex: 0 0 auto;
+    width: auto;
+    margin: 0;
+    padding: 0 var(--mb-pad, 10px) 0 0;
+    border-bottom: none;
+    border-right: 1px solid #ccc;
+    }
+
+    .is-mobile .toolbar .tool-group:last-child {
+    border-right: none;
+    padding-right: 0;
+    }
+
+    .is-mobile .toolbar .file-actions {
+    flex-direction: row;
+    gap: var(--mb-gap, 8px);
+    flex: 0 0 auto;
+    width: auto;
+    }
+
+    .is-mobile .toolbar .toolButton,
+    .is-mobile .toolbar .file-actions .toolButton {
+    width: var(--mb-btn, 38px);
+    height: var(--mb-btn, 38px);
+    padding: 0;
+    font-size: var(--mb-font, 13px);
+    border-radius: calc(var(--mb-btn, 38px) / 8);
+    flex: 0 0 auto;
+    }
+
+    .is-mobile .toolbar .toolButton i {
+    font-size: var(--mb-font, 13px);
+    }
+
+    .is-mobile .toolbar .toolButton span {
+    font-size: var(--mb-font, 14px) !important;
+    }
+
+    .is-mobile .toolbar .dropdown {
+    width: var(--mb-btn, 38px);
+    height: var(--mb-btn, 38px);
+    flex: 0 0 auto;
+    }
+
+    .is-mobile .viewer-container {
+    margin-right: 0;
+    height: calc(100vh - var(--mb-bar, 66px));
+    }
+
+    .is-mobile .main-content {
+    height: calc(100vh - var(--mb-bar, 66px));
+    }
+
+    .is-mobile .sidebar {
+    height: calc(100vh - var(--mb-bar, 66px) - 24px);
+    max-height: calc(100vh - var(--mb-bar, 66px) - 24px);
+    }
+
+    .is-mobile .dropdown-content {
+    left: auto !important;
+    right: 8px;
+    top: auto !important;
+    bottom: calc(var(--mb-bar, 66px) + 4px);
+    }
+
     @media (min-width: 768px) and (max-width: 1280px) {
     .main-content {
     grid-template-columns: 125px 1fr;
     gap: 8px;
     padding: 8px;
+    }
+    .sidebar {
+    height: calc(100vh - 16px);
+    max-height: calc(100vh - 16px);
     }
     .mpr-modal {
     width: 96vw;
@@ -808,6 +923,9 @@
             </div>
             <button class="toolButton" id="split1x2Btn" title="1x2 Layout">
               <span style="font-weight: bold; font-size: 14px;">1×2</span>
+            </button>
+            <button class="toolButton" id="split2x2Btn" title="2x2 Layout">
+              <span style="font-weight: bold; font-size: 14px;">2×2</span>
             </button>
           </div>
 
@@ -2672,13 +2790,7 @@ function drawCrossReferenceLines() {
                 releaseThumbnails();
             }
 
-            const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-            if (isTouchDevice) {
-                deactivateAllTools();
-                document.querySelectorAll(".toolButton").forEach(button => button.classList.remove("active"));
-            } else {
-                activateTool("Wwwc");
-            }
+            activateTool("Wwwc");
             if (totalImages > 1) setupImageSlider();
             updateStatus("Study loaded");
         }
@@ -2837,6 +2949,10 @@ function drawCrossReferenceLines() {
             document.getElementById("split1x2Btn").addEventListener("click", () => {
                 applySplitViewLayout(1, 2);
                 updateStatus("Layout: 1x2");
+            });
+            document.getElementById("split2x2Btn").addEventListener("click", () => {
+                applySplitViewLayout(2, 2);
+                updateStatus("Layout: 2x2");
             });
             document.getElementById("mprTool").addEventListener("click", openMPRWindow);
 

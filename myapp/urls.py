@@ -93,5 +93,8 @@ urlpatterns = [
     path('toggle-user-active/', toggle_user_active, name='toggle_user_active'),
     path('doctor-groups/', doctor_groups_list, name='doctor_groups_list'),
     path('doctor-groups/<str:group_id>/', doctor_groups_detail, name='doctor_groups_detail'),
+    path('printed-files/', views.printed_files, name='printed_files'),
+    path('billing-data/', views.billing_data, name='billing_data'),
+    path('billing-data/sync/', views.billing_sync, name='billing_sync'),
 ]
 

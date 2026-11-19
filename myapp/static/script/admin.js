@@ -100,7 +100,6 @@ document.querySelectorAll('.nav-item').forEach(item => {
     else if (page === 'sessions') loadSessions();
     else if (page === 'server') loadServerInfo();
     else if (page === 'mgmt-reports') initMgmtReports();
-    else if (page === 'billing') initBilling();
   });
 });
 
@@ -239,7 +238,7 @@ function toggleUserFields() {
 
   centerGroup.style.display = role === 'Center' ? 'block' : 'none';
   instSection.style.display = role === 'Doctor' ? 'block' : 'none';
-  fullnameReq.style.display = role === 'Doctor' ? 'inline' : 'none';
+  fullnameReq.style.display = (role === 'Doctor' || role === 'Admin_acc') ? 'inline' : 'none';
   qualReq.style.display = role === 'Doctor' ? 'inline' : 'none';
 
   if (role === 'Doctor') {
@@ -294,6 +293,12 @@ async function saveUser() {
   
   if (role === 'Doctor' && (!fullName || !qualification)) {
     errEl.textContent = 'Full name and qualification are required for doctors.';
+    errEl.style.display = 'inline-flex';
+    return;
+  }
+
+  if (role === 'Admin_acc' && !fullName) {
+    errEl.textContent = 'Full name is required for Admin_acc users.';
     errEl.style.display = 'inline-flex';
     return;
   }
@@ -3495,359 +3500,57 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-let allBills = [];
-let billFormReady = false;
-let billInstituteNames = [];
-let billSelectedFiles = [];
-let filteredBills = [];
-let currentBillsPage = 1;
-let billsPerPage = 25;
+let navReturnItem = document.querySelector('.nav-item.active[data-page]');
 
-function billEsc(value) {
-  return String(value == null ? '' : value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function navGroupOf(item) {
+  if (item.dataset.group) return item.dataset.group;
+  const fold = item.closest('.nav-fold[data-group]');
+  return fold ? fold.dataset.group : null;
 }
 
-function defaultBillTitle() {
-  const now = new Date();
-  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  return `Bill - ${prev.toLocaleString('en-US', { month: 'long' })} ${prev.getFullYear()}`;
-}
-
-function resetBillForm() {
-  const title = defaultBillTitle();
-  document.getElementById('bill-institute-search').value = '';
-  renderBillInstituteOptions();
-  document.getElementById('bill-institute').value = '';
-  document.getElementById('bill-title').value = title;
-  document.getElementById('bill-title').placeholder = title;
-  document.getElementById('bill-description').value = title;
-  document.getElementById('bill-description').placeholder = title;
-  document.getElementById('bill-file').value = '';
-  billSelectedFiles = [];
-  renderBillSelectedFiles();
-}
-
-function renderBillSelectedFiles() {
-  const box = document.getElementById('bill-file-list');
-  if (!box) return;
-  if (!billSelectedFiles.length) {
-    box.innerHTML = '';
-    return;
-  }
-  box.innerHTML = billSelectedFiles.map((f, i) => `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px;">
-      <span style="overflow-wrap:anywhere;">${billEsc(f.name)}</span>
-      <button type="button" class="btn btn-danger btn-xs" onclick="removeBillSelectedFile(${i})">Remove</button>
-    </div>`).join('');
-}
-
-function removeBillSelectedFile(index) {
-  billSelectedFiles.splice(index, 1);
-  renderBillSelectedFiles();
-}
-
-function onBillFilesPicked() {
-  const input = document.getElementById('bill-file');
-  Array.from(input.files).forEach(file => {
-    const exists = billSelectedFiles.some(f => f.name === file.name && f.size === file.size && f.lastModified === file.lastModified);
-    if (!exists) billSelectedFiles.push(file);
+function setNavGroup(group) {
+  const nav = document.getElementById('sidebar-nav');
+  if (!nav) return;
+  nav.querySelectorAll('.nav-fold').forEach(fold => {
+    const kind = fold.dataset.fold;
+    const own = fold.dataset.group;
+    let hide;
+    if (kind === 'back') hide = !group;
+    else if (kind === 'children') hide = group !== own;
+    else if (kind === 'parent') hide = !!group && group !== own;
+    else hide = !!group;
+    fold.classList.toggle('collapsed', hide);
   });
-  input.value = '';
-  renderBillSelectedFiles();
+  nav.querySelectorAll('.nav-parent').forEach(parent => {
+    parent.classList.toggle('expanded', parent.dataset.group === group);
+  });
+  nav.scrollTop = 0;
 }
 
-async function initBilling() {
-  if (!billFormReady) {
-    resetBillForm();
-    document.getElementById('bill-file').addEventListener('change', onBillFilesPicked);
-    billFormReady = true;
-  }
-  await Promise.all([loadBillInstitutes(), loadBills()]);
-}
+document.querySelectorAll('#sidebar-nav .nav-item').forEach(item => {
+  if (item.id === 'nav-back') return;
+  item.addEventListener('click', () => {
+    const group = navGroupOf(item);
+    if (group) {
+      setNavGroup(group);
+      return;
+    }
+    if (item.getAttribute('data-page')) navReturnItem = item;
+    setNavGroup(null);
+  });
+});
 
-function renderBillInstituteOptions() {
-  const select = document.getElementById('bill-institute');
-  const search = document.getElementById('bill-institute-search');
-  const words = (search ? search.value : '').trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const current = select.value;
-  const list = words.length
-    ? billInstituteNames.filter(n => words.every(w => n.toLowerCase().includes(w)))
-    : billInstituteNames;
-  let html = '<option value="">Select Institute</option>';
-  if (words.length) html = list.length ? '' : '<option value="">No institute found</option>';
-  html += list.map(n => `<option value="${billEsc(n)}">${billEsc(n)}</option>`).join('');
-  select.innerHTML = html;
-  if (words.length && list.length) select.value = list.includes(current) ? current : list[0];
-  else if (current && list.includes(current)) select.value = current;
-}
-
-async function loadBillInstitutes() {
-  try {
-    const res = await api('/api/centers/');
-    if (!res.ok) return;
-    const data = await res.json();
-    const arr = Array.isArray(data) ? data : (data.results || []);
-    const seen = {};
-    const names = [];
-    arr.forEach(c => {
-      const n = (c.institute_name || '').trim();
-      if (n && !seen[n]) {
-        seen[n] = true;
-        names.push(n);
-      }
-    });
-    names.sort((a, b) => a.localeCompare(b));
-    billInstituteNames = names;
-    renderBillInstituteOptions();
-  } catch (e) {
-    console.error('Failed to load institutes:', e);
-  }
-}
-
-async function loadBills() {
-  const tbody = document.getElementById('bills-table-body');
-  try {
-    const res = await api('/api/institute-bills-admin/');
-    if (!res.ok) throw new Error('failed');
-    const data = await res.json();
-    allBills = data.results || [];
-    applyBillFilter();
-    renderBillsWithPagination();
-  } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-title">Failed to load bills</div></div></td></tr>';
-  }
-}
-
-function applyBillFilter() {
-  const input = document.getElementById('bill-search-input');
-  const query = input ? input.value.trim().toLowerCase() : '';
-
-  filteredBills = allBills.filter(b => {
-    return !query ||
-           (b.institute_name || '').toLowerCase().includes(query) ||
-           (b.title || '').toLowerCase().includes(query) ||
-           (b.files || []).some(f => (f.name || '').toLowerCase().includes(query));
+const navBackBtn = document.getElementById('nav-back');
+if (navBackBtn) {
+  navBackBtn.addEventListener('click', () => {
+    const active = document.querySelector('#sidebar-nav .nav-item.active');
+    const inGroup = active && navGroupOf(active);
+    const target = navReturnItem || document.querySelector('.nav-item[data-page="dashboard"]');
+    if (inGroup && target) target.click();
+    else setNavGroup(null);
   });
 }
 
-function searchBills() {
-  applyBillFilter();
-  currentBillsPage = 1;
-  renderBillsWithPagination();
-}
-
-function renderBillsWithPagination() {
-  const totalBills = filteredBills.length;
-  const totalPages = Math.ceil(totalBills / billsPerPage);
-  if (currentBillsPage > totalPages) currentBillsPage = Math.max(1, totalPages);
-  const startIndex = (currentBillsPage - 1) * billsPerPage;
-  const endIndex = Math.min(startIndex + billsPerPage, totalBills);
-  const billsToShow = filteredBills.slice(startIndex, endIndex);
-
-  renderBills(billsToShow);
-
-  if (totalBills > 10) {
-    document.getElementById('bills-pagination-container').style.display = 'block';
-    document.getElementById('bills-pagination-info').textContent = 
-      `Showing ${startIndex + 1}-${endIndex} of ${totalBills} bills`;
-    renderBillsPaginationButtons(totalPages);
-  } else {
-    document.getElementById('bills-pagination-container').style.display = 'none';
-  }
-}
-
-function renderBillsPaginationButtons(totalPages) {
-  const container = document.getElementById('bills-pagination-buttons');
-  let html = '';
-
-  html += `<button class="pagination-btn" onclick="goToBillsPage(${currentBillsPage - 1})" ${currentBillsPage === 1 ? 'disabled' : ''}>‹</button>`;
-
-  const maxButtons = 7;
-  let startPage = Math.max(1, currentBillsPage - Math.floor(maxButtons / 2));
-  let endPage = Math.min(totalPages, startPage + maxButtons - 1);
-
-  if (endPage - startPage < maxButtons - 1) {
-    startPage = Math.max(1, endPage - maxButtons + 1);
-  }
-
-  if (startPage > 1) {
-    html += `<button class="pagination-btn" onclick="goToBillsPage(1)">1</button>`;
-    if (startPage > 2) {
-      html += `<span class="pagination-ellipsis">...</span>`;
-    }
-  }
-
-  for (let i = startPage; i <= endPage; i++) {
-    html += `<button class="pagination-btn ${i === currentBillsPage ? 'active' : ''}" onclick="goToBillsPage(${i})">${i}</button>`;
-  }
-
-  if (endPage < totalPages) {
-    if (endPage < totalPages - 1) {
-      html += `<span class="pagination-ellipsis">...</span>`;
-    }
-    html += `<button class="pagination-btn" onclick="goToBillsPage(${totalPages})">${totalPages}</button>`;
-  }
-
-  html += `<button class="pagination-btn" onclick="goToBillsPage(${currentBillsPage + 1})" ${currentBillsPage === totalPages ? 'disabled' : ''}>›</button>`;
-
-  container.innerHTML = html;
-}
-
-function goToBillsPage(page) {
-  const totalPages = Math.ceil(filteredBills.length / billsPerPage);
-  if (page < 1 || page > totalPages) return;
-  currentBillsPage = page;
-  renderBillsWithPagination();
-}
-
-function changeBillsPerPage() {
-  billsPerPage = parseInt(document.getElementById('bills-items-per-page').value);
-  currentBillsPage = 1;
-  renderBillsWithPagination();
-}
-
-function renderBills(bills) {
-  const tbody = document.getElementById('bills-table-body');
-  if (!bills.length) {
-    const noBills = !allBills.length;
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-title">${noBills ? 'No bills sent yet' : 'No bills found'}</div><div class="empty-text">${noBills ? 'Bills you send to an institute will appear here.' : 'Try a different search.'}</div></div></td></tr>`;
-    return;
-  }
-  tbody.innerHTML = bills.map(b => {
-    const fileCell = (b.files || []).length
-      ? b.files.map(f => `<div><a href="#" onclick="downloadBillFile(${b.id}, ${f.id}); return false;" style="color:var(--accent);">${billEsc(f.name)}</a></div>`).join('')
-      : '<span style="color:var(--text3);font-size:12px;">No file</span>';
-    const statusBadge = b.is_active
-      ? '<span class="badge badge-green">Active</span>'
-      : '<span class="badge badge-gray">Off</span>';
-    const toggleBtn = b.is_active
-      ? `<button class="btn btn-warning btn-xs" onclick="turnOffBill(${b.id})">Turn Off</button>`
-      : `<button class="btn btn-success btn-xs" onclick="setBillActive(${b.id}, true)">Turn On</button>`;
-    const action = `<div style="display:flex;gap:6px;flex-wrap:wrap;">${toggleBtn}<button class="btn btn-danger btn-xs" onclick="deleteBill(${b.id})">Delete</button></div>`;
-    return `<tr>
-      <td><span style="font-weight:500;color:var(--text);">${billEsc(b.institute_name)}</span></td>
-      <td>${billEsc(b.title)}</td>
-      <td style="font-size:12px;color:var(--text3);">${billEsc(b.bill_date)}</td>
-      <td>${fileCell}</td>
-      <td>${statusBadge}</td>
-      <td>${action}</td>
-    </tr>`;
-  }).join('');
-}
-
-async function sendBill() {
-  const institute = document.getElementById('bill-institute').value;
-  const title = document.getElementById('bill-title').value.trim();
-  if (!institute) {
-    toast('Please select an institute', 'error');
-    return;
-  }
-  if (!title) {
-    toast('Please enter the bill title', 'error');
-    return;
-  }
-  const form = new FormData();
-  form.append('institute_name', institute);
-  form.append('title', title);
-  form.append('description', document.getElementById('bill-description').value.trim());
-  const files = billSelectedFiles.slice();
-  files.forEach(file => form.append('bill_file', file));
-
-  const btn = document.getElementById('bill-send-btn');
-  btn.disabled = true;
-  try {
-    const token = getToken();
-    const res = await fetch('/api/institute-bills-admin/', {
-      method: 'POST',
-      headers: token ? { 'Authorization': `Token ${token}` } : {},
-      body: form
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success) {
-      toast(data.error || 'Failed to send bill', 'error');
-      return;
-    }
-    toast(`Bill sent to ${institute}`, 'success');
-    resetBillForm();
-    await loadBills();
-  } catch (e) {
-    toast('Failed to send bill', 'error');
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-function turnOffBill(id) {
-  const bill = allBills.find(b => b.id === id);
-  const label = bill ? `"${bill.title}" for ${bill.institute_name}` : 'this bill';
-  openConfirm('Turn Off Bill', `Turn off ${label}? It will stop showing at the top of the institute's study list.`, () => setBillActive(id, false));
-}
-
-function deleteBill(id) {
-  const bill = allBills.find(b => b.id === id);
-  const label = bill ? `"${bill.title}" for ${bill.institute_name}` : 'this bill';
-  openConfirm('Delete Bill', `Delete ${label}? The bill and its attached files will be removed permanently.`, () => removeBill(id));
-}
-
-async function removeBill(id) {
-  try {
-    const res = await api('/api/institute-bills-admin/delete/', {
-      method: 'POST',
-      body: JSON.stringify({ bill_id: id })
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success) {
-      toast(data.error || 'Failed to delete bill', 'error');
-      return;
-    }
-    toast('Bill deleted', 'success');
-    await loadBills();
-  } catch (e) {
-    toast('Failed to delete bill', 'error');
-  }
-}
-
-async function setBillActive(id, isActive) {
-  try {
-    const res = await api('/api/institute-bills-admin/toggle/', {
-      method: 'POST',
-      body: JSON.stringify({ bill_id: id, is_active: isActive })
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success) {
-      toast(data.error || 'Failed to update bill', 'error');
-      return;
-    }
-    toast(isActive ? 'Bill turned on' : 'Bill turned off', 'success');
-    await loadBills();
-  } catch (e) {
-    toast('Failed to update bill', 'error');
-  }
-}
-
-async function downloadBillFile(id, fileId) {
-  const bill = allBills.find(b => b.id === id);
-  const entry = bill && (bill.files || []).find(f => f.id === fileId);
-  const name = entry && entry.name;
-  try {
-    const res = await api(`/api/institute-bills/${id}/download/?file=${fileId}`);
-    if (!res.ok) throw new Error('failed');
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name || 'bill';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-  } catch (e) {
-    toast('Failed to download file', 'error');
-  }
+function goToBilling() {
+  window.location.href = 'billing.html';
 }

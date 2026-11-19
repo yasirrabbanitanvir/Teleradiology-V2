@@ -15,6 +15,20 @@
     var dlBtn = document.getElementById('inv-dl');
     var prBtn = document.getElementById('inv-pr');
     var printer = null;
+    var tracker = window.opener && window.opener.PrintTracker;
+    var pBadge = document.getElementById('inv-printed');
+
+    function syncPrinted() {
+      if (!pBadge) return;
+      pBadge.style.display = (tracker && S && S.printKey && tracker.isPrinted(S.printKey)) ? 'inline-block' : 'none';
+    }
+    function markPrinted() {
+      if (tracker && S && S.printKey) {
+        tracker.mark(S.printKey);
+        syncPrinted();
+      }
+    }
+    if (tracker) tracker.load().then(syncPrinted);
 
     function esc(v) {
       return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -611,9 +625,11 @@
     }
     window.addEventListener('beforeprint', fitForPrint);
     window.addEventListener('afterprint', resetPrint);
+    window.addEventListener('beforeprint', markPrinted);
 
     dlBtn.addEventListener('click', save);
     prBtn.addEventListener('click', function () {
+      markPrinted();
       if (printer) { printer(); return; }
       window.print();
     });
@@ -708,7 +724,7 @@
     var title = bill.title || 'Institute Bill';
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + esc(title) + '</title>' +
       '<link rel="stylesheet" href="' + o + '/static/styles/styles.css"><style>' + STYLE + '</style></head><body class="inv-body">' +
-      '<div class="inv-bar"><span class="inv-pt">' + esc(title) + '</span><div class="inv-actions"><span id="inv-msg" class="inv-msg"></span><button id="inv-dl" type="button" class="inv-alt">Download</button><button id="inv-pr" type="button">Print</button></div></div>' +
+      '<div class="inv-bar"><span class="inv-pt">' + esc(title) + '</span><span id="inv-printed" style="display:none;margin-left:10px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:10px;background:#fff;color:#1b7a2f;">Printed</span><div class="inv-actions"><span id="inv-msg" class="inv-msg"></span><button id="inv-dl" type="button" class="inv-alt">Download</button><button id="inv-pr" type="button">Print</button></div></div>' +
       '<div id="inv-view" class="inv-view"></div>' +
       '<script src="' + o + '/static/script/jszip.min.js"><\/script>' +
       '<script src="' + o + '/static/script/docx-preview.min.js"><\/script>' +
@@ -746,9 +762,9 @@
     const win = openPopup();
     if (!win) {
       alert('Please allow popups for this site to view the bill');
-      return;
+      return null;
     }
-    const session = { blob: null, fileName: file ? file.name : '', bill: bill, error: '' };
+    const session = { blob: null, fileName: file ? file.name : '', bill: bill, error: '', printKey: 'b:' + bill.id + ':' + (file && file.id != null ? file.id : 0) };
     if (file) {
       try {
         session.blob = await fetchBill(bill, ctx, file);
@@ -766,7 +782,9 @@
       win.focus();
     } catch (e) {
       try { win.close(); } catch (x) {}
+      return null;
     }
+    return win;
   }
 
   window.BillViewer = { open: open };

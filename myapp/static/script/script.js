@@ -282,7 +282,7 @@ function isSearchPanelEmpty() {
   const allModalities = Array.from(document.querySelectorAll('.modality-checkbox')).every(cb => cb.checked);
 
   const startIsDefault = startDate === fmt(past);
-  const endIsDefault = endDate === '';
+  const endIsDefault = endDate === fmt(today);
 
   return !nameQ && !idQ && !bodyQ && statusQ === 'All' && centerQ === 'ALL' && !emergency && allModalities && startIsDefault && endIsDefault;
 }
@@ -354,24 +354,9 @@ function isBillSearch(f) {
   return /bill/i.test(f.bodyPart || '');
 }
 
-function isDefaultView(f, totalModalities) {
-  const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const past = new Date();
-  past.setDate(past.getDate() - 3);
-  return !f.name &&
-    !f.id &&
-    !f.bodyPart &&
-    (!f.status || f.status === 'All') &&
-    (!f.center || f.center === 'ALL') &&
-    !f.emergency &&
-    !f.end &&
-    (!f.start || f.start === fmt(past)) &&
-    f.modalities.length >= totalModalities;
-}
-
-function canShowBills(f, totalModalities) {
+function canShowBills(f) {
   if (currentPage !== 1) return false;
-  return isBillSearch(f) || isDefaultView(f, totalModalities);
+  return isBillSearch(f);
 }
 
 async function searchStudies(maintainPage = false, silent = false) {
@@ -420,9 +405,7 @@ async function searchStudies(maintainPage = false, silent = false) {
   if (f.start) params.append('server_start', f.start);
   if (f.end) params.append('server_end', f.end);
 
-  const billsOnly = isDefaultView(f, totalModalities);
-
-  const billsPromise = canShowBills(f, totalModalities)
+  const billsPromise = canShowBills(f)
     ? fetchSubadminBills()
     : Promise.resolve([]);
 
@@ -430,9 +413,7 @@ async function searchStudies(maintainPage = false, silent = false) {
 
   try {
     const [res, doctorsRes, groupsRes] = await Promise.all([
-      billsOnly
-        ? Promise.resolve(new Response(JSON.stringify({ results: [], count: 0, total_pages: 1, current_page: 1 }), { status: 200 }))
-        : fetch(`${baseUrl}/api/dicom-images/?${params.toString()}`, {
+      fetch(`${baseUrl}/api/dicom-images/?${params.toString()}`, {
         headers: {
           'Authorization': `Token ${token}`,
           'Content-Type': 'application/json'
@@ -741,11 +722,6 @@ function updatePaginationInfo() {
 }
 
 async function removeSingleDoctor(imageId, doctorName) {
-  const confirmed = confirm(`Remove ${doctorName} from this study?`);
-  if (!confirmed) {
-    return;
-  }
-  
   try {
     const response = await fetch(`${baseUrl}/api/dicom-images/remove_single_doctor/`, {
       method: 'POST',
@@ -1074,6 +1050,7 @@ function setDefaultDateRange() {
   const past = new Date();
   past.setDate(today.getDate() - 3);
   if (startInput && !startInput.value) startInput.value = fmt(past);
+  if (endInput && !endInput.value) endInput.value = fmt(today);
 }
 
 function fitStudyTable() {
@@ -1730,7 +1707,7 @@ const REPORT_BAR_CSS = "body{padding-top:56px;font-family:'Segoe UI',Arial,sans-
 const REPORT_PRINT_ICON = '<svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>';
 const REPORT_DOWNLOAD_ICON = '<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
 
-function buildReportBar(d, win, onDownload, reportedAt) {
+function buildReportBar(d, win, onDownload, reportedAt, printKeys) {
   const bar = d.createElement('div');
   bar.className = 'report-bar';
   const title = d.createElement('div');
@@ -1742,6 +1719,18 @@ function buildReportBar(d, win, onDownload, reportedAt) {
     stamp.textContent = `/ ${reportedAt}`;
     title.appendChild(stamp);
   }
+  const printedBadge = d.createElement('span');
+  printedBadge.textContent = 'Printed';
+  printedBadge.style.cssText = 'display:none;margin-left:12px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:10px;background:#fff;color:#1b7a2f;vertical-align:middle;';
+  title.appendChild(printedBadge);
+  const syncPrinted = () => {
+    printedBadge.style.display = PrintTracker.anyPrinted(printKeys) ? 'inline-block' : 'none';
+  };
+  PrintTracker.load().then(syncPrinted);
+  win.addEventListener('beforeprint', () => {
+    PrintTracker.mark(printKeys);
+    syncPrinted();
+  });
   const actions = d.createElement('div');
   actions.className = 'actions';
   const printBtn = d.createElement('button');
@@ -1834,7 +1823,7 @@ function renderReportPopup(win, reports) {
       win.document.body.appendChild(a);
       a.click();
       a.remove();
-    } : null, reportedAt);
+    } : null, reportedAt, items.map(r => PrintTracker.reportKey(r.report_file)).filter(Boolean));
     win.focus();
     return true;
   } catch (e) {
@@ -2026,7 +2015,7 @@ async function renderDocxPopup(win, reports) {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    }, docxReportedAt);
+    }, docxReportedAt, files.map(PrintTracker.reportKey));
     for (const item of prepared) {
       const holder = d.createElement('div');
       d.body.appendChild(holder);
@@ -2094,52 +2083,39 @@ function pickLatestReport(reports) {
 async function showReportPopup(report, fallbackUrl) {
   const win = openReportPopup();
   if (win && await renderDocxPopup(win, [report])) {
-    return;
+    return win;
   }
   if (win && renderReportPopup(win, [report])) {
-    return;
+    return win;
   }
   const fileUrl = report.report_file || fallbackUrl;
   if (win) {
     if (fileUrl) {
       win.location.href = fileUrl;
-    } else {
-      win.close();
-      alert('No report available');
+      return win;
     }
-    return;
+    win.close();
+    alert('No report available');
+    return null;
   }
   if (fileUrl) {
-    window.open(fileUrl, '_blank');
-  } else {
-    alert('No report available');
+    return window.open(fileUrl, '_blank');
   }
+  alert('No report available');
+  return null;
 }
 
 function openReportChooser(reports, onPick) {
-  const existing = document.getElementById('combined-report-modal');
-  if (existing) existing.remove();
-  const modal = document.createElement('div');
-  modal.id = 'combined-report-modal';
-  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  const linksHtml = reports.map((r, i) => {
-    let label = `Report ${i+1}`;
-    if (r.reported_by) label += ` - ${r.reported_by}`;
-    if (r.created_at) label += ` (${r.created_at})`;
-    return `<div style="margin:8px 0;"><a href="#" class="report-chooser-link" data-index="${i}" style="color:#0066cc;font-size:15px;text-decoration:none;padding:8px 12px;background:#f0f7ff;border:1px solid #cce;border-radius:4px;display:inline-block;">📄 ${label}</a></div>`;
-  }).join('');
-  modal.innerHTML = `<div style="background:#fff;border-radius:8px;padding:30px;min-width:360px;max-width:500px;box-shadow:0 4px 20px rgba(0,0,0,0.3);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><strong style="font-size:17px;">Reports (${reports.length})</strong><button type="button" class="report-chooser-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;">✕</button></div>${linksHtml}</div>`;
-  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
-  modal.querySelector('.report-chooser-close').addEventListener('click', function() { modal.remove(); });
-  modal.querySelectorAll('.report-chooser-link').forEach(link => {
-    link.addEventListener('click', function(e) {
-      e.preventDefault();
-      const picked = reports[Number(this.dataset.index)];
-      modal.remove();
-      onPick(picked);
-    });
+  PrintTracker.chooser({
+    id: 'combined-report-modal',
+    title: `Reports (${reports.length})`,
+    items: reports.map((r, i) => ({
+      label: PrintTracker.reportLabel(r, i),
+      key: PrintTracker.reportKey(r.report_file),
+      data: r
+    })),
+    onPick: item => onPick(item.data)
   });
-  document.body.appendChild(modal);
 }
 
 async function openReport(reportUrl, studyUid) {
@@ -2196,23 +2172,17 @@ async function openReport(reportUrl, studyUid) {
 }
 
 function openCombinedReportModal(reports) {
-  const existing = document.getElementById('combined-report-modal');
-  if (existing) existing.remove();
-  const modal = document.createElement('div');
-  modal.id = 'combined-report-modal';
-  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  let linksHtml = reports.map((r, i) => {
-    let label = `Report ${i+1}`;
-    if (r.reported_by) label += ` - ${r.reported_by}`;
-    if (r.created_at) label += ` (${r.created_at})`;
-    if (r.report_file) {
-      return `<div style="margin:8px 0;"><a href="${r.report_file}" target="_blank" style="color:#0066cc;font-size:15px;text-decoration:none;padding:8px 12px;background:#f0f7ff;border:1px solid #cce;border-radius:4px;display:inline-block;">📄 ${label}</a></div>`;
-    }
-    return `<div style="margin:8px 0;color:#888;">📄 ${label} (no file)</div>`;
-  }).join('');
-  modal.innerHTML = `<div style="background:#fff;border-radius:8px;padding:30px;min-width:360px;max-width:500px;box-shadow:0 4px 20px rgba(0,0,0,0.3);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><strong style="font-size:17px;">Reports (${reports.length})</strong><button onclick="document.getElementById('combined-report-modal').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;">✕</button></div>${linksHtml}</div>`;
-  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
-  document.body.appendChild(modal);
+  PrintTracker.chooser({
+    id: 'combined-report-modal',
+    title: `Reports (${reports.length})`,
+    items: reports.map((r, i) => ({
+      label: PrintTracker.reportLabel(r, i),
+      key: PrintTracker.reportKey(r.report_file),
+      disabled: !r.report_file,
+      data: r
+    })),
+    onPick: item => window.open(item.data.report_file, '_blank')
+  });
 }
 
 function openHistory(patientId) { 
@@ -2482,7 +2452,7 @@ function buildBillRow(bill) {
     : '';
   tr.innerHTML = `
     <td><input type="checkbox" class="bill-checkbox" data-bill-id="${bill.id}" /></td>
-    <td><button class="action-btn view-btn bill-view-btn" title="View Bill"><img src="images/view.png" alt="View" width="32" height="32"></button></td>
+    <td><button class="action-btn view-btn bill-view-btn" title="Please click on Bill View"><img src="images/view.png" alt="View" width="32" height="32"></button></td>
     <td></td>
     <td>${escapeReportText(bill.institute_name)}</td>
     <td>${escapeReportText(bill.title)}</td>
@@ -2501,8 +2471,6 @@ function buildBillRow(bill) {
     <td></td>
     <td></td>
   `;
-  const viewBtn = tr.querySelector('.bill-view-btn');
-  if (viewBtn) viewBtn.addEventListener('click', () => openBillViewer(bill.id));
   const link = tr.querySelector('.bill-file-link');
   if (link) {
     link.addEventListener('click', e => {
@@ -2537,25 +2505,17 @@ async function downloadBillAttachment(id) {
 }
 
 function openBillFileChooser(bill, onPick) {
-  const existing = document.getElementById('bill-file-modal');
-  if (existing) existing.remove();
   const files = bill.files || [];
-  const modal = document.createElement('div');
-  modal.id = 'bill-file-modal';
-  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  const linksHtml = files.map((f, i) => `<div style="margin:8px 0;"><a href="#" class="bill-chooser-link" data-index="${i}" style="color:#0066cc;font-size:15px;text-decoration:none;padding:8px 12px;background:#f0f7ff;border:1px solid #cce;border-radius:4px;display:inline-block;">📄 ${escapeReportText(f.name)}</a></div>`).join('');
-  modal.innerHTML = `<div style="background:#fff;border-radius:8px;padding:30px;min-width:360px;max-width:500px;box-shadow:0 4px 20px rgba(0,0,0,0.3);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><strong style="font-size:17px;">Bill Files (${files.length})</strong><button type="button" class="bill-chooser-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;">✕</button></div>${linksHtml}</div>`;
-  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
-  modal.querySelector('.bill-chooser-close').addEventListener('click', function() { modal.remove(); });
-  modal.querySelectorAll('.bill-chooser-link').forEach(link => {
-    link.addEventListener('click', function(e) {
-      e.preventDefault();
-      const picked = files[Number(this.dataset.index)];
-      modal.remove();
-      onPick(picked);
-    });
+  PrintTracker.chooser({
+    id: 'bill-file-modal',
+    title: `Bill Files (${files.length})`,
+    items: files.map(f => ({
+      label: f.name,
+      key: PrintTracker.billKey(bill.id, f),
+      data: f
+    })),
+    onPick: item => onPick(item.data)
   });
-  document.body.appendChild(modal);
 }
 
 function openBillViewer(id, openAll) {
