@@ -2550,7 +2550,16 @@ function drawCrossReferenceLines() {
                         const studyTime = getTagValue(dataset, 'x00080030') || "";
                         const institutionName = getTagValue(dataset, 'x00080080') || "";
                         const formattedDateTime = formatOverlayDateTime(studyDate, studyTime);
-                        element.innerHTML = `${patientName}  [MR${patientId}]<br>${formattedDateTime}<br>${institutionName}`;
+                        let ageText = calculateAge(getTagValue(dataset, 'x00100030') || "");
+                        if (!ageText) {
+                            const rawAge = getTagValue(dataset, 'x00101010') || "";
+                            const m = rawAge.match(/^0*(\d+)\s*([DWMY])?$/i);
+                            ageText = m ? m[1] + (m[2] ? m[2].toUpperCase() : "") : rawAge;
+                        } else {
+                            ageText += "Y";
+                        }
+                        const ageLabel = ageText ? `  Age: ${ageText}` : "";
+                        element.innerHTML = `${patientName}  [MR${patientId}]${ageLabel}<br>${formattedDateTime}<br>${institutionName}`;
                     }
                     break;
                 case 'topRight':
